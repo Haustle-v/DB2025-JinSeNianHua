@@ -74,9 +74,8 @@ void BufferPoolManager::update_page(Page* page, PageId new_page_id,
 
   //   更新元数据
   page->id_ = new_page_id;
-  page->reset_memory();  // 考虑一下注释掉这个
+  // page->reset_memory();  // 考虑一下注释掉这个
   page->set_page_lsn(INVALID_LSN);
-  page->is_dirty_ = false;
 }
 
 /**
@@ -198,13 +197,10 @@ bool BufferPoolManager::flush_page(PageId page_id) {
     return false;
   }
 
-  //   脏了才刷盘
   Page& target_page = pages_[iter->second];
-  // if (target_page.is_dirty()) {
   disk_manager_->write_page(target_page.id_.fd, target_page.id_.page_no,
                             target_page.get_data(), PAGE_SIZE);
   target_page.is_dirty_ = false;
-  // }
   return true;
 }
 
@@ -264,15 +260,15 @@ bool BufferPoolManager::delete_page(PageId page_id) {
   }
   // std::cerr << "[DEBUG] bpm will delete page " << page_id.toString()
   //           << " frame " << iter->second << std::endl;
-  replacer_->unpin(iter->second);
+
   Page& target_page = pages_[iter->second];
   if (target_page.pin_count_ == 0) {
     // pc为0才能删
     disk_manager_->write_page(target_page.id_.fd, target_page.id_.page_no,
                               target_page.get_data(), PAGE_SIZE);
     // 有问题！free加入了当前页框后面就会被替换 但是同时加入lru
-    // 和free可能会被使用两次！ replacer_->unpin(iter->second);
-    replacer_->pin(iter->second);
+    // 和free可能会被使用两次！
+    // replacer_->pin(iter->second);
     page_table_.erase(page_id);
     free_list_.emplace_back(iter->second);
     target_page.id_.fd = -1;
