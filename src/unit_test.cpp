@@ -400,7 +400,7 @@ class BufferPoolManagerConcurrencyTest : public ::testing::Test {
   };
 };
 
-TEST_F(BufferPoolManagerConcurrencyTest, DISABLED_ConcurrencyTest) {
+TEST_F(BufferPoolManagerConcurrencyTest, ConcurrencyTest) {
   // const int num_threads = 5;
   const int num_threads = 5;
   const int num_runs = 50;
@@ -452,7 +452,7 @@ TEST_F(BufferPoolManagerConcurrencyTest, DISABLED_ConcurrencyTest) {
 }
 
 // TODO: fix detected memory leaks found by Google Test
-TEST(StorageTest, DISABLED_SimpleTest) {
+TEST(StorageTest, SimpleTest) {
   srand((unsigned)time(nullptr));
 
   /** Test disk_manager */

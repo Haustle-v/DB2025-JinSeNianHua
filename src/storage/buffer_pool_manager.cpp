@@ -75,8 +75,6 @@ void BufferPoolManager::update_page(Page* page, PageId new_page_id,
   page->reset_memory();  // 考虑一下注释掉这个
   page->set_page_lsn(INVALID_LSN);
   page->is_dirty_ = false;
-
-  //   观察一下pincount后期调用决定一下是否修改
 }
 
 /**
@@ -181,6 +179,7 @@ bool BufferPoolManager::flush_page(PageId page_id) {
   // 1.1 目标页P没有被page_table_记录 ，返回false
   // 2. 无论P是否为脏都将其写回磁盘。
   // 3. 更新P的is_dirty_
+  assert(page_id.page_no != INVALID_PAGE_ID && "bpm flush invalid page");
   std::scoped_lock<std::mutex> lock(latch_);
   auto iter = page_table_.find(page_id);
   if (iter == page_table_.end()) {
@@ -256,13 +255,18 @@ bool BufferPoolManager::delete_page(PageId page_id) {
     // pc为0才能删
     disk_manager_->write_page(target_page.id_.fd, target_page.id_.page_no,
                               target_page.get_data(), PAGE_SIZE);
-    replacer_->unpin(iter->second);
+    // 有问题！free加入了当前页框后面就会被替换 但是同时加入lru
+    // 和free可能会被使用两次！ replacer_->unpin(iter->second);
+    replacer_->pin(iter->second);
     page_table_.erase(page_id);
     free_list_.emplace_back(iter->second);
     target_page.id_.fd = -1;
     target_page.id_.page_no = INVALID_PAGE_ID;
+    // target_page.reset_memory();
+    target_page.is_dirty_ = false;
     return true;
   }
+  //   pc大于0返回false
   return false;
 }
 
