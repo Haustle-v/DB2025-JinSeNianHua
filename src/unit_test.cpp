@@ -402,7 +402,7 @@ class BufferPoolManagerConcurrencyTest : public ::testing::Test {
 
 TEST_F(BufferPoolManagerConcurrencyTest, ConcurrencyTest) {
   // const int num_threads = 5;
-  const int num_threads = 5;
+  const int num_threads = 10;
   const int num_runs = 50;
 
   // get fd
