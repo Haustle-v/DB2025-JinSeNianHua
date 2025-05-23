@@ -35,6 +35,7 @@ bool BufferPoolManager::find_victim_page(frame_id_t* frame_id) {
   *frame_id = target_frame_id;
 
   if (target_frame_id != INVALID_FRAME_ID) {
+    // std::cerr << "[DEBUG] bpm victim frame " << target_frame_id << std::endl;
     return true;
   }
 
@@ -60,6 +61,7 @@ void BufferPoolManager::update_page(Page* page, PageId new_page_id,
   if (page->is_dirty()) {
     disk_manager_->write_page(page->id_.fd, page->id_.page_no, page->get_data(),
                               PAGE_SIZE);
+    page->is_dirty_ = false;
   }
 
   //   数据页更新 不相等更新键值对 相等则修正
@@ -86,7 +88,6 @@ void BufferPoolManager::update_page(Page* page, PageId new_page_id,
  * @param {PageId} page_id 需要获取的页的PageId
  */
 Page* BufferPoolManager::fetch_page(PageId page_id) {
-  // 相当于找文件中的page
   // Todo:
   //  1.     从page_table_中搜寻目标页
   //  1.1 若目标页有被page_table_记录，则将其所在frame固定(pin)，并返回目标页。
@@ -103,8 +104,10 @@ Page* BufferPoolManager::fetch_page(PageId page_id) {
   if (iter != page_table_.end()) {
     // 缓存命中
     Page& target_page = pages_[iter->second];
-    replacer_->pin(useable_frame_id);  // unpin会在外面被调用 这里必须加
     target_page.pin_count_++;
+    replacer_->pin(useable_frame_id);  // unpin会在外面被调用 这里必须加
+    // std::cerr << "[DEBUG] bpm fetch_page cached hit! page "
+    //           << page_id.toString() << std::endl;
     return &target_page;
   }
 
@@ -122,8 +125,8 @@ Page* BufferPoolManager::fetch_page(PageId page_id) {
                            pages_[useable_frame_id].get_data(), PAGE_SIZE);
 
   //    加载到内存时把它定住
-  replacer_->pin(useable_frame_id);
   pages_[useable_frame_id].pin_count_ = 1;
+  replacer_->pin(useable_frame_id);
 
   return pages_ + useable_frame_id;
 }
@@ -148,6 +151,9 @@ bool BufferPoolManager::unpin_page(PageId page_id, bool is_dirty) {
   std::scoped_lock<std::mutex> lock(latch_);
   auto iter = page_table_.find(page_id);
 
+  // std::cerr << "[DEBUG] bpm unpin page " << page_id.toString()
+  //           << " try set dirty " << is_dirty << std::endl;
+
   if (iter == page_table_.end()) {
     // 不在缓存 直接false
     return false;
@@ -161,9 +167,14 @@ bool BufferPoolManager::unpin_page(PageId page_id, bool is_dirty) {
   //   pc大于0 自减后判断
   --target_page.pin_count_;
   if (target_page.pin_count_ == 0) {
+    // std::cerr << "[DEBUG] will unpin frame " << iter->second << std::endl;
     replacer_->unpin(iter->second);
   }
-  target_page.is_dirty_ = is_dirty;
+
+  // 虽然它本来可能是脏的 但读时调用的unpin将会是false
+  if (is_dirty) {
+    target_page.is_dirty_ = is_dirty;
+  }
   return true;
 }
 
@@ -229,6 +240,8 @@ Page* BufferPoolManager::new_page(PageId* page_id) {
   replacer_->pin(usable_frame_id);
   target_page.pin_count_ = 1;
 
+  // std::cerr << "[DEBUG] bpm new page " << page_id->toString() << " on frame "
+  //           << usable_frame_id << std::endl;
   return &target_page;
 }
 
@@ -249,7 +262,9 @@ bool BufferPoolManager::delete_page(PageId page_id) {
   if (iter == page_table_.end()) {
     return true;
   }
-
+  // std::cerr << "[DEBUG] bpm will delete page " << page_id.toString()
+  //           << " frame " << iter->second << std::endl;
+  replacer_->unpin(iter->second);
   Page& target_page = pages_[iter->second];
   if (target_page.pin_count_ == 0) {
     // pc为0才能删
