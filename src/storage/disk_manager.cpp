@@ -37,6 +37,8 @@ void DiskManager::write_page(int fd, page_id_t page_no, const char *offset,
   // 注意write返回值与num_bytes不等时 throw
   // InternalError("DiskManager::write_page Error");
   std::scoped_lock<std::mutex> lock(latch_);
+  // std::cerr << "[DBUG] disk write fd " << fd << " page no " << page_no
+  //           << std::endl;
   lseek(fd, page_no * PAGE_SIZE, SEEK_SET);
   ssize_t write_bytes = write(fd, offset, num_bytes);
   if (write_bytes != num_bytes) {
