@@ -284,8 +284,8 @@ void BufferPoolManager::flush_all_pages(int fd) {
     for (page_id_t frame_no = 0; frame_no < pool_size_; ++frame_no) {
       const PageId& page_id = pages_[frame_no].get_page_id();
       if (page_id.fd == fd && page_id.page_no != INVALID_PAGE_ID) {
-        disk_manager_->write_page(fd, page_id.page_no, pages_->get_data(),
-                                  PAGE_SIZE);
+        disk_manager_->write_page(fd, page_id.page_no,
+                                  pages_[frame_no].get_data(), PAGE_SIZE);
         pages_[frame_no].is_dirty_ = false;
       }
     }
