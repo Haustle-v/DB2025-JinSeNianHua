@@ -43,12 +43,22 @@ class InsertExecutor : public AbstractExecutor {
         for (size_t i = 0; i < values_.size(); i++) {
             auto &col = tab_.cols[i];
             auto &val = values_[i];
+            
+            // 添加类型转换逻辑
             if (col.type != val.type) {
-                throw IncompatibleTypeError(coltype2str(col.type), coltype2str(val.type));
+                if (col.type == TYPE_FLOAT && val.type == TYPE_INT) {
+                    // 将整数转换为浮点数
+                    val.type = TYPE_FLOAT;
+                    val.float_val = static_cast<float>(val.int_val);
+                } else {
+                    throw IncompatibleTypeError(coltype2str(col.type), coltype2str(val.type));
+                }
             }
+            
             val.init_raw(col.len);
             memcpy(rec.data + col.offset, val.raw->data, col.len);
         }
+        
         // Insert into record file
         rid_ = fh_->insert_record(rec.data, context_);
         
