@@ -104,7 +104,7 @@ Page* BufferPoolManager::fetch_page(PageId page_id) {
     // 缓存命中
     Page& target_page = pages_[iter->second];
     target_page.pin_count_++;
-    replacer_->pin(useable_frame_id);  // unpin会在外面被调用 这里必须加
+    replacer_->pin(iter->second);  // unpin会在外面被调用 这里必须加
     // std::cerr << "[DEBUG] bpm fetch_page cached hit! page "
     //           << page_id.toString() << std::endl;
     return &target_page;
