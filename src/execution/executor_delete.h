@@ -1,7 +1,7 @@
 /* Copyright (c) 2023 Renmin University of China
 RMDB is licensed under Mulan PSL v2.
-You can use this software according to the terms and conditions of the Mulan PSL v2.
-You may obtain a copy of Mulan PSL v2 at:
+You can use this software according to the terms and conditions of the Mulan PSL
+v2. You may obtain a copy of Mulan PSL v2 at:
         http://license.coscl.org.cn/MulanPSL2
 THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
 EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
@@ -16,29 +16,37 @@ See the Mulan PSL v2 for more details. */
 #include "system/sm.h"
 
 class DeleteExecutor : public AbstractExecutor {
-   private:
-    TabMeta tab_;                   // 表的元数据
-    std::vector<Condition> conds_;  // delete的条件
-    RmFileHandle *fh_;              // 表的数据文件句柄
-    std::vector<Rid> rids_;         // 需要删除的记录的位置
-    std::string tab_name_;          // 表名称
-    SmManager *sm_manager_;
+ private:
+  TabMeta tab_;                   // 表的元数据
+  std::vector<Condition> conds_;  // delete的条件
+  RmFileHandle *fh_;              // 表的数据文件句柄
+  std::vector<Rid> rids_;         // 需要删除的记录的位置
+  std::string tab_name_;          // 表名称
+  SmManager *sm_manager_;
 
-   public:
-    DeleteExecutor(SmManager *sm_manager, const std::string &tab_name, std::vector<Condition> conds,
-                   std::vector<Rid> rids, Context *context) {
-        sm_manager_ = sm_manager;
-        tab_name_ = tab_name;
-        tab_ = sm_manager_->db_.get_table(tab_name);
-        fh_ = sm_manager_->fhs_.at(tab_name).get();
-        conds_ = conds;
-        rids_ = rids;
-        context_ = context;
+ public:
+  DeleteExecutor(SmManager *sm_manager, const std::string &tab_name,
+                 std::vector<Condition> conds, std::vector<Rid> rids,
+                 Context *context) {
+    sm_manager_ = sm_manager;
+    tab_name_ = tab_name;
+    tab_ = sm_manager_->db_.get_table(tab_name);
+    fh_ = sm_manager_->fhs_.at(tab_name).get();
+    conds_ = conds;
+    rids_ = rids;
+    context_ = context;
+  }
+
+  //   sqb: 这里与update类似 rids就是包含了所有待删除记录 顺序处理即可
+  //   还是注意后续的索引 5.24
+  std::unique_ptr<RmRecord> Next() override {
+    for (auto &rid : rids_) {
+      fh_->delete_record(rid, context_);
     }
+    return nullptr;
+  }
 
-    std::unique_ptr<RmRecord> Next() override {
-        return nullptr;
-    }
+  Rid &rid() override { return _abstract_rid; }
 
-    Rid &rid() override { return _abstract_rid; }
+  std::string getType() override { return "DeleteExecutor"; };
 };

@@ -86,6 +86,7 @@ void SmManager::drop_db(const std::string& db_name) {
  * @param {string&} db_name 数据库名称，与文件夹同名
  */
 void SmManager::open_db(const std::string& db_name) {
+  // sqb :完成数据部分 未考虑索引 5.22
   // 找到目录 并进入
   if (!is_dir(db_name)) {
     throw DatabaseNotFoundError(db_name);
@@ -100,6 +101,9 @@ void SmManager::open_db(const std::string& db_name) {
 
   //   加载数据文件
   for (auto& entry : db_.tabs_) {
+    fhs_.emplace(entry.first, rm_manager_->open_file(entry.first));
+    // 加载表的索引文件 留到第三问
+    // for(auto &)
   }
 }
 
@@ -115,7 +119,17 @@ void SmManager::flush_meta() {
 /**
  * @description: 关闭数据库并把数据落盘
  */
-void SmManager::close_db() {}
+void SmManager::close_db() {
+  // sqb :完成数据部分 未考虑索引 5.22
+  // 更新元数据
+  flush_meta();
+  // 更新数据
+  for (auto& entry : fhs_) {
+    rm_manager_->close_file(entry.second.get());
+  }
+  // 更新索引
+  //   for(auto &entry:ihs_)
+}
 
 /**
  * @description:
@@ -207,15 +221,20 @@ void SmManager::create_table(const std::string& tab_name,
  * @param {Context*} context
  */
 void SmManager::drop_table(const std::string& tab_name, Context* context) {
+  // sqb :完成数据部分 未考虑索引 5.22
   if (!db_.is_table(tab_name)) {
     throw TableNotFoundError(tab_name);
   }
 
   //   删除内存中相关表元数据
   db_.tabs_.erase(tab_name);
-  fhs_.erase(tab_name);
+  flush_meta();
+
+  rm_manager_->close_file(fhs_[tab_name].get());
   rm_manager_->destroy_file(tab_name);
-  //   ihs_.erase(tab_name); //暂时先加上
+  fhs_.erase(tab_name);
+
+  //   ihs_.erase(tab_name); //还有索引
 }
 
 /**
