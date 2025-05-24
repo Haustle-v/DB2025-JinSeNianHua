@@ -273,7 +273,7 @@ bool BufferPoolManager::delete_page(PageId page_id) {
     free_list_.emplace_back(iter->second);
     target_page.id_.fd = -1;
     target_page.id_.page_no = INVALID_PAGE_ID;
-    // target_page.reset_memory();
+    target_page.reset_memory();
     target_page.is_dirty_ = false;
     return true;
   }
