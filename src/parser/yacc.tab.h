@@ -35,8 +35,8 @@
    especially those whose name start with YY_ or yy_.  They are
    private implementation details that can be changed or removed.  */
 
-#ifndef YY_YY_MNT_D_PHD1_DATABASE_COMPETITION_DB2024_RMDB_SRC_PARSER_YACC_TAB_H_INCLUDED
-# define YY_YY_MNT_D_PHD1_DATABASE_COMPETITION_DB2024_RMDB_SRC_PARSER_YACC_TAB_H_INCLUDED
+#ifndef YY_YY_HOME_UBUNTU_DB2025_JINSENIANHUA_SRC_PARSER_YACC_TAB_H_INCLUDED
+# define YY_YY_HOME_UBUNTU_DB2025_JINSENIANHUA_SRC_PARSER_YACC_TAB_H_INCLUDED
 /* Debug traces.  */
 #ifndef YYDEBUG
 # define YYDEBUG 0
@@ -95,7 +95,13 @@ extern int yydebug;
     VALUE_STRING = 296,            /* VALUE_STRING  */
     VALUE_INT = 297,               /* VALUE_INT  */
     VALUE_FLOAT = 298,             /* VALUE_FLOAT  */
-    VALUE_BOOL = 299               /* VALUE_BOOL  */
+    VALUE_BOOL = 299,              /* VALUE_BOOL  */
+    COUNT = 300,                   /* COUNT  */
+    MAX = 301,                     /* MAX  */
+    MIN = 302,                     /* MIN  */
+    SUM = 303,                     /* SUM  */
+    AVG = 304,                     /* AVG  */
+    AS = 305                       /* AS  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -122,4 +128,4 @@ struct YYLTYPE
 int yyparse (void);
 
 
-#endif /* !YY_YY_MNT_D_PHD1_DATABASE_COMPETITION_DB2024_RMDB_SRC_PARSER_YACC_TAB_H_INCLUDED  */
+#endif /* !YY_YY_HOME_UBUNTU_DB2025_JINSENIANHUA_SRC_PARSER_YACC_TAB_H_INCLUDED  */

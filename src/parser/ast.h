@@ -18,6 +18,14 @@ enum JoinType {
 };
 namespace ast {
 
+enum AggregateType {
+    AGG_COUNT,
+    AGG_MAX,
+    AGG_MIN,
+    AGG_SUM,
+    AGG_AVG
+};
+
 enum SvType {
     SV_TYPE_INT, SV_TYPE_FLOAT, SV_TYPE_STRING, SV_TYPE_BOOL
 };
@@ -147,8 +155,17 @@ struct Col : public Expr {
     std::string tab_name;
     std::string col_name;
 
+    bool is_agg = false;
+    AggregateType agg_type;
+    std::string alias;
+
     Col(std::string tab_name_, std::string col_name_) :
             tab_name(std::move(tab_name_)), col_name(std::move(col_name_)) {}
+
+    Col(AggregateType agg_type_, std::string col_name_, std::string alias_) :
+        agg_type(agg_type_), col_name(std::move(col_name_)), alias(std::move(alias_)) {
+        is_agg = true;
+    }
 };
 
 struct SetClause : public TreeNode {

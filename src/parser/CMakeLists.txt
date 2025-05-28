@@ -1,3 +1,7 @@
+# 设置编译类型为Debug
+set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g")
+
 find_package(BISON REQUIRED)
 find_package(FLEX REQUIRED)
 

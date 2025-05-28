@@ -32,6 +32,11 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %token <sv_float> VALUE_FLOAT
 %token <sv_bool> VALUE_BOOL
 
+// 新增聚合函数关键字
+%token COUNT MAX MIN SUM AVG AS
+// 这里系统没有设置好，需要手动在yacc.tab.h中添加enum
+// 注意新加token的顺序需要和yacc.tab.h中定义的顺序一致
+
 // specify types for non-terminal symbol
 %type <sv_node> stmt dbStmt ddl dml txnStmt setStmt
 %type <sv_field> field
@@ -41,10 +46,10 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %type <sv_expr> expr
 %type <sv_val> value
 %type <sv_vals> valueList
-%type <sv_str> tbName colName
+%type <sv_str> tbName colName alias
 %type <sv_strs> tableList colNameList
-%type <sv_col> col
-%type <sv_cols> colList selector
+%type <sv_col> col agg_expr
+%type <sv_cols> colList aggExprList selector
 %type <sv_set_clause> setClause
 %type <sv_set_clauses> setClauses
 %type <sv_cond> condition
@@ -309,6 +314,29 @@ op:
     }
     ;
 
+agg_expr:
+        COUNT '(' colName ')' AS alias
+    {
+        $$ = std::make_shared<Col>(AGG_COUNT, $3, $6);
+    }
+    |   MAX '(' colName ')' AS alias
+    {
+        $$ = std::make_shared<Col>(AGG_MAX, $3, $6);
+    }
+    |   MIN '(' colName ')' AS alias
+    {
+        $$ = std::make_shared<Col>(AGG_MIN, $3, $6);
+    }
+    |   SUM '(' colName ')' AS alias
+    {
+        $$ = std::make_shared<Col>(AGG_SUM, $3, $6);
+    }
+    |   AVG '(' colName ')' AS alias
+    {
+        $$ = std::make_shared<Col>(AGG_AVG, $3, $6);
+    }
+    ;
+
 expr:
         value
     {
@@ -344,6 +372,24 @@ selector:
         $$ = {};
     }
     |   colList
+    {
+        $$ = $1;
+    }
+    |   aggExprList
+    {
+        $$ = $1;
+    }
+    ;
+
+aggExprList:
+        agg_expr
+    {
+        $$ = std::vector<std::shared_ptr<Col>>{$1};
+    }
+    |   aggExprList ',' agg_expr
+    {
+        $$.push_back($3);
+    }
     ;
 
 tableList:
@@ -390,4 +436,6 @@ set_knob_type:
 tbName: IDENTIFIER;
 
 colName: IDENTIFIER;
+
+alias: IDENTIFIER;
 %%

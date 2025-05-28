@@ -95,6 +95,12 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
     yylval->sv_bool = false;
     return VALUE_BOOL;
 }
+"COUNT" { return COUNT; }
+"MAX"   { return MAX; }
+"MIN"   { return MIN; }
+"SUM"   { return SUM; }
+"AVG"   { return AVG; }
+"AS"    { return AS; }
     /* operators */
 ">=" { return GEQ; }
 "<=" { return LEQ; }
