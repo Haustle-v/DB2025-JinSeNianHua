@@ -353,7 +353,7 @@ IxNodeHandle *IxIndexHandle::split(IxNodeHandle *node) {
 
   // sqb 5.27
   int init_size = node->get_size();
-  assert(init_size == node->get_max_size() + 1 && "b+ tree split error");
+  assert(init_size == node->get_max_size() && "b+ tree split error");
   IxNodeHandle *right_node = create_node();
 
   // 均分键值
@@ -372,7 +372,7 @@ IxNodeHandle *IxIndexHandle::split(IxNodeHandle *node) {
   //   初始化page_hdr
   right_node->page_hdr->next_free_page_no = IX_NO_PAGE;
   right_node->page_hdr->parent = node->get_parent_page_no();
-  bool is_leaf = right_node->is_leaf_page();
+  bool is_leaf = node->is_leaf_page();
   right_node->page_hdr->is_leaf = is_leaf;
 
   if (is_leaf) {
@@ -570,7 +570,7 @@ bool IxIndexHandle::coalesce_or_redistribute(IxNodeHandle *node, Transaction *tr
     return false;
   }
 
-  //   叶子节点大小不符合要求 合并
+  //   叶子节点大小不符合要求 移动借或合并
   IxNodeHandle *parent_node = fetch_node(node->get_parent_page_no());
   bool need_remove = true;
   int node_idx = parent_node->find_child(node);
@@ -580,10 +580,11 @@ bool IxIndexHandle::coalesce_or_redistribute(IxNodeHandle *node, Transaction *tr
     // 两节点仍可存在 重新分配键值
     redistribute(sibling_node, node, parent_node, node_idx);
     need_remove = false;
+  } else {
+    // 两节点需合并
+    coalesce(&sibling_node, &node, &parent_node, node_idx, transaction, root_is_latched);
   }
 
-  // 两节点需合并
-  coalesce(&sibling_node, &node, &parent_node, node_idx, transaction, root_is_latched);
   buffer_pool_manager_->unpin_page(parent_node->get_page_id(), true);
   buffer_pool_manager_->unpin_page(sibling_node->get_page_id(), true);
 
@@ -616,7 +617,6 @@ bool IxIndexHandle::adjust_root(IxNodeHandle *old_root_node) {
     release_node_handle(*old_root_node);
     return true;
   } else if (is_leaf && key_num == 0) {
-    // 不确定这里的根
     release_node_handle(*old_root_node);
     update_root_page_no(IX_INIT_ROOT_PAGE);
     return true;
@@ -703,20 +703,19 @@ bool IxIndexHandle::coalesce(IxNodeHandle **neighbor_node, IxNodeHandle **node, 
   int key_num = (*node)->get_size();
   (*neighbor_node)->insert_pairs((*neighbor_node)->get_size(), (*node)->get_key(0), (*node)->get_rid(0), key_num);
 
-  //   维护孩子
+  //   维护新挪移的孩子
   int merge_key_size = (*neighbor_node)->get_size();
-  for (int child_idx = 0; child_idx < merge_key_size; ++child_idx) {
+  for (int child_idx = merge_key_size - key_num; child_idx < merge_key_size; ++child_idx) {
     maintain_child(*neighbor_node, child_idx);
   }
-  (*parent)->erase_pair(index);
 
-  //   更新叶子
+  //   更新最后叶子
   bool is_leaf = (*node)->is_leaf_page();
   if (is_leaf && file_hdr_->last_leaf_ == (*node)->get_page_no()) {
     file_hdr_->last_leaf_ = (*neighbor_node)->get_page_no();
   }
 
-  //   删除node
+  //   释放并删除node
   if (is_leaf) {
     erase_leaf(*node);
   }

@@ -51,7 +51,7 @@ class DeleteExecutor : public AbstractExecutor {
         char key_buffer[index_meta.col_tot_len];
         int offset = 0;
         for (auto &col_meta : index_meta.cols) {
-          memcpy(key_buffer + offset, rec_ptr->data + col_meta.len, col_meta.len);
+          memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
           offset += col_meta.len;
         }
         ix_hdl_ptr->delete_entry(key_buffer, context_->txn_);
