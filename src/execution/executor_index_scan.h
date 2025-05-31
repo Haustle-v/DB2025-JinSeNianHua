@@ -96,6 +96,9 @@ class IndexScanExecutor : public AbstractExecutor {
 
   // sqb  检查cond中的条件语句中是否包含索引 true代表是等值查询 false为范围 5.30
   bool get_key(std::string &index_col_name, char *lower_key, char *upper_key, int offset, int len) {
+    // 列要么是等值查询  给定下界的查询  给定上界的查询  同时给定上下界 暂时不考虑同时给多个下界的情况
+    bool lower_inited = false;
+    bool upper_inited = false;
     for (auto &cond : conds_) {
       // 仅考虑右侧为值 注意这里会检查所有条件 也就是支持一个索引的上下界检查
       if (cond.lhs_col.col_name == index_col_name && cond.is_rhs_val) {
@@ -107,18 +110,24 @@ class IndexScanExecutor : public AbstractExecutor {
           case OP_LT:
           case OP_LE:
             memcpy(upper_key + offset, cond.rhs_val.raw->data, len);
-            fill_lowest(index_col_name, lower_key, offset, len);
+            upper_inited = true;
             break;
           case OP_GT:
           case OP_GE:
             memcpy(lower_key + offset, cond.rhs_val.raw->data, len);
-            fill_uppest(index_col_name, upper_key, offset, len);
+            lower_inited = true;
             break;
           default:
             //   不处理不等号
             break;
         }
       }
+    }
+    if (!lower_inited) {
+      fill_lowest(index_col_name, lower_key, offset, len);
+    }
+    if (!upper_inited) {
+      fill_uppest(index_col_name, upper_key, offset, len);
     }
     return false;
   }
@@ -137,11 +146,11 @@ class IndexScanExecutor : public AbstractExecutor {
     memset(upper_key, 0, sizeof(upper_key));
     int offset = 0;
 
-    // 按照索引的顺序 检查cond中的条件语句是否能应用索引 若有 则得到对应键值
+    // 按照索引的顺序 检查cond中的条件语句是否能应用索引 若有 则得到对应键值 current_size代表等值查询数
     int current_size = 0;
-    for (auto &index_col_meta : index_meta_.cols) {
+    for (; current_size < index_meta_.col_num; ++current_size) {
       // 注意第一个范围查询可用索引 后续都不能使用索引
-      ++current_size;
+      auto &index_col_meta = index_meta_.cols[current_size];
       if (!get_key(index_col_meta.name, lower_key, upper_key, offset, index_col_meta.len)) {
         break;
       }
