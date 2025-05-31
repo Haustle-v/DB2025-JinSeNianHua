@@ -112,8 +112,6 @@ void *client_handler(void *sock_fd) {
     }
 
     std::cout << "Read from client " << fd << ": " << data_recv << std::endl;
-    // sqb 调试试试
-    std::cerr << "[DEBUG] " << data_recv << '\n';
 
     memset(data_send, '\0', BUFFER_LENGTH);
     offset = 0;

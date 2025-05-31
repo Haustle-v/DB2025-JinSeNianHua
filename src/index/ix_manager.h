@@ -75,7 +75,7 @@ class IxManager {
     // 即 n <= btree_order，那么btree_order就是每个结点最多可插入的键值对数量（实际还多留了一个空位，但其不可插入）
     int btree_order = static_cast<int>((PAGE_SIZE - sizeof(IxPageHdr)) / (col_tot_len + sizeof(Rid)) - 1);
     // 调试用
-    // int btree_order = 3;
+    // int btree_order = 4;
     assert(btree_order > 2);
 
     // Create file header and write to file

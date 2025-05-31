@@ -356,18 +356,19 @@ IxNodeHandle *IxIndexHandle::split(IxNodeHandle *node) {
   assert(init_size == node->get_max_size() && "b+ tree split error");
   IxNodeHandle *right_node = create_node();
 
-  // 均分键值
-  int split_num = init_size / 2;
-  right_node->set_size(split_num);
-  node->set_size(split_num);
+  // 均分键值 b+的阶可能无法均分
+  int left_num = init_size / 2;
+  int right_num = init_size - left_num;
+  node->set_size(left_num);
+  right_node->set_size(right_num);
 
-  char *left_key = node->get_key(split_num);
-  Rid *left_rid = node->get_rid(split_num);
+  char *left_key = node->get_key(left_num);
+  Rid *left_rid = node->get_rid(left_num);
   int key_len = node->file_hdr->col_tot_len_;
-  memmove(right_node->get_key(0), left_key, key_len * split_num);
-  memset(left_key, 0, split_num * key_len);
-  memmove(right_node->get_rid(0), left_rid, split_num * sizeof(Rid));
-  memset(left_rid, 0, split_num * sizeof(Rid));
+  memmove(right_node->get_key(0), left_key, key_len * right_num);
+  memset(left_key, 0, right_num * key_len);
+  memmove(right_node->get_rid(0), left_rid, right_num * sizeof(Rid));
+  memset(left_rid, 0, right_num * sizeof(Rid));
 
   //   初始化page_hdr
   right_node->page_hdr->next_free_page_no = IX_NO_PAGE;
@@ -389,7 +390,7 @@ IxNodeHandle *IxIndexHandle::split(IxNodeHandle *node) {
     buffer_pool_manager_->unpin_page(init_next->get_page_id(), true);
   } else {
     // 若为内部节点 更新子节点的parent
-    for (int child_idx = 0; child_idx < split_num; ++child_idx) {
+    for (int child_idx = 0; child_idx < right_num; ++child_idx) {
       maintain_child(right_node, child_idx);
     }
   }
