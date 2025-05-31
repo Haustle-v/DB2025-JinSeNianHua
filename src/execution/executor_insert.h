@@ -59,6 +59,23 @@ class InsertExecutor : public AbstractExecutor {
       memcpy(rec.data + col.offset, val.raw->data, col.len);
     }
 
+    // sqb 添加索引唯一性检查 注意先检查所有索引再插入数据 不能边检查边插入
+    IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
+    for (auto &index_meta : tab_.indexes) {
+      std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
+      auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
+      char key_buffer[index_meta.col_tot_len];
+      int offset = 0;
+      for (auto &index_col_meta : index_meta.cols) {
+        memcpy(key_buffer + offset, rec.data + index_col_meta.offset, index_col_meta.len);
+        offset += index_col_meta.len;
+      }
+      std::vector<Rid> tmp;
+      if (ix_hdl_ptr->get_value(key_buffer, &tmp, context_->txn_)) {
+        throw InternalError("index unique constration error");
+      }
+    }
+
     // Insert into record file
     rid_ = fh_->insert_record(rec.data, context_);
 

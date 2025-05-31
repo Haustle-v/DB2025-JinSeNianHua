@@ -323,10 +323,10 @@ bool IxIndexHandle::get_value(const char *key, std::vector<Rid> *result, Transac
     throw InternalError("try find valud one invalid leaf page");
   }
   IxNodeHandle *leaf_node = entry.first;
-  Rid **value = nullptr;
+  Rid *value = nullptr;
   bool ret = false;
-  if (leaf_node->leaf_lookup(key, value)) {
-    result->emplace_back(**value);
+  if (leaf_node->leaf_lookup(key, &value)) {
+    result->emplace_back(*value);
     ret = true;
   }
   buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), false);

@@ -67,7 +67,6 @@ class UpdateExecutor : public AbstractExecutor {
         auto col_meta_iter = tab_.get_col(single_set_clause.lhs.col_name);
         memcpy(rec_ptr->data + col_meta_iter->offset, single_set_clause.rhs.raw->data, col_meta_iter->len);
       }
-      fh_->update_record(rid, rec_ptr->data, context_);
 
       //   处理索引
       RmRecord new_rec = *rec_ptr;
@@ -86,13 +85,16 @@ class UpdateExecutor : public AbstractExecutor {
         if (memcmp(old_key, new_key, index_meta.col_tot_len) != 0) {
           std::vector<Rid> tmp;
           if (ix_hdl_ptr->get_value(new_key, &tmp, context_->txn_)) {
-            throw InternalError("index dumplate!");
+            throw InternalError("index unique constration error");
           }
 
           ix_hdl_ptr->delete_entry(old_key, context_->txn_);
           ix_hdl_ptr->insert_entry(new_key, rid, context_->txn_);
         }
       }
+
+      // 调整一下 先检查完唯一性后再更新数据
+      fh_->update_record(rid, rec_ptr->data, context_);
     }
 
     return nullptr;
