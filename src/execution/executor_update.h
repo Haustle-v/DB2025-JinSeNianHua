@@ -26,10 +26,8 @@ class UpdateExecutor : public AbstractExecutor {
   SmManager *sm_manager_;
 
  public:
-  UpdateExecutor(SmManager *sm_manager, const std::string &tab_name,
-                 std::vector<SetClause> set_clauses,
-                 std::vector<Condition> conds, std::vector<Rid> rids,
-                 Context *context) {
+  UpdateExecutor(SmManager *sm_manager, const std::string &tab_name, std::vector<SetClause> set_clauses,
+                 std::vector<Condition> conds, std::vector<Rid> rids, Context *context) {
     sm_manager_ = sm_manager;
     tab_name_ = tab_name;
     set_clauses_ = set_clauses;
@@ -41,20 +39,19 @@ class UpdateExecutor : public AbstractExecutor {
   }
 
   // sqb: updata算子里的rids_是经过seq scan扫描得到的
-  // 所以在这里更新全部就好 5.24 注意这里后面还要考虑索引
+  // 所以在这里更新全部就好 处理数据与索引 5.29
   std::unique_ptr<RmRecord> Next() override {
     // 提前做类型兼容 并为set 子句的值分配空间 它的空间通过raii管理
+    IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     for (auto &single_set_clause : set_clauses_) {
       auto col_meta_iter = tab_.get_col(single_set_clause.lhs.col_name);
 
       if (col_meta_iter->type != single_set_clause.rhs.type) {
-        if (col_meta_iter->type == TYPE_FLOAT &&
-            single_set_clause.rhs.type == TYPE_INT) {
+        if (col_meta_iter->type == TYPE_FLOAT && single_set_clause.rhs.type == TYPE_INT) {
           single_set_clause.rhs.type = TYPE_FLOAT;
           single_set_clause.rhs.float_val = single_set_clause.rhs.int_val;
         } else {
-          throw IncompatibleTypeError(coltype2str(col_meta_iter->type),
-                                      coltype2str(single_set_clause.rhs.type));
+          throw IncompatibleTypeError(coltype2str(col_meta_iter->type), coltype2str(single_set_clause.rhs.type));
         }
       }
       // 分配空间 跟列保持一致
@@ -63,13 +60,39 @@ class UpdateExecutor : public AbstractExecutor {
 
     for (auto &rid : rids_) {
       std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
+      RmRecord old_rec = *rec_ptr;
+
+      //   更新数据
       for (auto &single_set_clause : set_clauses_) {
         auto col_meta_iter = tab_.get_col(single_set_clause.lhs.col_name);
-        // 更新
-        memcpy(rec_ptr->data + col_meta_iter->offset,
-               single_set_clause.rhs.raw->data, col_meta_iter->len);
+        memcpy(rec_ptr->data + col_meta_iter->offset, single_set_clause.rhs.raw->data, col_meta_iter->len);
       }
       fh_->update_record(rid, rec_ptr->data, context_);
+
+      //   处理索引
+      RmRecord new_rec = *rec_ptr;
+      for (auto &index_meta : tab_.indexes) {
+        char old_key[index_meta.col_tot_len], new_key[index_meta.col_tot_len];
+        std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
+        auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
+        // 获取新旧键
+        int offset = 0;
+        for (auto &col_meta : index_meta.cols) {
+          memcpy(old_key + offset, old_rec.data + col_meta.offset, col_meta.len);
+          memcpy(new_key + offset, new_rec.data + col_meta.offset, col_meta.len);
+          offset += col_meta.len;
+        }
+        // 检查键是否相同 相同无需更新 不相同要保证键的唯一性
+        if (memcmp(old_key, new_key, index_meta.col_tot_len) != 0) {
+          std::vector<Rid> tmp;
+          if (ix_hdl_ptr->get_value(new_key, &tmp, context_->txn_)) {
+            throw InternalError("index dumplate!");
+          }
+
+          ix_hdl_ptr->delete_entry(old_key, context_->txn_);
+          ix_hdl_ptr->insert_entry(new_key, rid, context_->txn_);
+        }
+      }
     }
 
     return nullptr;

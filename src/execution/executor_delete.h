@@ -25,9 +25,8 @@ class DeleteExecutor : public AbstractExecutor {
   SmManager *sm_manager_;
 
  public:
-  DeleteExecutor(SmManager *sm_manager, const std::string &tab_name,
-                 std::vector<Condition> conds, std::vector<Rid> rids,
-                 Context *context) {
+  DeleteExecutor(SmManager *sm_manager, const std::string &tab_name, std::vector<Condition> conds,
+                 std::vector<Rid> rids, Context *context) {
     sm_manager_ = sm_manager;
     tab_name_ = tab_name;
     tab_ = sm_manager_->db_.get_table(tab_name);
@@ -38,9 +37,27 @@ class DeleteExecutor : public AbstractExecutor {
   }
 
   //   sqb: 这里与update类似 rids就是包含了所有待删除记录 顺序处理即可
-  //   还是注意后续的索引 5.24
+  //  处理记录与索引 5.29
   std::unique_ptr<RmRecord> Next() override {
+    IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
+
     for (auto &rid : rids_) {
+      std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
+
+      //   删除索引
+      for (auto &index_meta : tab_.indexes) {
+        std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
+        auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
+        char key_buffer[index_meta.col_tot_len];
+        int offset = 0;
+        for (auto &col_meta : index_meta.cols) {
+          memcpy(key_buffer + offset, rec_ptr->data + col_meta.len, col_meta.len);
+          offset += col_meta.len;
+        }
+        ix_hdl_ptr->delete_entry(key_buffer, context_->txn_);
+      }
+
+      //   删除记录
       fh_->delete_record(rid, context_);
     }
     return nullptr;
