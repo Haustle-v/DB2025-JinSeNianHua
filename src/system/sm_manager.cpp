@@ -282,16 +282,16 @@ void SmManager::create_index(const std::string &tab_name, const std::vector<std:
   auto ix_hdl_ptr = ix_manager_->open_index(tab_name, col_names);
   auto file_hdl_ptr = fhs_[tab_name].get();
   char key_buffer[col_len];
-  // char *key_buffer = new char[col_len];
-  //   for (RmScan scan(file_hdl_ptr); !scan.is_end(); scan.next()) {
-  //     auto rec_ptr = file_hdl_ptr->get_record(scan.rid(), context);
-  //     int curr_offset = 0;
-  //     for (auto &col_meta : index.cols) {
-  //       memcpy(key_buffer + curr_offset, rec_ptr->data + col_meta.offset, col_meta.len);
-  //       curr_offset += col_meta.len;
-  //     }
-  //     ix_hdl_ptr->insert_entry(key_buffer, scan.rid(), context->txn_);
+  char *key_buffer = new char[col_len];
+  // for (RmScan scan(file_hdl_ptr); !scan.is_end(); scan.next()) {
+  //   auto rec_ptr = file_hdl_ptr->get_record(scan.rid(), context);
+  //   int curr_offset = 0;
+  //   for (auto &col_meta : index_cols_meta) {
+  //     memcpy(key_buffer + curr_offset, rec_ptr->data + col_meta.offset, col_meta.len);
+  //     curr_offset += col_meta.len;
   //   }
+  //   ix_hdl_ptr->insert_entry(key_buffer, scan.rid(), context->txn_);
+  // }
 
   //   将索引元数据添加
   IndexMeta index = {.tab_name = tab_name,
@@ -315,24 +315,24 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<std::s
     throw IndexNotFoundError(tab_name, col_names);
   }
 
-  //   std::string index_name = ix_manager_->get_index_name(tab_name, col_names);
-  //   IxIndexHandle *ix_hdl_ptr = ihs_[index_name].get();
-  //   int index_page_num = ix_hdl_ptr->get_page_num();
+  std::string index_name = ix_manager_->get_index_name(tab_name, col_names);
+  IxIndexHandle *ix_hdl_ptr = ihs_[index_name].get();
+  int index_page_num = ix_hdl_ptr->get_page_num();
 
-  //   // 缓冲池要删除索引对应页 因为创建时索引写入磁盘绕过了缓冲池 后面创建可能会有虚假缓存命中
-  //   // 0 1 作为file leaf hdr 直接绕过了缓冲区读写 不用管
-  //   for (page_id_t page_no = 2; page_no < index_page_num; ++page_no) {
-  //     buffer_pool_manager_->delete_page({ix_hdl_ptr->get_fd(), page_no});
-  //   }
+  // 缓冲池要删除索引对应页 因为创建时索引写入磁盘绕过了缓冲池 后面创建可能会有虚假缓存命中
+  // 0 1 作为file leaf hdr 直接绕过了缓冲区读写 不用管
+  for (page_id_t page_no = 2; page_no < index_page_num; ++page_no) {
+    buffer_pool_manager_->delete_page({ix_hdl_ptr->get_fd(), page_no});
+  }
 
-  //   //   删除索引文件
-  //   ix_manager_->close_index(ix_hdl_ptr);
-  //   ix_manager_->destroy_index(tab_name, col_names);
+  //   删除索引文件
+  ix_manager_->close_index(ix_hdl_ptr);
+  ix_manager_->destroy_index(tab_name, col_names);
 
-  //   TabMeta &tab = db_.tabs_[tab_name];
-  //   tab.indexes.erase(tab.get_index_meta(col_names));
-  //   ihs_.erase(index_name);
-  //   flush_meta();
+  TabMeta &tab = db_.tabs_[tab_name];
+  tab.indexes.erase(tab.get_index_meta(col_names));
+  ihs_.erase(index_name);
+  flush_meta();
 }
 
 /**
@@ -356,22 +356,22 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<ColMet
  * @param {Context*} context
  */
 void SmManager::show_index(const std::string &tab_name, Context *context) {
-  //   std::fstream outfile;
-  //   outfile.open("output.txt", std::ios::out | std::ios::app);
-  //   RecordPrinter printer(1);
+  std::fstream outfile;
+  outfile.open("output.txt", std::ios::out | std::ios::app);
+  RecordPrinter printer(1);
 
-  //   TabMeta &tab_meta = db_.get_table(tab_name);
-  //   for (auto &index_meta : tab_meta.indexes) {
-  //     std::string output;  // 用于输出到终端
-  //     outfile << "| " << tab_name << " | unique | (" << index_meta.cols[0].name;
-  //     output += tab_name + " | unique | (" + index_meta.cols[0].name;
-  //     for (size_t i = 1; i < index_meta.col_num; ++i) {
-  //       outfile << "," << index_meta.cols[i].name;
-  //       output += "," + index_meta.cols[i].name;
-  //     }
-  //     outfile << ") |\n";
-  //     output += ")";  // 剩下的 | \n 在下个函数里
-  //     printer.print_index({output}, context);
-  //   }
-  //   outfile.close();
+  TabMeta &tab_meta = db_.get_table(tab_name);
+  for (auto &index_meta : tab_meta.indexes) {
+    std::string output;  // 用于输出到终端
+    outfile << "| " << tab_name << " | unique | (" << index_meta.cols[0].name;
+    output += tab_name + " | unique | (" + index_meta.cols[0].name;
+    for (size_t i = 1; i < index_meta.col_num; ++i) {
+      outfile << "," << index_meta.cols[i].name;
+      output += "," + index_meta.cols[i].name;
+    }
+    outfile << ") |\n";
+    output += ")";  // 剩下的 | \n 在下个函数里
+    printer.print_index({output}, context);
+  }
+  outfile.close();
 }
