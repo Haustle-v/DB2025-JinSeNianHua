@@ -45,17 +45,17 @@ class DeleteExecutor : public AbstractExecutor {
       std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
 
       //   删除索引
-      for (auto &index_meta : tab_.indexes) {
-        std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
-        auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
-        char key_buffer[index_meta.col_tot_len];
-        int offset = 0;
-        for (auto &col_meta : index_meta.cols) {
-          memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
-          offset += col_meta.len;
-        }
-        ix_hdl_ptr->delete_entry(key_buffer, context_->txn_);
-      }
+      //   for (auto &index_meta : tab_.indexes) {
+      //     std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
+      //     auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
+      //     char key_buffer[index_meta.col_tot_len];
+      //     int offset = 0;
+      //     for (auto &col_meta : index_meta.cols) {
+      //       memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
+      //       offset += col_meta.len;
+      //     }
+      //     ix_hdl_ptr->delete_entry(key_buffer, context_->txn_);
+      //   }
 
       //   删除记录
       fh_->delete_record(rid, context_);
