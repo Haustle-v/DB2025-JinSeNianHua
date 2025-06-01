@@ -310,24 +310,24 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<std::s
     throw IndexNotFoundError(tab_name, col_names);
   }
 
-  std::string index_name = ix_manager_->get_index_name(tab_name, col_names);
-  IxIndexHandle *ix_hdl_ptr = ihs_[index_name].get();
-  int index_page_num = ix_hdl_ptr->get_page_num();
+  //   std::string index_name = ix_manager_->get_index_name(tab_name, col_names);
+  //   IxIndexHandle *ix_hdl_ptr = ihs_[index_name].get();
+  //   int index_page_num = ix_hdl_ptr->get_page_num();
 
-  // 缓冲池要删除索引对应页 因为创建时索引写入磁盘绕过了缓冲池 后面创建可能会有虚假缓存命中
-  // 0 1 作为file leaf hdr 直接绕过了缓冲区读写 不用管
-  for (page_id_t page_no = 2; page_no < index_page_num; ++page_no) {
-    buffer_pool_manager_->delete_page({ix_hdl_ptr->get_fd(), page_no});
-  }
+  //   // 缓冲池要删除索引对应页 因为创建时索引写入磁盘绕过了缓冲池 后面创建可能会有虚假缓存命中
+  //   // 0 1 作为file leaf hdr 直接绕过了缓冲区读写 不用管
+  //   for (page_id_t page_no = 2; page_no < index_page_num; ++page_no) {
+  //     buffer_pool_manager_->delete_page({ix_hdl_ptr->get_fd(), page_no});
+  //   }
 
-  //   删除索引文件
-  ix_manager_->close_index(ix_hdl_ptr);
-  ix_manager_->destroy_index(tab_name, col_names);
+  //   //   删除索引文件
+  //   ix_manager_->close_index(ix_hdl_ptr);
+  //   ix_manager_->destroy_index(tab_name, col_names);
 
-  TabMeta &tab = db_.tabs_[tab_name];
-  tab.indexes.erase(tab.get_index_meta(col_names));
-  ihs_.erase(index_name);
-  flush_meta();
+  //   TabMeta &tab = db_.tabs_[tab_name];
+  //   tab.indexes.erase(tab.get_index_meta(col_names));
+  //   ihs_.erase(index_name);
+  //   flush_meta();
 }
 
 /**
