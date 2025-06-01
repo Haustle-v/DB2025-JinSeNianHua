@@ -68,7 +68,7 @@ bool Planner::get_index_cols(std::string tab_name, std::vector<Condition> curr_c
     }
   }
 
-  //   if (tab.is_index(index_col_names)) return true;
+  if (tab.is_index(index_col_names)) return true;
   return false;
 }
 
