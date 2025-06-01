@@ -282,7 +282,6 @@ void SmManager::create_index(const std::string &tab_name, const std::vector<std:
   auto ix_hdl_ptr = ix_manager_->open_index(tab_name, col_names);
   auto file_hdl_ptr = fhs_[tab_name].get();
   char key_buffer[col_len];
-  char *key_buffer = new char[col_len];
   // for (RmScan scan(file_hdl_ptr); !scan.is_end(); scan.next()) {
   //   auto rec_ptr = file_hdl_ptr->get_record(scan.rid(), context);
   //   int curr_offset = 0;
