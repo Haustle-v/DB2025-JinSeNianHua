@@ -267,21 +267,20 @@ void SmManager::create_index(const std::string &tab_name, const std::vector<std:
     throw IndexExistsError(tab_name, col_names);
   }
 
-  // 创建索引元数据
+  // 搜索列元数据
   TabMeta &tab = db_.tabs_[tab_name];
-  IndexMeta index = {.tab_name = tab_name, .col_num = static_cast<int>(col_names.size())};
+  std::vector<ColMeta> index_cols_meta;
   int col_len = 0;
   for (auto &col_name : col_names) {
     auto col__meta_iter = tab.get_col(col_name);
     col_len += col__meta_iter->len;
-    index.cols.emplace_back(*col__meta_iter);
+    index_cols_meta.emplace_back(*col__meta_iter);
   }
-  index.col_tot_len = col_len;
 
   //   创建索引 插入记录
-  ix_manager_->create_index(tab_name, index.cols);
+  ix_manager_->create_index(tab_name, index_cols_meta);
   auto ix_hdl_ptr = ix_manager_->open_index(tab_name, col_names);
-  auto file_hdl_ptr = fhs_[tab_name].get();
+  //   auto file_hdl_ptr = fhs_[tab_name].get();
   // char key_buffer[col_len];
   // char *key_buffer = new char[col_len];
   //   for (RmScan scan(file_hdl_ptr); !scan.is_end(); scan.next()) {
@@ -295,6 +294,10 @@ void SmManager::create_index(const std::string &tab_name, const std::vector<std:
   //   }
 
   //   将索引元数据添加
+  IndexMeta index = {.tab_name = tab_name,
+                     .col_tot_len = col_len,
+                     .col_num = static_cast<int>(col_names.size()),
+                     .cols = index_cols_meta};
   tab.indexes.emplace_back(index);
   ihs_.emplace(ix_manager_->get_index_name(tab_name, col_names), std::move(ix_hdl_ptr));
   flush_meta();
