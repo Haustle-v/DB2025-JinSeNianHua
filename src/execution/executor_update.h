@@ -69,29 +69,29 @@ class UpdateExecutor : public AbstractExecutor {
       }
 
       //   处理索引
-      RmRecord new_rec = *rec_ptr;
-      for (auto &index_meta : tab_.indexes) {
-        char old_key[index_meta.col_tot_len], new_key[index_meta.col_tot_len];
-        std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
-        auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
-        // 获取新旧键
-        int offset = 0;
-        for (auto &col_meta : index_meta.cols) {
-          memcpy(old_key + offset, old_rec.data + col_meta.offset, col_meta.len);
-          memcpy(new_key + offset, new_rec.data + col_meta.offset, col_meta.len);
-          offset += col_meta.len;
-        }
-        // 检查键是否相同 相同无需更新 不相同要保证键的唯一性
-        if (memcmp(old_key, new_key, index_meta.col_tot_len) != 0) {
-          std::vector<Rid> tmp;
-          if (ix_hdl_ptr->get_value(new_key, &tmp, context_->txn_)) {
-            throw InternalError("index unique constration error");
-          }
+      //   RmRecord new_rec = *rec_ptr;
+      //   for (auto &index_meta : tab_.indexes) {
+      //     char old_key[index_meta.col_tot_len], new_key[index_meta.col_tot_len];
+      //     std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
+      //     auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
+      //     // 获取新旧键
+      //     int offset = 0;
+      //     for (auto &col_meta : index_meta.cols) {
+      //       memcpy(old_key + offset, old_rec.data + col_meta.offset, col_meta.len);
+      //       memcpy(new_key + offset, new_rec.data + col_meta.offset, col_meta.len);
+      //       offset += col_meta.len;
+      //     }
+      //     // 检查键是否相同 相同无需更新 不相同要保证键的唯一性
+      //     if (memcmp(old_key, new_key, index_meta.col_tot_len) != 0) {
+      //       std::vector<Rid> tmp;
+      //       if (ix_hdl_ptr->get_value(new_key, &tmp, context_->txn_)) {
+      //         throw InternalError("index unique constration error");
+      //       }
 
-          ix_hdl_ptr->delete_entry(old_key, context_->txn_);
-          ix_hdl_ptr->insert_entry(new_key, rid, context_->txn_);
-        }
-      }
+      //       ix_hdl_ptr->delete_entry(old_key, context_->txn_);
+      //       ix_hdl_ptr->insert_entry(new_key, rid, context_->txn_);
+      //     }
+      //   }
 
       // 调整一下 先检查完唯一性后再更新数据
       fh_->update_record(rid, rec_ptr->data, context_);
