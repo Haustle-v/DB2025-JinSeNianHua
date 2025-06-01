@@ -351,22 +351,22 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<ColMet
  * @param {Context*} context
  */
 void SmManager::show_index(const std::string &tab_name, Context *context) {
-  std::fstream outfile;
-  outfile.open("output.txt", std::ios::out | std::ios::app);
-  RecordPrinter printer(1);
+  //   std::fstream outfile;
+  //   outfile.open("output.txt", std::ios::out | std::ios::app);
+  //   RecordPrinter printer(1);
 
-  TabMeta &tab_meta = db_.get_table(tab_name);
-  for (auto &index_meta : tab_meta.indexes) {
-    std::string output;  // 用于输出到终端
-    outfile << "| " << tab_name << " | unique | (" << index_meta.cols[0].name;
-    output += tab_name + " | unique | (" + index_meta.cols[0].name;
-    for (size_t i = 1; i < index_meta.col_num; ++i) {
-      outfile << "," << index_meta.cols[i].name;
-      output += "," + index_meta.cols[i].name;
-    }
-    outfile << ") |\n";
-    output += ")";  // 剩下的 | \n 在下个函数里
-    printer.print_index({output}, context);
-  }
-  outfile.close();
+  //   TabMeta &tab_meta = db_.get_table(tab_name);
+  //   for (auto &index_meta : tab_meta.indexes) {
+  //     std::string output;  // 用于输出到终端
+  //     outfile << "| " << tab_name << " | unique | (" << index_meta.cols[0].name;
+  //     output += tab_name + " | unique | (" + index_meta.cols[0].name;
+  //     for (size_t i = 1; i < index_meta.col_num; ++i) {
+  //       outfile << "," << index_meta.cols[i].name;
+  //       output += "," + index_meta.cols[i].name;
+  //     }
+  //     outfile << ") |\n";
+  //     output += ")";  // 剩下的 | \n 在下个函数里
+  //     printer.print_index({output}, context);
+  //   }
+  //   outfile.close();
 }
