@@ -28,7 +28,7 @@ int IxNodeHandle::lower_bound(const char *target) const {
   // sqb: 5.25 二分实现 相当于找左边界
   int l = 0, r = page_hdr->num_key - 1;
   while (l <= r) {
-    int mid = l + r >> 1;
+    int mid = (l + r) >> 1;
     char *cur_key = get_key(mid);
     int cmp = ix_compare(target, cur_key, file_hdr->col_types_, file_hdr->col_lens_);
     if (cmp <= 0) {
@@ -58,7 +58,7 @@ int IxNodeHandle::upper_bound(const char *target) const {
   // sqb: 5.25 二分实现 还是找左边界 改条件判断即可
   int l = 0, r = page_hdr->num_key - 1;
   while (l <= r) {
-    int mid = l + r >> 1;
+    int mid = (l + r) >> 1;
     char *cur_key = get_key(mid);
     int cmp = ix_compare(target, cur_key, file_hdr->col_types_, file_hdr->col_lens_);
     if (cmp < 0) {
@@ -218,13 +218,13 @@ void IxNodeHandle::erase_pair(int pos) {
   int move_num = key_num - pos - 1;  // 要移动键的数量
   int key_len = file_hdr->col_tot_len_;
 
-  //   不确定是不是尾巴 保险起见清零
-  memset(cur_key, 0, key_len);
+  //  保险起见移动完清零
   memmove(cur_key, cur_key + key_len, move_num * key_len);
+  memset(cur_key + move_num * key_len, 0, key_len);
 
   Rid *cur_rid = get_rid(pos);
-  memset(cur_rid, 0, sizeof(Rid));
   memmove(cur_rid, cur_rid + 1, move_num * sizeof(Rid));
+  memset(cur_rid + move_num, 0, sizeof(Rid));
 
   set_size(get_size() - 1);
 }
@@ -427,7 +427,6 @@ void IxIndexHandle::insert_into_parent(IxNodeHandle *old_node, const char *key, 
   if (old_node->is_root_page()) {
     // 原根节点分裂 创建新的 初始化
     IxNodeHandle *root_node = create_node();
-    root_node = create_node();
     page_id_t root_page_no = root_node->get_page_no();
     root_node->page_hdr->next_free_page_no = IX_NO_PAGE;
     root_node->page_hdr->parent = old_node->get_parent_page_no();
@@ -481,9 +480,13 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
   if (leaf_node == nullptr) {
     throw InternalError("insert entry at invalid leaf node");
   }
+  char pre_first_key[file_hdr_->col_tot_len_];
+  memcpy(pre_first_key, leaf_node->get_key(0), file_hdr_->col_tot_len_);
   int ket_num_before = leaf_node->get_size();
   int key_num_after = leaf_node->insert(key, value);
+  char *cur_first_key = leaf_node->get_key(0);
   bool is_repeat = ket_num_before == key_num_after;
+
   if (!is_repeat && key_num_after > file_hdr_->btree_order_) {
     // 如果没重复会直接插入 超过上限才分裂 更新父节点
     IxNodeHandle *new_right_split_node = split(leaf_node);
@@ -493,6 +496,9 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
       file_hdr_->last_leaf_ = new_right_split_node->get_page_no();
     }
     buffer_pool_manager_->unpin_page(new_right_split_node->get_page_id(), true);
+  } else if (!is_repeat && memcmp(pre_first_key, cur_first_key, file_hdr_->col_tot_len_) != 0) {
+    // 如果更新了第一个节点，那么维护父节点的对应key
+    maintain_parent(leaf_node);
   }
   //   重复则为读-false 不重复为写-true
   buffer_pool_manager_->unpin_page(leaf_node->get_page_id(), !is_repeat);
@@ -658,8 +664,9 @@ void IxIndexHandle::redistribute(IxNodeHandle *neighbor_node, IxNodeHandle *node
   node->insert_pair(insert_pos, neighbor_node->get_key(remove_pos), *neighbor_node->get_rid(remove_pos));
   neighbor_node->erase_pair(remove_pos);
   maintain_child(node, insert_pos);
-  //   维护父节点是右边的节点维护
-  maintain_parent(index == 0 ? neighbor_node : node);
+  //   两个节点都维护一下 否则左边第一个若是被删将没有被维护
+  maintain_parent(node);
+  maintain_parent(neighbor_node);
 }
 
 /**
