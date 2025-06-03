@@ -105,6 +105,13 @@ private:
             std::cout << "COL_DEF\n";
             print_val(x->col_name, offset);
             print_node(x->type_len, offset);
+        }
+        else if (auto x = std::dynamic_pointer_cast<AggCol>(node)) {
+            std::cout << "AGG_COL\n";
+            print_val(x->tab_name, offset);
+            print_val(x->col_name, offset);
+            print_val(x->agg_type, offset);
+            print_val(x->alias, offset);
         } else if (auto x = std::dynamic_pointer_cast<Col>(node)) {
             std::cout << "COL\n";
             print_val(x->tab_name, offset);

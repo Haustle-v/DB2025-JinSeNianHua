@@ -25,6 +25,7 @@ using namespace ast;
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
+%token MAX MIN SUM AVG COUNT AS
 
 // type-specific tokens
 %token <sv_str> IDENTIFIER VALUE_STRING
@@ -41,10 +42,10 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %type <sv_expr> expr
 %type <sv_val> value
 %type <sv_vals> valueList
-%type <sv_str> tbName colName
+%type <sv_str> tbName colName alias
 %type <sv_strs> tableList colNameList
-%type <sv_col> col
-%type <sv_cols> colList selector
+%type <sv_col> col aggCol
+%type <sv_cols> colList selector aggColList
 %type <sv_set_clause> setClause
 %type <sv_set_clauses> setClauses
 %type <sv_cond> condition
@@ -344,6 +345,41 @@ selector:
         $$ = {};
     }
     |   colList
+    |   aggColList
+    ;
+
+aggColList:
+        aggCol
+    {
+        $$ = std::vector<std::shared_ptr<Col>>{$1};
+    }
+    |   aggColList ',' aggCol
+    {
+        $$.push_back($3);
+    }
+    ;
+
+aggCol:
+        MAX '(' col ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_MAX, $6));
+    }
+    |   MIN '(' col ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_MIN, $6));
+    }
+    |   SUM '(' col ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_SUM, $6));
+    }
+    |   AVG '(' col ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_AVG, $6));
+    }
+    |   COUNT '(' col ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_COUNT, $6));
+    }
     ;
 
 tableList:
@@ -390,4 +426,6 @@ set_knob_type:
 tbName: IDENTIFIER;
 
 colName: IDENTIFIER;
+
+alias: IDENTIFIER;
 %%

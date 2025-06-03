@@ -151,6 +151,22 @@ struct Col : public Expr {
             tab_name(std::move(tab_name_)), col_name(std::move(col_name_)) {}
 };
 
+enum AggregateType {
+    AGG_COUNT,
+    AGG_MAX,
+    AGG_MIN,
+    AGG_SUM,
+    AGG_AVG
+};
+
+struct AggCol : public Col {
+    AggregateType agg_type;
+    std::string alias;
+
+    AggCol(std::string tab_name_, std::string col_name_, AggregateType agg_type_, std::string alias_) :
+            Col(std::move(tab_name_), std::move(col_name_)), agg_type(agg_type_), alias(std::move(alias_)) {}
+};
+
 struct SetClause : public TreeNode {
     std::string col_name;
     std::shared_ptr<Value> val;
