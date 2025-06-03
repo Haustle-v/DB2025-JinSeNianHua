@@ -87,6 +87,7 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "ASC" { return ASC; }
 "ENABLE_NESTLOOP" { return ENABLE_NESTLOOP; }
 "ENABLE_SORTMERGE" { return ENABLE_SORTMERGE; }
+"EXPLAIN" { return EXPLAIN; }
 "TRUE" { 
     yylval->sv_bool = true;
     return VALUE_BOOL; 

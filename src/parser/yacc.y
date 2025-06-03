@@ -32,6 +32,9 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %token <sv_float> VALUE_FLOAT
 %token <sv_bool> VALUE_BOOL
 
+// added keywords
+%token EXPLAIN
+
 // specify types for non-terminal symbol
 %type <sv_node> stmt dbStmt ddl dml txnStmt setStmt
 %type <sv_field> field
@@ -112,6 +115,13 @@ dbStmt:
     |  SHOW INDEX FROM tbName
     {
         $$ = std::make_shared<ShowIndex>($4);
+    }
+    |  EXPLAIN dml
+    {
+        if(auto select = std::dynamic_pointer_cast<SelectStmt>($2)){
+            select->need_explain = true;
+            $$ = select;
+        }
     }
     ;
 

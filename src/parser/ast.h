@@ -62,8 +62,7 @@ struct CreateTable : public TreeNode {
   std::string tab_name;
   std::vector<std::shared_ptr<Field>> fields;
 
-  CreateTable(std::string tab_name_,
-              std::vector<std::shared_ptr<Field>> fields_)
+  CreateTable(std::string tab_name_, std::vector<std::shared_ptr<Field>> fields_)
       : tab_name(std::move(tab_name_)), fields(std::move(fields_)) {}
 };
 
@@ -134,8 +133,7 @@ struct Col : public Expr {
   std::string tab_name;
   std::string col_name;
 
-  Col(std::string tab_name_, std::string col_name_)
-      : tab_name(std::move(tab_name_)), col_name(std::move(col_name_)) {}
+  Col(std::string tab_name_, std::string col_name_) : tab_name(std::move(tab_name_)), col_name(std::move(col_name_)) {}
 };
 
 struct SetClause : public TreeNode {
@@ -151,8 +149,7 @@ struct BinaryExpr : public TreeNode {
   SvCompOp op;
   std::shared_ptr<Expr> rhs;
 
-  BinaryExpr(std::shared_ptr<Col> lhs_, SvCompOp op_,
-             std::shared_ptr<Expr> rhs_)
+  BinaryExpr(std::shared_ptr<Col> lhs_, SvCompOp op_, std::shared_ptr<Expr> rhs_)
       : lhs(std::move(lhs_)), op(op_), rhs(std::move(rhs_)) {}
 };
 
@@ -175,8 +172,7 @@ struct DeleteStmt : public TreeNode {
   std::string tab_name;
   std::vector<std::shared_ptr<BinaryExpr>> conds;
 
-  DeleteStmt(std::string tab_name_,
-             std::vector<std::shared_ptr<BinaryExpr>> conds_)
+  DeleteStmt(std::string tab_name_, std::vector<std::shared_ptr<BinaryExpr>> conds_)
       : tab_name(std::move(tab_name_)), conds(std::move(conds_)) {}
 };
 
@@ -185,12 +181,9 @@ struct UpdateStmt : public TreeNode {
   std::vector<std::shared_ptr<SetClause>> set_clauses;
   std::vector<std::shared_ptr<BinaryExpr>> conds;
 
-  UpdateStmt(std::string tab_name_,
-             std::vector<std::shared_ptr<SetClause>> set_clauses_,
+  UpdateStmt(std::string tab_name_, std::vector<std::shared_ptr<SetClause>> set_clauses_,
              std::vector<std::shared_ptr<BinaryExpr>> conds_)
-      : tab_name(std::move(tab_name_)),
-        set_clauses(std::move(set_clauses_)),
-        conds(std::move(conds_)) {}
+      : tab_name(std::move(tab_name_)), set_clauses(std::move(set_clauses_)), conds(std::move(conds_)) {}
 };
 
 struct JoinExpr : public TreeNode {
@@ -199,14 +192,11 @@ struct JoinExpr : public TreeNode {
   std::vector<std::shared_ptr<BinaryExpr>> conds;
   JoinType type;
 
-  JoinExpr(std::string left_, std::string right_,
-           std::vector<std::shared_ptr<BinaryExpr>> conds_, JoinType type_)
-      : left(std::move(left_)),
-        right(std::move(right_)),
-        conds(std::move(conds_)),
-        type(type_) {}
+  JoinExpr(std::string left_, std::string right_, std::vector<std::shared_ptr<BinaryExpr>> conds_, JoinType type_)
+      : left(std::move(left_)), right(std::move(right_)), conds(std::move(conds_)), type(type_) {}
 };
 
+// sqb 增加对explain的支持 need_explain将会在语法分析时被赋值
 struct SelectStmt : public TreeNode {
   std::vector<std::shared_ptr<Col>> cols;
   std::vector<std::string> tabs;
@@ -216,14 +206,11 @@ struct SelectStmt : public TreeNode {
   bool has_sort;
   std::shared_ptr<OrderBy> order;
 
-  SelectStmt(std::vector<std::shared_ptr<Col>> cols_,
-             std::vector<std::string> tabs_,
-             std::vector<std::shared_ptr<BinaryExpr>> conds_,
-             std::shared_ptr<OrderBy> order_)
-      : cols(std::move(cols_)),
-        tabs(std::move(tabs_)),
-        conds(std::move(conds_)),
-        order(std::move(order_)) {
+  bool need_explain{false};
+
+  SelectStmt(std::vector<std::shared_ptr<Col>> cols_, std::vector<std::string> tabs_,
+             std::vector<std::shared_ptr<BinaryExpr>> conds_, std::shared_ptr<OrderBy> order_)
+      : cols(std::move(cols_)), tabs(std::move(tabs_)), conds(std::move(conds_)), order(std::move(order_)) {
     has_sort = (bool)order;
   }
 };
@@ -233,8 +220,7 @@ struct SetStmt : public TreeNode {
   SetKnobType set_knob_type_;
   bool bool_val_;
 
-  SetStmt(SetKnobType &type, bool bool_value)
-      : set_knob_type_(type), bool_val_(bool_value) {}
+  SetStmt(SetKnobType &type, bool bool_value) : set_knob_type_(type), bool_val_(bool_value) {}
 };
 
 // Semantic value

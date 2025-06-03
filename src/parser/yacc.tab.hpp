@@ -86,7 +86,8 @@ extern int yydebug;
     VALUE_STRING = 296,
     VALUE_INT = 297,
     VALUE_FLOAT = 298,
-    VALUE_BOOL = 299
+    VALUE_BOOL = 299,
+    EXPLAIN = 300
   };
 #endif
 

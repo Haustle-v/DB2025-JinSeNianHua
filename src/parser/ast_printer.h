@@ -19,14 +19,10 @@ namespace ast {
 
 class TreePrinter {
  public:
-  static void print(const std::shared_ptr<TreeNode> &node) {
-    print_node(node, 0);
-  }
+  static void print(const std::shared_ptr<TreeNode> &node) { print_node(node, 0); }
 
  private:
-  static std::string offset2string(int offset) {
-    return std::string(offset, ' ');
-  }
+  static std::string offset2string(int offset) { return std::string(offset, ' '); }
 
   template <typename T>
   static void print_val(const T &val, int offset) {
@@ -53,8 +49,7 @@ class TreePrinter {
 
   static std::string op2str(SvCompOp op) {
     static std::map<SvCompOp, std::string> m{
-        {SV_OP_EQ, "=="}, {SV_OP_NE, "!="}, {SV_OP_LT, "<"},
-        {SV_OP_GT, ">"},  {SV_OP_LE, "<="}, {SV_OP_GE, ">="},
+        {SV_OP_EQ, "=="}, {SV_OP_NE, "!="}, {SV_OP_LT, "<"}, {SV_OP_GT, ">"}, {SV_OP_LE, "<="}, {SV_OP_GE, ">="},
     };
     return m.at(op);
   }
@@ -144,7 +139,12 @@ class TreePrinter {
       print_node_list(x->set_clauses, offset);
       print_node_list(x->conds, offset);
     } else if (auto x = std::dynamic_pointer_cast<SelectStmt>(node)) {
-      std::cout << "SELECT\n";
+      // sqb 增加explain支持
+      if (x->need_explain) {
+        std::cout << "EXPLAIN SELECT\n";
+      } else {
+        std::cout << "SELECT\n";
+      }
       print_node_list(x->cols, offset);
       print_val_list(x->tabs, offset);
       print_node_list(x->conds, offset);
