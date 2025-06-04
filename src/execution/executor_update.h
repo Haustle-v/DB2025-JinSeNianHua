@@ -93,8 +93,8 @@ class UpdateExecutor : public AbstractExecutor {
         }
       }
 
-      // 调整一下 先检查完唯一性后再更新数据
-      fh_->update_record(rid, rec_ptr->data, context_);
+      // 调整一下 先检查完唯一性后再更新数据  补充事务控制
+      fh_->update_record(rid, rec_ptr->data, context_, &old_rec);
     }
 
     return nullptr;

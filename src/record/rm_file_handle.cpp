@@ -16,8 +16,7 @@ See the Mulan PSL v2 for more details. */
  * @param {Context*} context
  * @return {unique_ptr<RmRecord>} rid对应的记录对象指针
  */
-std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid& rid,
-                                                   Context* context) const {
+std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *context) const {
   // Todo:
   // 1. 获取指定记录所在的page handle
   // 2. 初始化一个指向RmRecord的指针（赋值其内部的data和size）
@@ -25,8 +24,8 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid& rid,
   // std::scoped_lock<std::mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
-  std::unique_ptr<RmRecord> record_ptr = std::make_unique<RmRecord>(
-      file_hdr_.record_size, page_hdl.get_slot(rid.slot_no));
+  std::unique_ptr<RmRecord> record_ptr =
+      std::make_unique<RmRecord>(file_hdr_.record_size, page_hdl.get_slot(rid.slot_no));
 
   //   这个bfm不是raii管理页 数据操作注意释放
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
@@ -39,7 +38,7 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid& rid,
  * @param {Context*} context
  * @return {Rid} 插入的记录的记录号（位置）
  */
-Rid RmFileHandle::insert_record(char* buf, Context* context) {
+Rid RmFileHandle::insert_record(char *buf, Context *context) {
   // Todo:
   // 1. 获取当前未满的page handle
   // 2. 在page handle中找到空闲slot位置
@@ -51,8 +50,16 @@ Rid RmFileHandle::insert_record(char* buf, Context* context) {
   RmPageHandle page_hdl = create_page_handle();
 
   // 找空闲位置
-  int free_slot_no =
-      Bitmap::next_bit(0, page_hdl.bitmap, file_hdr_.num_records_per_page, -1);
+  int free_slot_no = Bitmap::next_bit(0, page_hdl.bitmap, file_hdr_.num_records_per_page, -1);
+  Rid ret{page_hdl.page->get_page_id().page_no, free_slot_no};
+  //   sqb 加入事务控制 6.4
+  if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
+                             context->txn_->get_state() == TransactionState::GROWING)) {
+    RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);
+    std::string tab_name = disk_manager_->get_file_name(fd_);
+    auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name, ret);
+    context->txn_->append_write_record(std::move(insert_wrec));
+  }
   memcpy(page_hdl.get_slot(free_slot_no), buf, file_hdr_.record_size);
   Bitmap::set(page_hdl.bitmap, free_slot_no);
 
@@ -64,7 +71,7 @@ Rid RmFileHandle::insert_record(char* buf, Context* context) {
   //   当前数据为脏
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 
-  return Rid{page_hdl.page->get_page_id().page_no, free_slot_no};
+  return ret;
 }
 
 /**
@@ -72,7 +79,7 @@ Rid RmFileHandle::insert_record(char* buf, Context* context) {
  * @param {Rid&} rid 要插入记录的位置
  * @param {char*} buf 要插入记录的数据
  */
-void RmFileHandle::insert_record(const Rid& rid, char* buf) {
+void RmFileHandle::insert_record(const Rid &rid, char *buf) {
   // 暂时没有考虑是插入在不存在的page上
   // std::scoped_lock<std::mutex> lock(latch_);
 
@@ -96,7 +103,7 @@ void RmFileHandle::insert_record(const Rid& rid, char* buf) {
  * @param {Rid&} rid 要删除的记录的记录号（位置）
  * @param {Context*} context
  */
-void RmFileHandle::delete_record(const Rid& rid, Context* context) {
+void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old_rec) {
   // Todo:
   // 1. 获取指定记录所在的page handle
   // 2. 更新page_handle.page_hdr中的数据结构
@@ -105,9 +112,16 @@ void RmFileHandle::delete_record(const Rid& rid, Context* context) {
   //   还是只考虑rid存在的情况
   // std::scoped_lock<std::mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
+  // sqb添加事务控制语句 6.4
+  if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
+                             context->txn_->get_state() == TransactionState::GROWING)) {
+    std::string tab_name = disk_manager_->get_file_name(fd_);
+    auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name, rid, *old_rec);
+    context->txn_->append_write_record(std::move(delete_wrec));
+  }
 
   //   删除先不动内存 因为get那里做了检查
-  Bitmap::reset(page_hdl.bitmap, rid.slot_no);
+  Bitmap ::reset(page_hdl.bitmap, rid.slot_no);
   //   考虑release
   --page_hdl.page_hdr->num_records;
   if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
@@ -123,7 +137,7 @@ void RmFileHandle::delete_record(const Rid& rid, Context* context) {
  * @param {char*} buf 新记录的数据
  * @param {Context*} context
  */
-void RmFileHandle::update_record(const Rid& rid, char* buf, Context* context) {
+void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec) {
   // Todo:
   // 1. 获取指定记录所在的page handle
   // 2. 更新记录
@@ -133,6 +147,14 @@ void RmFileHandle::update_record(const Rid& rid, char* buf, Context* context) {
 
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
+
+  // sqb添加事务控制语句 6.4
+  if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
+                             context->txn_->get_state() == TransactionState::GROWING)) {
+    std::string tab_name = disk_manager_->get_file_name(fd_);
+    auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name, rid, *old_rec);
+    context->txn_->append_write_record(std::move(update_wrec));
+  }
   memcpy(page_hdl.get_slot(rid.slot_no), buf, file_hdr_.record_size);
   // Bitmap::set(page_hdl.bitmap, rid.slot_no);  // 出于保险加上先
 
@@ -156,7 +178,7 @@ RmPageHandle RmFileHandle::fetch_page_handle(int page_no) const {
     throw PageNotExistError(disk_manager_->get_file_name(fd_), page_no);
   }
   PageId target_page_id{fd_, page_no};
-  Page* target_page = buffer_pool_manager_->fetch_page(target_page_id);
+  Page *target_page = buffer_pool_manager_->fetch_page(target_page_id);
   //   按理来说得抛异常 断言先试试
   assert(target_page != nullptr);
   return RmPageHandle(&file_hdr_, target_page);
@@ -174,7 +196,7 @@ RmPageHandle RmFileHandle::create_new_page_handle() {
 
   // 在磁盘上获得一个新的page
   PageId new_page_id{fd_, INVALID_PAGE_ID};
-  Page* new_page = buffer_pool_manager_->new_page(&new_page_id);
+  Page *new_page = buffer_pool_manager_->new_page(&new_page_id);
 
   //   对空页框进行初始化
   RmPageHandle page_hdl{&file_hdr_, new_page};
@@ -215,7 +237,7 @@ RmPageHandle RmFileHandle::create_page_handle() {
  * @description:
  * 当一个页面从没有空闲空间的状态变为有空闲空间状态时，更新文件头和页头中空闲页面相关的元数据
  */
-void RmFileHandle::release_page_handle(RmPageHandle& page_handle) {
+void RmFileHandle::release_page_handle(RmPageHandle &page_handle) {
   // Todo:
   // 当page从已满变成未满，考虑如何更新：
   // 1. page_handle.page_hdr->next_free_page_no

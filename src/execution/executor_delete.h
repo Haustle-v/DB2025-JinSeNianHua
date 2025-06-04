@@ -58,7 +58,7 @@ class DeleteExecutor : public AbstractExecutor {
       }
 
       //   删除记录
-      fh_->delete_record(rid, context_);
+      fh_->delete_record(rid, context_, rec_ptr.get());
     }
     return nullptr;
   }
