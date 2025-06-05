@@ -3,4 +3,4 @@ build/
 .vscode/
 start_client.exp
 run_client.sh
-parser/test_parser.cpp
+src/parser/test_parser.cpp

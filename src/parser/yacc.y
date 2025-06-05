@@ -3,6 +3,7 @@
 #include "yacc.tab.h"
 #include <iostream>
 #include <memory>
+#include <set>
 
 int yylex(YYSTYPE *yylval, YYLTYPE *yylloc);
 
@@ -23,6 +24,7 @@ using namespace ast;
 // keywords
 %token SHOW TABLES CREATE TABLE DROP DESC INSERT INTO VALUES DELETE FROM ASC ORDER BY
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
+INNER LEFT RIGHT FULL SEMI ON
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
 
@@ -51,6 +53,9 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %type <sv_conds> whereClause optWhereClause
 %type <sv_orderby>  order_clause opt_order_clause
 %type <sv_orderby_dir> opt_asc_desc
+%type <join_type_dir> join_type    /*yfs0527, 参考sv_orderby_dir*/
+%type <sv_join_expr> join_expr
+%type <sv_join_exprs> join_exprs, join_exprss
 %type <sv_setKnobType> set_knob_type
 
 %%
@@ -158,7 +163,22 @@ dml:
     {
         $$ = std::make_shared<SelectStmt>($2, $4, $5, $6);
     }
-    ;
+    |   SELECT selector FROM join_exprss optWhereClause opt_order_clause
+    {
+        /*$$ = std::make_shared<SelectStmt>($2, $4, $5, $6);*/
+        /*必须要把所有表名赋值给SelectStmt的tabs，后面需要用*/
+        auto sel_stmt = std::make_shared<SelectStmt>($2, $4, $5, $6);
+        std::set<std::string> tab_set;
+        for (const auto &join_expr : $4) {
+            if (join_expr) {
+                tab_set.insert(join_expr->left);
+                tab_set.insert(join_expr->right);
+            }
+        }
+        sel_stmt->tabs.assign(tab_set.begin(), tab_set.end());
+        $$ = sel_stmt;
+    };   
+    
 
 fieldList:
         field
@@ -327,7 +347,7 @@ setClauses:
     }
     |   setClauses ',' setClause
     {
-        $$.push_back($3);
+        $$.push_back($3);       /*我怎么感觉这里写错了？难道不应该把setClauses先赋值给$$吗？而且setClause也不应该是vector而应该是ptr*/
     }
     ;
 
@@ -355,11 +375,48 @@ tableList:
     {
         $$.push_back($3);
     }
-    |   tableList JOIN tbName
-    {
-        $$.push_back($3);
-    }
+    /*|   tableList JOIN tbName */
+    /*{                         */
+    /*    $$.push_back($3);     */
+    /*}   yfs0604:  这里会和自己定义的join冲突，所以注释掉好了  */
     ;
+
+
+join_exprss:
+    tbName join_exprs
+    {
+        $$ = $2;
+        for (auto& join_expr : $$) {
+            join_expr->left = $1;
+        }
+    }
+
+
+join_exprs:
+        join_expr
+    {
+        $$ = std::vector<std::shared_ptr<JoinExpr>>{$1};
+    }
+    |   join_exprs join_expr
+    {
+        $$.push_back($2);
+    }
+
+join_expr:
+        join_type tbName ON whereClause
+    {
+        $$ = std::make_shared<JoinExpr>("", $2, $4, $1);
+    }
+
+join_type:      /*yfs0527*/
+        JOIN   { $$ = INNER_JOIN; }
+    |   INNER JOIN   { $$ = INNER_JOIN; }
+    |   LEFT JOIN   { $$ = LEFT_JOIN; }
+    |   RIGHT JOIN   { $$ = RIGHT_JOIN; }
+    |   FULL JOIN   { $$ = FULL_JOIN; }
+    |   SEMI JOIN   { $$ = SEMI_JOIN; }
+    ;
+
 
 opt_order_clause:
     ORDER BY order_clause      

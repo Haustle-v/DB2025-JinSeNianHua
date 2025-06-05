@@ -141,12 +141,13 @@ std::shared_ptr<Plan> Planner::physical_optimization(std::shared_ptr<Query> quer
 
 std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query)
 {
-    auto x = std::dynamic_pointer_cast<ast::SelectStmt>(query->parse);
+    auto x = std::dynamic_pointer_cast<ast::SelectStmt>(query->parse);      // debug看下这个x有没有jointree
     std::vector<std::string> tables = query->tables;
     // // Scan table , 生成表算子列表tab_nodes
     std::vector<std::shared_ptr<Plan>> table_scan_executors(tables.size());
+    // 这是处理where中的只涉及一个表的条件吗？也就是filter
     for (size_t i = 0; i < tables.size(); i++) {
-        auto curr_conds = pop_conds(query->conds, tables[i]);
+        auto curr_conds = pop_conds(query->conds, tables[i]);   // curr_conds是只某个表本身的条件（比如a.col>10或者a.col1>a.col2)
         // int index_no = get_indexNo(tables[i], curr_conds);
         std::vector<std::string> index_col_names;
         bool index_exist = get_index_cols(tables[i], curr_conds, index_col_names);
@@ -167,6 +168,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query)
     // 获取where条件
     auto conds = std::move(query->conds);
     std::shared_ptr<Plan> table_join_executors;
+    auto joinconds = std::move(query->join_conds);     // 获取join条件
     
     int scantbl[tables.size()];
     for(size_t i = 0; i < tables.size(); i++)
@@ -174,6 +176,37 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query)
         scantbl[i] = -1;
     }
     // 假设在ast中已经添加了jointree，这里需要修改的逻辑是，先处理jointree，然后再考虑剩下的部分
+    if (joinconds.size() >= 1){        // 先考虑只有一个的情况（也就是不会连续semi join）
+        std::vector<std::string> joined_tables(tables.size());
+        auto it = joinconds.begin();
+        while (it != joinconds.end()) {
+            std::shared_ptr<Plan> left , right;
+            left = pop_scan(scantbl, it->lhs_col.tab_name, joined_tables, table_scan_executors);
+            right = pop_scan(scantbl, it->rhs_col.tab_name, joined_tables, table_scan_executors);
+            std::vector<Condition> join_conds{*it};
+            //建立join
+            // 
+            // 判断使用哪种join方式
+            if(enable_nestedloop_join && enable_sortmerge_join) {
+                // 默认nested loop join
+                // table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right), join_conds);
+                table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right), join_conds, query->join_type_);
+            } else if(enable_nestedloop_join) {
+                table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right), join_conds, query->join_type_);
+            } else if(enable_sortmerge_join) {
+                table_join_executors = std::make_shared<JoinPlan>(T_SortMerge, std::move(left), std::move(right), join_conds, query->join_type_);
+            } else {
+                // error
+                throw RMDBError("No join executor selected!");
+            }
+
+            // table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right), join_conds);
+            it = joinconds.erase(it);
+            break;
+        }
+        return table_join_executors;
+    }     
+    // 没有join的情况，隐式连接（根据where语句猜测连接方式），那后面处理where条件的话，需要简化下面吗？
     if(conds.size() >= 1)
     {
         // 有连接条件
@@ -185,7 +218,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query)
             std::shared_ptr<Plan> left , right;
             left = pop_scan(scantbl, it->lhs_col.tab_name, joined_tables, table_scan_executors);
             right = pop_scan(scantbl, it->rhs_col.tab_name, joined_tables, table_scan_executors);
-            std::vector<Condition> join_conds{*it};
+            std::vector<Condition> join_conds{*it};     // 这是推断出的join_conds？
             //建立join
             // 判断使用哪种join方式
             if(enable_nestedloop_join && enable_sortmerge_join) {

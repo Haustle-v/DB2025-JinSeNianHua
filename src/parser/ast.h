@@ -14,7 +14,7 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 
 enum JoinType {
-    INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN
+    INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN, SEMI_JOIN
 };
 namespace ast {
 
@@ -233,6 +233,16 @@ struct SelectStmt : public TreeNode {
             order(std::move(order_)) {
                 has_sort = (bool)order;
             }
+    /*yfs0527: 支持join的构造函数*/ 
+    SelectStmt(std::vector<std::shared_ptr<Col>> cols_,
+               std::vector<std::shared_ptr<JoinExpr>> jointree_,
+               std::vector<std::shared_ptr<BinaryExpr>> conds_,
+               std::shared_ptr<OrderBy> order_) :
+            cols(std::move(cols_)), jointree(std::move(jointree_)), conds(std::move(conds_)), 
+            order(std::move(order_)) {
+                has_sort = (bool)order;
+            }
+            
 };
 
 // set enable_nestloop
@@ -251,6 +261,7 @@ struct SemValue {
     std::string sv_str;
     bool sv_bool;
     OrderByDir sv_orderby_dir;
+    JoinType join_type_dir;     /*yfs0527*/
     std::vector<std::string> sv_strs;
 
     std::shared_ptr<TreeNode> sv_node;
@@ -275,6 +286,9 @@ struct SemValue {
 
     std::shared_ptr<BinaryExpr> sv_cond;
     std::vector<std::shared_ptr<BinaryExpr>> sv_conds;
+
+    std::shared_ptr<JoinExpr> sv_join_expr;      /*yfs0527*/
+    std::vector<std::shared_ptr<JoinExpr>> sv_join_exprs;
 
     std::shared_ptr<OrderBy> sv_orderby;
 

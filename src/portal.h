@@ -122,7 +122,7 @@ class Portal
     void run(std::shared_ptr<PortalStmt> portal, QlManager* ql, txn_id_t *txn_id, Context *context){
         switch(portal->tag) {
             case PORTAL_ONE_SELECT:
-            {
+            {   
                 ql->select_from(std::move(portal->root), std::move(portal->sel_cols), context);
                 break;
             }
@@ -168,9 +168,10 @@ class Portal
         } else if(auto x = std::dynamic_pointer_cast<JoinPlan>(plan)) {
             std::unique_ptr<AbstractExecutor> left = convert_plan_executor(x->left_, context);
             std::unique_ptr<AbstractExecutor> right = convert_plan_executor(x->right_, context);
+            // 在这里执行不同的join
             std::unique_ptr<AbstractExecutor> join = std::make_unique<NestedLoopJoinExecutor>(
                                 std::move(left), 
-                                std::move(right), std::move(x->conds_));
+                                std::move(right), std::move(x->conds_), std::move(x->type));
             return join;
         } else if(auto x = std::dynamic_pointer_cast<SortPlan>(plan)) {
             return std::make_unique<SortExecutor>(convert_plan_executor(x->subplan_, context), 

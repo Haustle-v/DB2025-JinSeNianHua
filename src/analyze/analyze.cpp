@@ -21,6 +21,9 @@ std::shared_ptr<Query> Analyze::do_analyze(
   if (auto x = std::dynamic_pointer_cast<ast::SelectStmt>(parse)) {
     // 处理表名
     query->tables = std::move(x->tabs);
+        if (!x->jointree.empty()) {
+        query->join_type_ = x->jointree[0]->type;
+    }
     /** TODO: 检查表是否存在 */
     // sqb: down! 5.24
     for (auto &tab_name : query->tables) {
@@ -37,7 +40,24 @@ std::shared_ptr<Query> Analyze::do_analyze(
     }
 
     std::vector<ColMeta> all_cols;
+    std::vector<ColMeta> all_cols_of_left_tab;
     get_all_cols(query->tables, all_cols);
+    get_all_cols_of_left_tab(x->jointree[0]->left, all_cols_of_left_tab);
+
+    // 检查列名的选择是否符合半连接的定义
+    if (query->join_type_ == JoinType::SEMI_JOIN){
+      if (query->cols.empty()) {  // select * 表示 select all
+        // select all columns
+        for (auto &col : all_cols_of_left_tab) {
+        TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name};
+        query->cols.push_back(sel_col);
+      }
+      }else {
+      // infer table name from column name
+      for (auto &sel_col : query->cols) {
+        sel_col = check_column4semi_join(all_cols_of_left_tab, sel_col);  // 列元数据校验
+      }}
+    }else{
     if (query->cols.empty()) {
       // select all columns
       for (auto &col : all_cols) {
@@ -48,11 +68,14 @@ std::shared_ptr<Query> Analyze::do_analyze(
       // infer table name from column name
       for (auto &sel_col : query->cols) {
         sel_col = check_column(all_cols, sel_col);  // 列元数据校验
-      }
+      }}
     }
     // 处理where条件
     get_clause(x->conds, query->conds);
     check_clause(query->tables, query->conds);
+
+    get_clause2(x->jointree, query->join_conds);
+    check_clause(query->tables, query->join_conds);   // 检查列名是否存在，以及可能需要推断表名
   } else if (auto x = std::dynamic_pointer_cast<ast::UpdateStmt>(parse)) {
     /** TODO: */
     // sqb :初步处理update 语句 5.24
@@ -117,6 +140,35 @@ TabCol Analyze::check_column(const std::vector<ColMeta> &all_cols,
   return target;
 }
 
+// 列没有指定表明，搜索所有表的所有列来匹配
+// 如果select的列为多个表所共有，就会报错AmbiguousColumnError
+// 但是semi join应该忽略这种情况，因为列名都是join左边的表
+// 为通过测试点4，如果发现cols是其他表的，则报错
+TabCol Analyze::check_column4semi_join(const std::vector<ColMeta> &all_cols,  // 左表的所有列
+                             TabCol target) {       // select的某一列（这只是一列，对select的列的遍历在函数外）
+  if (target.tab_name.empty()) {  // 选择的列没有表名
+    // 检查列是否都是左表的
+    std::string tab_name;
+    for (auto &col : all_cols) {
+      if (col.name == target.col_name) {
+        tab_name = col.tab_name;
+      }
+    }
+    if (tab_name.empty()) {   // 在左表的所有列中没有匹配到select的列
+      throw ChooseColumnOfOtherTableError(target.col_name);
+      // std::cout << "failure" << std::endl;
+    }
+    target.tab_name = tab_name;   // 把表名附带上去了
+  } else {
+    /** TODO: Make sure target column exists */
+    // sqb: down! 5.24
+    if (!sm_manager_->db_.get_table(target.tab_name).is_col(target.col_name)) {
+      throw ColumnNotFoundError(target.col_name);
+    }
+  }
+  return target;
+}
+
 void Analyze::get_all_cols(const std::vector<std::string> &tab_names,
                            std::vector<ColMeta> &all_cols) {
   for (auto &sel_tab_name : tab_names) {
@@ -126,13 +178,20 @@ void Analyze::get_all_cols(const std::vector<std::string> &tab_names,
   }
 }
 
+void Analyze::get_all_cols_of_left_tab(const std::string &tab_name,
+                           std::vector<ColMeta> &all_cols) {
+  // 这里db_不能写成get_db(), 注意要传指针
+  const auto &sel_tab_cols = sm_manager_->db_.get_table(tab_name).cols;
+  all_cols.insert(all_cols.end(), sel_tab_cols.begin(), sel_tab_cols.end());
+}
+
 void Analyze::get_clause(
     const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
     std::vector<Condition> &conds) {
   conds.clear();
   for (auto &expr : sv_conds) {
     Condition cond;
-    cond.lhs_col = {.tab_name = expr->lhs->tab_name,
+    cond.lhs_col = {.tab_name = expr->lhs->tab_name,      // 这个是C++20的写法，但我现在C++17为啥没报错？
                     .col_name = expr->lhs->col_name};
     cond.op = convert_sv_comp_op(expr->op);
     if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
@@ -183,6 +242,30 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names,
       }
     }
   }
+}
+
+void Analyze::get_clause2(
+    const std::vector<std::shared_ptr<ast::JoinExpr>> &sv_join_exprs,
+    std::vector<Condition> &join_conds) {
+  join_conds.clear();
+  for (auto &sv_conds : sv_join_exprs){     // 遍历JoinExpr的vector
+    for (auto &expr : sv_conds->conds){    // 取出每个JoinExpr的cond，后面操作就和上面get_clause一样了。所以，问题在于，根本不需要使用到join的left和right咯
+        Condition cond;
+        cond.lhs_col = {.tab_name = expr->lhs->tab_name, 
+                        .col_name = expr->lhs->col_name};
+        cond.op = convert_sv_comp_op(expr->op);
+        if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
+          cond.is_rhs_val = true;
+          cond.rhs_val = convert_sv_value(rhs_val);
+        } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
+          cond.is_rhs_val = false;
+          cond.rhs_col = {.tab_name = rhs_col->tab_name,
+                          .col_name = rhs_col->col_name};
+        }
+        join_conds.push_back(cond);
+      }
+  }
+  
 }
 
 Value Analyze::convert_sv_value(const std::shared_ptr<ast::Value> &sv_val) {

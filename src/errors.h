@@ -108,6 +108,11 @@ class ColumnNotFoundError : public RMDBError {
     ColumnNotFoundError(const std::string &col_name) : RMDBError("Column not found: " + col_name) {}
 };
 
+class ChooseColumnOfOtherTableError : public RMDBError {
+   public:
+    ChooseColumnOfOtherTableError(const std::string &col_name) : RMDBError("Column not from the left table: " + col_name) {}
+};
+
 class IndexNotFoundError : public RMDBError {
    public:
     IndexNotFoundError(const std::string &tab_name, const std::vector<std::string> &col_names) {

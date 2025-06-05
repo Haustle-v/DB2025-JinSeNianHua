@@ -126,7 +126,14 @@ private:
             std::cout << "SET_CLAUSE\n";
             print_val(x->col_name, offset);
             print_node(x->val, offset);
-        } else if (auto x = std::dynamic_pointer_cast<BinaryExpr>(node)) {
+        } else if (auto x = std::dynamic_pointer_cast<JoinExpr>(node)) {
+            std::cout << "Join_Expr\n";
+            print_val(x->left, offset);
+            print_val(x->right, offset);
+            print_val(x->type, offset);
+            print_node_list(x->conds, offset);
+        } 
+        else if (auto x = std::dynamic_pointer_cast<BinaryExpr>(node)) {
             std::cout << "BINARY_EXPR\n";
             print_node(x->lhs, offset);
             print_val(op2str(x->op), offset);
@@ -149,6 +156,7 @@ private:
             print_node_list(x->cols, offset);
             print_val_list(x->tabs, offset);
             print_node_list(x->conds, offset);
+            print_node_list(x->jointree, offset);
         } else if (auto x = std::dynamic_pointer_cast<TxnBegin>(node)) {
             std::cout << "BEGIN\n";
         } else if (auto x = std::dynamic_pointer_cast<TxnCommit>(node)) {

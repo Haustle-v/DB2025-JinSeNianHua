@@ -24,6 +24,7 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
 
   std::vector<Condition> fed_conds_;  // join条件
   bool isend;
+  JoinType join_type_;
 
   //   sqb: 左右缓冲区 注意后期优化限制大小 5.24
   std::vector<std::unique_ptr<RmRecord>> Lbuffer;
@@ -34,7 +35,8 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
  public:
   NestedLoopJoinExecutor(std::unique_ptr<AbstractExecutor> left,
                          std::unique_ptr<AbstractExecutor> right,
-                         std::vector<Condition> conds) {
+                         std::vector<Condition> conds,
+                        JoinType join_type) {
     left_ = std::move(left);
     right_ = std::move(right);
     len_ = left_->tupleLen() + right_->tupleLen();
@@ -47,6 +49,7 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
     cols_.insert(cols_.end(), right_cols.begin(), right_cols.end());
     isend = false;
     fed_conds_ = std::move(conds);
+    join_type_ = std::move(join_type);
   }
 
   // sqb: 先实现一个最直接的嵌套循环连接 应该还有预读或者分块的做法
@@ -70,6 +73,40 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
     size_t Rsize = Rbuffer.size();
     bool is_find = false;
 
+    // 只要在Rbuffer找到匹配就可以跳出右层循环了
+    if (join_type_ == JoinType::SEMI_JOIN) {
+      for (; Lpos < Lsize && !is_find; ++Lpos) {
+        auto &lrec_ptr = Lbuffer[Lpos];
+        for (; Rpos < Rsize && !is_find; ++Rpos) {
+          auto &rrec_ptr = Rbuffer[Rpos];
+          // 先拼成新元组后再检查
+          cur_rec_ptr_ = std::make_unique<RmRecord>(left_->tupleLen());
+          auto temp = std::make_unique<RmRecord>(len_);   //临时构造一个拼接记录，仅用于条件判断
+          memcpy(temp->data, lrec_ptr->data, lrec_ptr->size);
+          memcpy(temp->data + lrec_ptr->size, rrec_ptr->data,
+                rrec_ptr->size);
+          if (check_conds(cols_, fed_conds_, temp.get())) {
+            // semi join 只保留左表记录
+            memcpy(cur_rec_ptr_->data, lrec_ptr->data, lrec_ptr->size);
+            is_find = true;
+            break;    // 一旦匹配到，就直接break，不需要再遍历右表了
+          }
+        }
+        //   注意外循环需迭代全部内表
+        if (!is_find) {   // 如果没找到，Rpos归零，左表++Lpos继续找
+          Rpos = 0;}
+        else {         
+          ++Lpos;   // 如果找到了，Rpos归零，左表++Lpos，跳出循环。注意这里要手动++，因为break就不会经过for的++Lpos
+          break;
+        }
+      }
+
+      // 注意没找到时要释放rec
+      if (!is_find) {
+        cur_rec_ptr_ = nullptr;
+      }
+    }else{
+
     for (; Lpos < Lsize && !is_find; ++Lpos) {
       auto &lrec_ptr = Lbuffer[Lpos];
       for (; Rpos < Rsize && !is_find; ++Rpos) {
@@ -81,7 +118,7 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
                rrec_ptr->size);
         if (check_conds(cols_, fed_conds_, cur_rec_ptr_.get())) {
           // 注意这里不是break 内循环会因find退出 但Rpos可以顺利自增
-          // 同时外循环用break退出 避免Lpos变化
+          // 同时外循环用break退出 避免Lpos变化（不执行++Lpos了）！保证下一次还是从这个Lpos寻找，而Rpos就从下一个位置
           is_find = true;
         }
       }
@@ -96,7 +133,7 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
     // 注意没找到时要释放rec
     if (!is_find) {
       cur_rec_ptr_ = nullptr;
-    }
+    }}
   }
 
   // sqb 5.24
