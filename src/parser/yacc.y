@@ -4,6 +4,8 @@
 #include <iostream>
 #include <memory>
 #include <set>
+#include <unordered_map>
+std::unordered_map<std::string, std::string> alias_map;
 
 int yylex(YYSTYPE *yylval, YYLTYPE *yylloc);
 
@@ -43,7 +45,7 @@ INNER LEFT RIGHT FULL SEMI ON
 %type <sv_expr> expr
 %type <sv_val> value
 %type <sv_vals> valueList
-%type <sv_str> tbName colName
+%type <sv_str> tbName colName tbNameWithAlias alias
 %type <sv_strs> tableList colNameList
 %type <sv_col> col
 %type <sv_cols> colList selector
@@ -367,11 +369,11 @@ selector:
     ;
 
 tableList:
-        tbName
+        tbNameWithAlias
     {
         $$ = std::vector<std::string>{$1};
     }
-    |   tableList ',' tbName
+    |   tableList ',' tbNameWithAlias
     {
         $$.push_back($3);
     }
@@ -381,9 +383,19 @@ tableList:
     /*}   yfs0604:  这里会和自己定义的join冲突，所以注释掉好了  */
     ;
 
+tbNameWithAlias:        /*这里多做的一个步骤只是把别名存在映射里*/
+        tbName
+    {
+        $$ = $1;
+    }
+    |   tbName alias
+    {
+        alias_map[$2] = $1;
+        $$ = $1;
+    }
 
 join_exprss:
-    tbName join_exprs
+    tbNameWithAlias join_exprs
     {
         $$ = $2;
         for (auto& join_expr : $$) {
@@ -403,7 +415,7 @@ join_exprs:
     }
 
 join_expr:
-        join_type tbName ON whereClause
+        join_type tbNameWithAlias ON whereClause
     {
         $$ = std::make_shared<JoinExpr>("", $2, $4, $1);
     }
@@ -447,4 +459,6 @@ set_knob_type:
 tbName: IDENTIFIER;
 
 colName: IDENTIFIER;
+
+alias: IDENTIFIER;
 %%

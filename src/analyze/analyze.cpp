@@ -9,6 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #include "analyze.h"
+#include "./parser/alias_map.h"
 
 /**
  * @description: 分析器，进行语义分析和查询重写，需要检查不符合语义规定的部分
@@ -32,7 +33,6 @@ std::shared_ptr<Query> Analyze::do_analyze(
       }
     }
 
-    // 处理target list，再target list中添加上表名，例如 a.id
     for (auto &sv_sel_col : x->cols) {
       TabCol sel_col = {.tab_name = sv_sel_col->tab_name,
                         .col_name = sv_sel_col->col_name};
@@ -40,12 +40,13 @@ std::shared_ptr<Query> Analyze::do_analyze(
     }
 
     std::vector<ColMeta> all_cols;
-    std::vector<ColMeta> all_cols_of_left_tab;
     get_all_cols(query->tables, all_cols);
-    get_all_cols_of_left_tab(x->jointree[0]->left, all_cols_of_left_tab);
 
-    // 检查列名的选择是否符合半连接的定义
-    if (query->join_type_ == JoinType::SEMI_JOIN){
+    // 处理target list，再target list中添加上表名，例如 a.id
+    if (query->join_type_ == JoinType::SEMI_JOIN){    // 检查列名的选择是否符合半连接的定义
+      std::vector<ColMeta> all_cols_of_left_tab;
+      get_all_cols_of_left_tab(x->jointree[0]->left, all_cols_of_left_tab);
+
       if (query->cols.empty()) {  // select * 表示 select all
         // select all columns
         for (auto &col : all_cols_of_left_tab) {
@@ -133,8 +134,12 @@ TabCol Analyze::check_column(const std::vector<ColMeta> &all_cols,
   } else {
     /** TODO: Make sure target column exists */
     // sqb: down! 5.24
-    if (!sm_manager_->db_.get_table(target.tab_name).is_col(target.col_name)) {
-      throw ColumnNotFoundError(target.col_name);
+    if (!(sm_manager_->db_.get_table(target.tab_name).is_col(target.col_name))) {
+      if (!(sm_manager_->db_.get_table(alias_map[target.tab_name]).is_col(target.col_name))){
+          throw ColumnNotFoundError(target.col_name);
+      }else{    
+        target.tab_name = alias_map[target.tab_name];   // 如果发现用的是表的别名，就在这里把别名改为原名
+      }
     }
   }
   return target;
@@ -191,7 +196,7 @@ void Analyze::get_clause(
   conds.clear();
   for (auto &expr : sv_conds) {
     Condition cond;
-    cond.lhs_col = {.tab_name = expr->lhs->tab_name,      // 这个是C++20的写法，但我现在C++17为啥没报错？
+    cond.lhs_col = {.tab_name = expr->lhs->tab_name,
                     .col_name = expr->lhs->col_name};
     cond.op = convert_sv_comp_op(expr->op);
     if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {

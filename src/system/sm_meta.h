@@ -18,6 +18,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "errors.h"
 #include "sm_defs.h"
+#include "./parser/alias_map.h"
 
 /* 字段元数据 */
 struct ColMeta {
@@ -177,7 +178,10 @@ class DbMeta {
     TabMeta &get_table(const std::string &tab_name) {
         auto pos = tabs_.find(tab_name);
         if (pos == tabs_.end()) {
-            throw TableNotFoundError(tab_name);
+            auto pos = tabs_.find(alias_map[tab_name]);     // 如果没找到，用别名试着找一下
+                if (pos == tabs_.end()) {
+                    throw TableNotFoundError(tab_name);
+                }
         }
 
         return pos->second;

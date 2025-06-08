@@ -138,7 +138,6 @@ void *client_handler(void *sock_fd) {
     if (yyparse() == 0) {
       if (ast::parse_tree != nullptr) {
         try {
-          // ast::TreePrinter::print(ast::parse_tree);   // 打印for debug
           // analyze and rewrite
           std::shared_ptr<Query> query = analyze->do_analyze(ast::parse_tree);
           yy_delete_buffer(buf);
