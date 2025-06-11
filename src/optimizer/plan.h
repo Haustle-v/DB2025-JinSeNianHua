@@ -42,7 +42,8 @@ typedef enum PlanTag{
     T_NestLoop,
     T_SortMerge,    // sort merge join
     T_Sort,
-    T_Projection
+    T_Projection,
+    T_Agg
 } PlanTag;
 
 // 查询执行计划
@@ -51,6 +52,18 @@ class Plan
 public:
     PlanTag tag;
     virtual ~Plan() = default;
+};
+
+class AggPlan : public Plan
+{
+public:
+    std::vector<TabCol> sel_cols_;
+    std::shared_ptr<Plan> subplan_;
+    std::vector<TabCol> group_by_cols;
+
+    AggPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> group_by_cols, std::vector<TabCol> sel_cols_) : sel_cols_(std::move(sel_cols_)), subplan_(std::move(subplan)), group_by_cols(std::move(group_by_cols)) { Plan::tag = tag; }
+
+    ~AggPlan() override = default;
 };
 
 class ScanPlan : public Plan

@@ -151,7 +151,8 @@ struct Col : public Expr {
             tab_name(std::move(tab_name_)), col_name(std::move(col_name_)) {}
 };
 
-enum AggregateType {
+enum AggFuncType {
+    AGG_INVALID,
     AGG_COUNT,
     AGG_MAX,
     AGG_MIN,
@@ -160,10 +161,10 @@ enum AggregateType {
 };
 
 struct AggCol : public Col {
-    AggregateType agg_type;
+    AggFuncType agg_type;
     std::string alias;
 
-    AggCol(std::string tab_name_, std::string col_name_, AggregateType agg_type_, std::string alias_) :
+    AggCol(std::string tab_name_, std::string col_name_, AggFuncType agg_type_, std::string alias_) :
             Col(std::move(tab_name_), std::move(col_name_)), agg_type(agg_type_), alias(std::move(alias_)) {}
 };
 
@@ -236,7 +237,7 @@ struct SelectStmt : public TreeNode {
     std::vector<std::shared_ptr<BinaryExpr>> conds;
     std::vector<std::shared_ptr<JoinExpr>> jointree;
 
-    
+    bool has_agg;
     bool has_sort;
     std::shared_ptr<OrderBy> order;
 
@@ -248,6 +249,7 @@ struct SelectStmt : public TreeNode {
             cols(std::move(cols_)), tabs(std::move(tabs_)), conds(std::move(conds_)), 
             order(std::move(order_)) {
                 has_sort = (bool)order;
+                has_agg = false;
             }
 };
 

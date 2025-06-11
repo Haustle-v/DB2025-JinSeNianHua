@@ -131,13 +131,28 @@ std::shared_ptr<Plan> Planner::physical_optimization(std::shared_ptr<Query> quer
     
     // 其他物理优化
 
+    // 处理聚合
+    // 优化：考虑将TabCol中的字段分开（多加一个TabAggCol继承TabCol）
+    plan = generate_agg_plan(query, std::move(plan));
+
     // 处理orderby
     plan = generate_sort_plan(query, std::move(plan)); 
 
     return plan;
 }
 
+std::shared_ptr<Plan> Planner::generate_agg_plan(std::shared_ptr<Query> query, std::shared_ptr<Plan> plan)
+{
+    auto x = std::dynamic_pointer_cast<ast::SelectStmt>(query->parse);
 
+    if(!x->has_agg) {
+        return plan;
+    }
+
+    // 生成聚合计划
+    plan = std::make_shared<AggPlan>(T_Agg, std::move(plan), std::vector<TabCol>{}, std::move(query->cols));
+    return plan;
+}
 
 std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query)
 {

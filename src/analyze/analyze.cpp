@@ -31,9 +31,21 @@ std::shared_ptr<Query> Analyze::do_analyze(
 
     // 处理target list，再target list中添加上表名，例如 a.id
     for (auto &sv_sel_col : x->cols) {
-      TabCol sel_col = {.tab_name = sv_sel_col->tab_name,
-                        .col_name = sv_sel_col->col_name};
+      // 如果 col 为 AggCol 类型
+      if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(sv_sel_col)) {
+        TabCol tab_agg_col = {.tab_name = agg_col->tab_name,
+                                .col_name = agg_col->col_name,
+                                .alias = agg_col->alias,
+                                .aggFuncType = static_cast<ast::AggFuncType>(agg_col->agg_type)};
+        query->cols.push_back(tab_agg_col);
+        x->has_agg = true;
+      } else {
+        TabCol sel_col = {.tab_name = sv_sel_col->tab_name,
+                        .col_name = sv_sel_col->col_name,
+                        .alias = "",
+                        .aggFuncType = ast::AGG_INVALID};
       query->cols.push_back(sel_col);
+      }
     }
 
     std::vector<ColMeta> all_cols;

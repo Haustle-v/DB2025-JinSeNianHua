@@ -67,7 +67,7 @@
 
 
 /* First part of user prologue.  */
-#line 1 "yacc.y"
+#line 1 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
 
 #include "ast.h"
 #include "yacc.tab.h"
@@ -82,7 +82,7 @@ void yyerror(YYLTYPE *locp, const char* s) {
 
 using namespace ast;
 
-#line 86 "yacc.tab.cpp"
+#line 86 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -105,7 +105,7 @@ using namespace ast;
 #  endif
 # endif
 
-#include "yacc.tab.hpp"
+#include "yacc.tab.h"
 /* Symbol kind.  */
 enum yysymbol_kind_t
 {
@@ -1666,573 +1666,573 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* start: stmt ';'  */
-#line 60 "yacc.y"
+#line 60 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         parse_tree = (yyvsp[-1].sv_node);
         YYACCEPT;
     }
-#line 1675 "yacc.tab.cpp"
+#line 1675 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 3: /* start: HELP  */
-#line 65 "yacc.y"
+#line 65 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         parse_tree = std::make_shared<Help>();
         YYACCEPT;
     }
-#line 1684 "yacc.tab.cpp"
+#line 1684 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 4: /* start: EXIT  */
-#line 70 "yacc.y"
+#line 70 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         parse_tree = nullptr;
         YYACCEPT;
     }
-#line 1693 "yacc.tab.cpp"
+#line 1693 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 5: /* start: T_EOF  */
-#line 75 "yacc.y"
+#line 75 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         parse_tree = nullptr;
         YYACCEPT;
     }
-#line 1702 "yacc.tab.cpp"
+#line 1702 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 11: /* txnStmt: TXN_BEGIN  */
-#line 91 "yacc.y"
+#line 91 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<TxnBegin>();
     }
-#line 1710 "yacc.tab.cpp"
+#line 1710 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 12: /* txnStmt: TXN_COMMIT  */
-#line 95 "yacc.y"
+#line 95 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<TxnCommit>();
     }
-#line 1718 "yacc.tab.cpp"
+#line 1718 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 13: /* txnStmt: TXN_ABORT  */
-#line 99 "yacc.y"
+#line 99 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<TxnAbort>();
     }
-#line 1726 "yacc.tab.cpp"
+#line 1726 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 14: /* txnStmt: TXN_ROLLBACK  */
-#line 103 "yacc.y"
+#line 103 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<TxnRollback>();
     }
-#line 1734 "yacc.tab.cpp"
+#line 1734 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 15: /* dbStmt: SHOW TABLES  */
-#line 110 "yacc.y"
+#line 110 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<ShowTables>();
     }
-#line 1742 "yacc.tab.cpp"
+#line 1742 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 16: /* setStmt: SET set_knob_type '=' VALUE_BOOL  */
-#line 117 "yacc.y"
+#line 117 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<SetStmt>((yyvsp[-2].sv_setKnobType), (yyvsp[0].sv_bool));
     }
-#line 1750 "yacc.tab.cpp"
+#line 1750 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 17: /* ddl: CREATE TABLE tbName '(' fieldList ')'  */
-#line 124 "yacc.y"
+#line 124 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<CreateTable>((yyvsp[-3].sv_str), (yyvsp[-1].sv_fields));
     }
-#line 1758 "yacc.tab.cpp"
+#line 1758 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 18: /* ddl: DROP TABLE tbName  */
-#line 128 "yacc.y"
+#line 128 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<DropTable>((yyvsp[0].sv_str));
     }
-#line 1766 "yacc.tab.cpp"
+#line 1766 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 19: /* ddl: DESC tbName  */
-#line 132 "yacc.y"
+#line 132 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<DescTable>((yyvsp[0].sv_str));
     }
-#line 1774 "yacc.tab.cpp"
+#line 1774 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 20: /* ddl: CREATE INDEX tbName '(' colNameList ')'  */
-#line 136 "yacc.y"
+#line 136 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<CreateIndex>((yyvsp[-3].sv_str), (yyvsp[-1].sv_strs));
     }
-#line 1782 "yacc.tab.cpp"
+#line 1782 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 21: /* ddl: DROP INDEX tbName '(' colNameList ')'  */
-#line 140 "yacc.y"
+#line 140 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<DropIndex>((yyvsp[-3].sv_str), (yyvsp[-1].sv_strs));
     }
-#line 1790 "yacc.tab.cpp"
+#line 1790 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 22: /* dml: INSERT INTO tbName VALUES '(' valueList ')'  */
-#line 147 "yacc.y"
+#line 147 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<InsertStmt>((yyvsp[-4].sv_str), (yyvsp[-1].sv_vals));
     }
-#line 1798 "yacc.tab.cpp"
+#line 1798 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 23: /* dml: DELETE FROM tbName optWhereClause  */
-#line 151 "yacc.y"
+#line 151 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<DeleteStmt>((yyvsp[-1].sv_str), (yyvsp[0].sv_conds));
     }
-#line 1806 "yacc.tab.cpp"
+#line 1806 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 24: /* dml: UPDATE tbName SET setClauses optWhereClause  */
-#line 155 "yacc.y"
+#line 155 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<UpdateStmt>((yyvsp[-3].sv_str), (yyvsp[-1].sv_set_clauses), (yyvsp[0].sv_conds));
     }
-#line 1814 "yacc.tab.cpp"
+#line 1814 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 25: /* dml: SELECT selector FROM tableList optWhereClause opt_order_clause  */
-#line 159 "yacc.y"
+#line 159 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_node) = std::make_shared<SelectStmt>((yyvsp[-4].sv_cols), (yyvsp[-2].sv_strs), (yyvsp[-1].sv_conds), (yyvsp[0].sv_orderby));
     }
-#line 1822 "yacc.tab.cpp"
+#line 1822 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 26: /* fieldList: field  */
-#line 166 "yacc.y"
+#line 166 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_fields) = std::vector<std::shared_ptr<Field>>{(yyvsp[0].sv_field)};
     }
-#line 1830 "yacc.tab.cpp"
+#line 1830 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 27: /* fieldList: fieldList ',' field  */
-#line 170 "yacc.y"
+#line 170 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_fields).push_back((yyvsp[0].sv_field));
     }
-#line 1838 "yacc.tab.cpp"
+#line 1838 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 28: /* colNameList: colName  */
-#line 177 "yacc.y"
+#line 177 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_strs) = std::vector<std::string>{(yyvsp[0].sv_str)};
     }
-#line 1846 "yacc.tab.cpp"
+#line 1846 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 29: /* colNameList: colNameList ',' colName  */
-#line 181 "yacc.y"
+#line 181 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_strs).push_back((yyvsp[0].sv_str));
     }
-#line 1854 "yacc.tab.cpp"
+#line 1854 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 30: /* field: colName type  */
-#line 188 "yacc.y"
+#line 188 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_field) = std::make_shared<ColDef>((yyvsp[-1].sv_str), (yyvsp[0].sv_type_len));
     }
-#line 1862 "yacc.tab.cpp"
+#line 1862 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 31: /* type: INT  */
-#line 195 "yacc.y"
+#line 195 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_type_len) = std::make_shared<TypeLen>(SV_TYPE_INT, sizeof(int));
     }
-#line 1870 "yacc.tab.cpp"
+#line 1870 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 32: /* type: CHAR '(' VALUE_INT ')'  */
-#line 199 "yacc.y"
+#line 199 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_type_len) = std::make_shared<TypeLen>(SV_TYPE_STRING, (yyvsp[-1].sv_int));
     }
-#line 1878 "yacc.tab.cpp"
+#line 1878 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 33: /* type: FLOAT  */
-#line 203 "yacc.y"
+#line 203 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_type_len) = std::make_shared<TypeLen>(SV_TYPE_FLOAT, sizeof(float));
     }
-#line 1886 "yacc.tab.cpp"
+#line 1886 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 34: /* valueList: value  */
-#line 210 "yacc.y"
+#line 210 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_vals) = std::vector<std::shared_ptr<Value>>{(yyvsp[0].sv_val)};
     }
-#line 1894 "yacc.tab.cpp"
+#line 1894 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 35: /* valueList: valueList ',' value  */
-#line 214 "yacc.y"
+#line 214 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_vals).push_back((yyvsp[0].sv_val));
     }
-#line 1902 "yacc.tab.cpp"
+#line 1902 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 36: /* value: VALUE_INT  */
-#line 221 "yacc.y"
+#line 221 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_val) = std::make_shared<IntLit>((yyvsp[0].sv_int));
     }
-#line 1910 "yacc.tab.cpp"
+#line 1910 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 37: /* value: VALUE_FLOAT  */
-#line 225 "yacc.y"
+#line 225 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_val) = std::make_shared<FloatLit>((yyvsp[0].sv_float));
     }
-#line 1918 "yacc.tab.cpp"
+#line 1918 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 38: /* value: VALUE_STRING  */
-#line 229 "yacc.y"
+#line 229 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_val) = std::make_shared<StringLit>((yyvsp[0].sv_str));
     }
-#line 1926 "yacc.tab.cpp"
+#line 1926 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 39: /* value: VALUE_BOOL  */
-#line 233 "yacc.y"
+#line 233 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_val) = std::make_shared<BoolLit>((yyvsp[0].sv_bool));
     }
-#line 1934 "yacc.tab.cpp"
+#line 1934 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 40: /* condition: col op expr  */
-#line 240 "yacc.y"
+#line 240 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_cond) = std::make_shared<BinaryExpr>((yyvsp[-2].sv_col), (yyvsp[-1].sv_comp_op), (yyvsp[0].sv_expr));
     }
-#line 1942 "yacc.tab.cpp"
+#line 1942 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 41: /* optWhereClause: %empty  */
-#line 246 "yacc.y"
+#line 246 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
                       { /* ignore*/ }
-#line 1948 "yacc.tab.cpp"
+#line 1948 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 42: /* optWhereClause: WHERE whereClause  */
-#line 248 "yacc.y"
+#line 248 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_conds) = (yyvsp[0].sv_conds);
     }
-#line 1956 "yacc.tab.cpp"
+#line 1956 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 43: /* whereClause: condition  */
-#line 255 "yacc.y"
+#line 255 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_conds) = std::vector<std::shared_ptr<BinaryExpr>>{(yyvsp[0].sv_cond)};
     }
-#line 1964 "yacc.tab.cpp"
+#line 1964 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 44: /* whereClause: whereClause AND condition  */
-#line 259 "yacc.y"
+#line 259 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_conds).push_back((yyvsp[0].sv_cond));
     }
-#line 1972 "yacc.tab.cpp"
+#line 1972 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 45: /* col: tbName '.' colName  */
-#line 266 "yacc.y"
+#line 266 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_col) = std::make_shared<Col>((yyvsp[-2].sv_str), (yyvsp[0].sv_str));
     }
-#line 1980 "yacc.tab.cpp"
+#line 1980 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 46: /* col: colName  */
-#line 270 "yacc.y"
+#line 270 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_col) = std::make_shared<Col>("", (yyvsp[0].sv_str));
     }
-#line 1988 "yacc.tab.cpp"
+#line 1988 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 47: /* colList: col  */
-#line 277 "yacc.y"
+#line 277 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_cols) = std::vector<std::shared_ptr<Col>>{(yyvsp[0].sv_col)};
     }
-#line 1996 "yacc.tab.cpp"
+#line 1996 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 48: /* colList: colList ',' col  */
-#line 281 "yacc.y"
+#line 281 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_cols).push_back((yyvsp[0].sv_col));
     }
-#line 2004 "yacc.tab.cpp"
+#line 2004 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 49: /* op: '='  */
-#line 288 "yacc.y"
+#line 288 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_EQ;
     }
-#line 2012 "yacc.tab.cpp"
+#line 2012 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 50: /* op: '<'  */
-#line 292 "yacc.y"
+#line 292 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_LT;
     }
-#line 2020 "yacc.tab.cpp"
+#line 2020 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 51: /* op: '>'  */
-#line 296 "yacc.y"
+#line 296 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_GT;
     }
-#line 2028 "yacc.tab.cpp"
+#line 2028 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 52: /* op: NEQ  */
-#line 300 "yacc.y"
+#line 300 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_NE;
     }
-#line 2036 "yacc.tab.cpp"
+#line 2036 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 53: /* op: LEQ  */
-#line 304 "yacc.y"
+#line 304 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_LE;
     }
-#line 2044 "yacc.tab.cpp"
+#line 2044 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 54: /* op: GEQ  */
-#line 308 "yacc.y"
+#line 308 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_comp_op) = SV_OP_GE;
     }
-#line 2052 "yacc.tab.cpp"
+#line 2052 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 55: /* expr: value  */
-#line 315 "yacc.y"
+#line 315 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_expr) = std::static_pointer_cast<Expr>((yyvsp[0].sv_val));
     }
-#line 2060 "yacc.tab.cpp"
+#line 2060 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 56: /* expr: col  */
-#line 319 "yacc.y"
+#line 319 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_expr) = std::static_pointer_cast<Expr>((yyvsp[0].sv_col));
     }
-#line 2068 "yacc.tab.cpp"
+#line 2068 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 57: /* setClauses: setClause  */
-#line 326 "yacc.y"
+#line 326 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_set_clauses) = std::vector<std::shared_ptr<SetClause>>{(yyvsp[0].sv_set_clause)};
     }
-#line 2076 "yacc.tab.cpp"
+#line 2076 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 58: /* setClauses: setClauses ',' setClause  */
-#line 330 "yacc.y"
+#line 330 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_set_clauses).push_back((yyvsp[0].sv_set_clause));
     }
-#line 2084 "yacc.tab.cpp"
+#line 2084 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 59: /* setClause: colName '=' value  */
-#line 337 "yacc.y"
+#line 337 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_set_clause) = std::make_shared<SetClause>((yyvsp[-2].sv_str), (yyvsp[0].sv_val));
     }
-#line 2092 "yacc.tab.cpp"
+#line 2092 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 60: /* selector: '*'  */
-#line 344 "yacc.y"
+#line 344 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_cols) = {};
     }
-#line 2100 "yacc.tab.cpp"
+#line 2100 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 63: /* aggColList: aggCol  */
-#line 353 "yacc.y"
+#line 353 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_cols) = std::vector<std::shared_ptr<Col>>{(yyvsp[0].sv_col)};
     }
-#line 2108 "yacc.tab.cpp"
+#line 2108 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 64: /* aggColList: aggColList ',' aggCol  */
-#line 357 "yacc.y"
+#line 357 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_cols).push_back((yyvsp[0].sv_col));
     }
-#line 2116 "yacc.tab.cpp"
+#line 2116 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 65: /* aggCol: MAX '(' col ')' AS alias  */
-#line 364 "yacc.y"
+#line 364 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_col) = std::static_pointer_cast<Col>(std::make_shared<AggCol>((yyvsp[-3].sv_col)->tab_name, (yyvsp[-3].sv_col)->col_name, AGG_MAX, (yyvsp[0].sv_str)));
     }
-#line 2124 "yacc.tab.cpp"
+#line 2124 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 66: /* aggCol: MIN '(' col ')' AS alias  */
-#line 368 "yacc.y"
+#line 368 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_col) = std::static_pointer_cast<Col>(std::make_shared<AggCol>((yyvsp[-3].sv_col)->tab_name, (yyvsp[-3].sv_col)->col_name, AGG_MIN, (yyvsp[0].sv_str)));
     }
-#line 2132 "yacc.tab.cpp"
+#line 2132 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 67: /* aggCol: SUM '(' col ')' AS alias  */
-#line 372 "yacc.y"
+#line 372 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_col) = std::static_pointer_cast<Col>(std::make_shared<AggCol>((yyvsp[-3].sv_col)->tab_name, (yyvsp[-3].sv_col)->col_name, AGG_SUM, (yyvsp[0].sv_str)));
     }
-#line 2140 "yacc.tab.cpp"
+#line 2140 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 68: /* aggCol: AVG '(' col ')' AS alias  */
-#line 376 "yacc.y"
+#line 376 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_col) = std::static_pointer_cast<Col>(std::make_shared<AggCol>((yyvsp[-3].sv_col)->tab_name, (yyvsp[-3].sv_col)->col_name, AGG_AVG, (yyvsp[0].sv_str)));
     }
-#line 2148 "yacc.tab.cpp"
+#line 2148 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 69: /* aggCol: COUNT '(' col ')' AS alias  */
-#line 380 "yacc.y"
+#line 380 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_col) = std::static_pointer_cast<Col>(std::make_shared<AggCol>((yyvsp[-3].sv_col)->tab_name, (yyvsp[-3].sv_col)->col_name, AGG_COUNT, (yyvsp[0].sv_str)));
     }
-#line 2156 "yacc.tab.cpp"
+#line 2156 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 70: /* tableList: tbName  */
-#line 387 "yacc.y"
+#line 387 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_strs) = std::vector<std::string>{(yyvsp[0].sv_str)};
     }
-#line 2164 "yacc.tab.cpp"
+#line 2164 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 71: /* tableList: tableList ',' tbName  */
-#line 391 "yacc.y"
+#line 391 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_strs).push_back((yyvsp[0].sv_str));
     }
-#line 2172 "yacc.tab.cpp"
+#line 2172 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 72: /* tableList: tableList JOIN tbName  */
-#line 395 "yacc.y"
+#line 395 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     {
         (yyval.sv_strs).push_back((yyvsp[0].sv_str));
     }
-#line 2180 "yacc.tab.cpp"
+#line 2180 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 73: /* opt_order_clause: ORDER BY order_clause  */
-#line 402 "yacc.y"
+#line 402 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     { 
         (yyval.sv_orderby) = (yyvsp[0].sv_orderby); 
     }
-#line 2188 "yacc.tab.cpp"
+#line 2188 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 74: /* opt_order_clause: %empty  */
-#line 405 "yacc.y"
+#line 405 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
                       { /* ignore*/ }
-#line 2194 "yacc.tab.cpp"
+#line 2194 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 75: /* order_clause: col opt_asc_desc  */
-#line 410 "yacc.y"
+#line 410 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
     { 
         (yyval.sv_orderby) = std::make_shared<OrderBy>((yyvsp[-1].sv_col), (yyvsp[0].sv_orderby_dir));
     }
-#line 2202 "yacc.tab.cpp"
+#line 2202 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 76: /* opt_asc_desc: ASC  */
-#line 416 "yacc.y"
+#line 416 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
                  { (yyval.sv_orderby_dir) = OrderBy_ASC;     }
-#line 2208 "yacc.tab.cpp"
+#line 2208 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 77: /* opt_asc_desc: DESC  */
-#line 417 "yacc.y"
+#line 417 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
                  { (yyval.sv_orderby_dir) = OrderBy_DESC;    }
-#line 2214 "yacc.tab.cpp"
+#line 2214 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 78: /* opt_asc_desc: %empty  */
-#line 418 "yacc.y"
+#line 418 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
             { (yyval.sv_orderby_dir) = OrderBy_DEFAULT; }
-#line 2220 "yacc.tab.cpp"
+#line 2220 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 79: /* set_knob_type: ENABLE_NESTLOOP  */
-#line 422 "yacc.y"
+#line 422 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
                     { (yyval.sv_setKnobType) = EnableNestLoop; }
-#line 2226 "yacc.tab.cpp"
+#line 2226 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
   case 80: /* set_knob_type: ENABLE_SORTMERGE  */
-#line 423 "yacc.y"
+#line 423 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
                          { (yyval.sv_setKnobType) = EnableSortMerge; }
-#line 2232 "yacc.tab.cpp"
+#line 2232 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
     break;
 
 
-#line 2236 "yacc.tab.cpp"
+#line 2236 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.tab.cpp"
 
       default: break;
     }
@@ -2461,5 +2461,5 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 431 "yacc.y"
+#line 431 "/home/ubuntu/db2025-jinsenianhua/src/parser/yacc.y"
 
