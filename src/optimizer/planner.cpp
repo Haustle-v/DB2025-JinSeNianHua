@@ -145,12 +145,12 @@ std::shared_ptr<Plan> Planner::generate_agg_plan(std::shared_ptr<Query> query, s
 {
     auto x = std::dynamic_pointer_cast<ast::SelectStmt>(query->parse);
 
-    if(!x->has_agg) {
+    if(!x->has_agg && x->group_by_cols.empty()) {
         return plan;
     }
 
     // 生成聚合计划
-    plan = std::make_shared<AggPlan>(T_Agg, std::move(plan), std::vector<TabCol>{}, std::move(query->cols));
+    plan = std::make_shared<AggPlan>(T_Agg, std::move(plan), std::move(query->group_by_cols), std::move(query->cols));
     return plan;
 }
 

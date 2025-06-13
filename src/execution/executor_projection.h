@@ -20,18 +20,19 @@ class ProjectionExecutor : public AbstractExecutor {
   std::unique_ptr<AbstractExecutor> prev_;  // 投影节点的儿子节点
   std::vector<ColMeta> cols_;               // 需要投影的字段
   size_t len_;                              // 字段总长度
-  std::vector<size_t> sel_idxs_;
+  std::vector<TabCol> sel_cols_;
 
  public:
   ProjectionExecutor(std::unique_ptr<AbstractExecutor> prev,
                      const std::vector<TabCol> &sel_cols) {
     prev_ = std::move(prev);
 
+    sel_cols_ = sel_cols;
+
     size_t curr_offset = 0;
     auto &prev_cols = prev_->cols();
     for (auto &sel_col : sel_cols) {
       auto pos = get_col(prev_cols, sel_col);
-      sel_idxs_.push_back(pos - prev_cols.begin());
       auto col = *pos;
       col.offset = curr_offset;
       curr_offset += col.len;
@@ -48,12 +49,9 @@ class ProjectionExecutor : public AbstractExecutor {
     // 将顺序扫描到的记录投影
     std::unique_ptr<RmRecord> pre_rec = prev_->Next();
     std::unique_ptr<RmRecord> proj_rec = std::make_unique<RmRecord>(len_);
-    auto &pre_cols = prev_->cols();
     size_t proj_col_num = cols_.size();
     for (size_t proj_idx = 0; proj_idx < proj_col_num; ++proj_idx) {
-      // 投影字段在原纪录的位置
-      size_t pre_idx = sel_idxs_[proj_idx];
-      auto &pre_col = pre_cols[pre_idx];
+      auto pre_col = prev_->get_col_offset(sel_cols_[proj_idx]);
       auto &proj_col = cols_[proj_idx];
       memcpy(proj_rec->data + proj_col.offset, pre_rec->data + pre_col.offset,
              proj_col.len);

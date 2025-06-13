@@ -34,6 +34,8 @@ class Query{
     std::vector<SetClause> set_clauses;
     //insert 的values值
     std::vector<Value> values;
+    // group by 条件
+    std::vector<TabCol> group_by_cols;
 
     Query(){}
 

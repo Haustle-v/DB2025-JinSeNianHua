@@ -65,6 +65,17 @@ std::shared_ptr<Query> Analyze::do_analyze(
         sel_col = check_column(all_cols, sel_col);  // 列元数据校验
       }
     }
+
+    // 处理group by条件
+    for (auto &sv_group_col : x->group_by_cols) {
+      TabCol group_col = {.tab_name = sv_group_col->tab_name,
+                          .col_name = sv_group_col->col_name,
+                          .alias = "",
+                          .aggFuncType = ast::AGG_INVALID};
+      group_col = check_column(all_cols, group_col);
+      query->group_by_cols.push_back(group_col);
+    }
+
     // 处理where条件
     get_clause(x->conds, query->conds);
     check_clause(query->tables, query->conds);

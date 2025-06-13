@@ -134,9 +134,7 @@ class AggPlanExecutor : public AbstractExecutor {
         }
 
         void nextTuple() override {
-            if (current_group_ != group_results_.end()) {
-                ++current_group_;
-            }
+            current_group_++;
         }
 
         std::unique_ptr<RmRecord> Next() override {
@@ -151,12 +149,34 @@ class AggPlanExecutor : public AbstractExecutor {
             }
             
             auto result = std::make_unique<RmRecord>(*current_group_->second.first);
-            current_group_++;
             return result;
         }
 
         bool is_end() const override {
             return current_group_ == group_results_.end();
+        }
+
+        ColMeta get_col_offset(const TabCol &target) override {
+            int curr_index = 0;
+            for (int i = 0; i < group_by_cols_.size(); i++) {
+                if (group_by_cols_[i].col_name == target.col_name &&
+                    group_by_cols_[i].tab_name == target.tab_name &&
+                    group_by_cols_[i].aggFuncType == target.aggFuncType &&
+                    group_by_cols_[i].alias == target.alias) {
+                    return cols_[curr_index];
+                }
+                curr_index++;
+            }
+            for (int i = 0; i < sel_cols_.size(); i++) {
+                if (sel_cols_[i].col_name == target.col_name &&
+                    sel_cols_[i].tab_name == target.tab_name &&
+                    sel_cols_[i].aggFuncType == target.aggFuncType &&
+                    sel_cols_[i].alias == target.alias) {
+                    return cols_[curr_index];
+                }
+                curr_index++;
+            }
+            throw ColumnNotFoundError(target.col_name);
         }
 
         const std::vector<ColMeta> &cols() const override { return cols_; }
@@ -222,13 +242,7 @@ class AggPlanExecutor : public AbstractExecutor {
             if (prev_->is_end()) {
                 auto new_record = std::make_unique<RmRecord>(len_);
                 
-                // 初始化group by列（如果有的话）
-                int curr_index = 0;
-                for (int i = 0; i < group_by_cols_.size(); i++) {
-                    auto col_meta = cols_[curr_index];
-                    memset(new_record->data + col_meta.offset, 0, col_meta.len);
-                    curr_index++;
-                }
+                int curr_index = group_by_cols_.size();
 
                 // 初始化聚合列
                 for (int i = 0; i < sel_cols_.size(); i++) {
@@ -270,7 +284,7 @@ class AggPlanExecutor : public AbstractExecutor {
                     for (int i = 0; i < group_by_cols_.size(); i++) {
                         auto col_meta = cols_[curr_index];
                         memcpy(new_record->data + col_meta.offset, 
-                               record->data + col_meta.offset, 
+                               record->data + prev_->get_col_offset(group_by_cols_[i]).offset, 
                                col_meta.len);
                         curr_index++;
                     }
