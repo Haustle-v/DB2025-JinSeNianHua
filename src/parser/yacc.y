@@ -25,7 +25,7 @@ using namespace ast;
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
-%token MAX MIN SUM AVG COUNT AS
+%token MAX MIN SUM AVG COUNT AS GROUP
 
 // type-specific tokens
 %token <sv_str> IDENTIFIER VALUE_STRING
@@ -45,7 +45,7 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %type <sv_str> tbName colName alias
 %type <sv_strs> tableList colNameList
 %type <sv_col> col aggCol
-%type <sv_cols> colList selector aggColList
+%type <sv_cols> colList selector optGroupByClause
 %type <sv_set_clause> setClause
 %type <sv_set_clauses> setClauses
 %type <sv_cond> condition
@@ -155,9 +155,20 @@ dml:
     {
         $$ = std::make_shared<UpdateStmt>($2, $4, $5);
     }
-    |   SELECT selector FROM tableList optWhereClause opt_order_clause
+    |   SELECT selector FROM tableList optWhereClause optGroupByClause opt_order_clause
     {
-        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6);
+        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6, $7);
+    }
+    ;
+
+optGroupByClause:
+        /* empty */
+    {
+        $$ = {};
+    }
+    |   GROUP BY colList
+    {
+        $$ = $3;
     }
     ;
 
@@ -270,6 +281,10 @@ col:
     {
         $$ = std::make_shared<Col>("", $1);
     }
+    |   aggCol
+    {
+        $$ = $1;
+    }
     ;
 
 colList:
@@ -345,18 +360,6 @@ selector:
         $$ = {};
     }
     |   colList
-    |   aggColList
-    ;
-
-aggColList:
-        aggCol
-    {
-        $$ = std::vector<std::shared_ptr<Col>>{$1};
-    }
-    |   aggColList ',' aggCol
-    {
-        $$.push_back($3);
-    }
     ;
 
 aggCol:

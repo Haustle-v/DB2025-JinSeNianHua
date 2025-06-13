@@ -91,6 +91,7 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "AVG" { return AVG; }
 "COUNT" { return COUNT; }
 "AS" { return AS; }
+"GROUP" { return GROUP; }
 "ENABLE_NESTLOOP" { return ENABLE_NESTLOOP; }
 "ENABLE_SORTMERGE" { return ENABLE_SORTMERGE; }
 "TRUE" { 
