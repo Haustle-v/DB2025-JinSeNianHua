@@ -12,15 +12,14 @@ class AggPlanExecutor : public AbstractExecutor {
         // 用于存储聚合值的结构体
         struct AggValue {
             std::variant<int32_t, float> value;  // 存储聚合结果
-            int64_t count;                       // 用于AVG计算
             ColType type;                        // 值的类型
             ast::AggFuncType agg_type;                    // 聚合函数类型
             
-            AggValue(ColType t, ast::AggFuncType at) : count(0), type(t), agg_type(at) {
+            AggValue(ColType t, ast::AggFuncType at) : type(t), agg_type(at) {
                 // 初始化value
                 switch(agg_type) {
                     case ast::AggFuncType::AGG_COUNT:
-                        value = 0;
+                        value = int32_t(0); // 明确指定类型
                         break;
                     case ast::AggFuncType::AGG_MIN:
                         if (type == TYPE_INT) {
@@ -71,9 +70,9 @@ class AggPlanExecutor : public AbstractExecutor {
             }
         };
 
-        // 存储分组的中间结果
-        std::unordered_map<GroupKey, std::unique_ptr<RmRecord>, GroupKeyHash> group_results_;
-        std::unordered_map<GroupKey, std::unique_ptr<RmRecord>, GroupKeyHash>::iterator current_group_;
+        // 存储分组的中间结果, 第二个int64_t用于存储计数
+        std::unordered_map<GroupKey, std::pair<std::unique_ptr<RmRecord>, int64_t>, GroupKeyHash> group_results_;
+        std::unordered_map<GroupKey, std::pair<std::unique_ptr<RmRecord>, int64_t>, GroupKeyHash>::iterator current_group_;
 
     public:
         AggPlanExecutor(std::unique_ptr<AbstractExecutor> prev, std::vector<TabCol> group_by_cols, std::vector<TabCol> sel_cols) {
@@ -101,6 +100,9 @@ class AggPlanExecutor : public AbstractExecutor {
                 auto col = *pos;
                 col.offset = curr_offset;
                 curr_offset += col.len;
+                if (sel_col.aggFuncType == ast::AggFuncType::AGG_COUNT) {
+                    col.type = TYPE_INT;
+                }
                 cols_.push_back(col);
             }
             
@@ -132,7 +134,7 @@ class AggPlanExecutor : public AbstractExecutor {
                 return nullptr;
             }
             
-            auto result = std::make_unique<RmRecord>(*current_group_->second);
+            auto result = std::make_unique<RmRecord>(*current_group_->second.first);
             current_group_++;
             return result;
         }
@@ -151,17 +153,18 @@ class AggPlanExecutor : public AbstractExecutor {
 
     private:
         void updateAggValue(AggValue& agg_value, const char* data, const ColMeta& col_meta) {
+            if (agg_value.agg_type == ast::AggFuncType::AGG_COUNT) {
+                std::get<int32_t>(agg_value.value)++;
+                return;
+            }
+
             // 根据不同的聚合类型和数据类型进行更新
             if (col_meta.type == TYPE_INT) {
                 int32_t val = *(int32_t*)(data);
                 switch(agg_value.agg_type) {
-                    case ast::AggFuncType::AGG_COUNT:
-                        std::get<int32_t>(agg_value.value)++;
-                        break;
                     case ast::AggFuncType::AGG_SUM:
                     case ast::AggFuncType::AGG_AVG:
                         std::get<int32_t>(agg_value.value) += val;
-                        agg_value.count++;
                         break;
                     case ast::AggFuncType::AGG_MIN:
                         std::get<int32_t>(agg_value.value) = std::min(std::get<int32_t>(agg_value.value), val);
@@ -175,13 +178,9 @@ class AggPlanExecutor : public AbstractExecutor {
             } else if (col_meta.type == TYPE_FLOAT) {
                 float val = *(float*)(data);
                 switch(agg_value.agg_type) {
-                    case ast::AggFuncType::AGG_COUNT:
-                        std::get<float>(agg_value.value)++;
-                        break;
                     case ast::AggFuncType::AGG_SUM:
                     case ast::AggFuncType::AGG_AVG:
                         std::get<float>(agg_value.value) += val;
-                        agg_value.count++;
                         break;
                     case ast::AggFuncType::AGG_MIN:
                         std::get<float>(agg_value.value) = std::min(std::get<float>(agg_value.value), val);
@@ -199,7 +198,7 @@ class AggPlanExecutor : public AbstractExecutor {
             // 遍历所有输入记录进行分组和聚合
             prev_->beginTuple();
             while (!prev_->is_end()) {
-                auto record = prev_->Next();
+                auto record = prev_->Next(); // 获取当前行
                 if (!record) continue;
 
                 // 构建分组键
@@ -207,7 +206,7 @@ class AggPlanExecutor : public AbstractExecutor {
                 std::string key_str;
                 for (const auto &group_col : group_by_cols_) {
                     auto col_meta = prev_->get_col_offset(group_col);
-                    key_str += std::string(record->data + col_meta.offset, col_meta.len);
+                    key_str += std::string(record->data + col_meta.offset, col_meta.len); // 将group by列的值拼接成字符串
                 }
                 group_key.key = key_str;
 
@@ -233,9 +232,11 @@ class AggPlanExecutor : public AbstractExecutor {
                         auto col_meta = prev_->get_col_offset(sel_col);
                         AggValue agg_value(col_meta.type, sel_col.aggFuncType);
                         updateAggValue(agg_value, record->data + col_meta.offset, col_meta);
-                        
+
                         // 写入初始值
-                        if (col_meta.type == TYPE_INT) {
+                        if (sel_col.aggFuncType == ast::AggFuncType::AGG_COUNT) {
+                            *(int32_t*)(new_record->data + curr_offset) = std::get<int32_t>(agg_value.value);
+                        } else if (col_meta.type == TYPE_INT) {
                             *(int32_t*)(new_record->data + curr_offset) = std::get<int32_t>(agg_value.value);
                         } else if (col_meta.type == TYPE_FLOAT) {
                             *(float*)(new_record->data + curr_offset) = std::get<float>(agg_value.value);
@@ -243,10 +244,11 @@ class AggPlanExecutor : public AbstractExecutor {
                         curr_offset += col_meta.len;
                     }
                     
-                    group_results_[group_key] = std::move(new_record);
+                    group_results_[group_key] = std::make_pair(std::move(new_record), 1);
                 } else {
                     // 更新已存在分组的聚合值
-                    auto &existing_record = group_results_[group_key];
+                    auto &existing_record = group_results_[group_key].first;
+                    group_results_[group_key].second++;
                     size_t curr_offset = 0;
                     size_t col_idx = 0;
                     
@@ -264,7 +266,9 @@ class AggPlanExecutor : public AbstractExecutor {
                         
                         // 读取当前聚合值
                         AggValue agg_value(col_meta.type, sel_col.aggFuncType);
-                        if (col_meta.type == TYPE_INT) {
+                        if (sel_col.aggFuncType == ast::AggFuncType::AGG_COUNT) {
+                            agg_value.value = *(int32_t*)(existing_record->data + curr_offset);
+                        } else if (col_meta.type == TYPE_INT) {
                             agg_value.value = *(int32_t*)(existing_record->data + curr_offset);
                         } else if (col_meta.type == TYPE_FLOAT) {
                             agg_value.value = *(float*)(existing_record->data + curr_offset);
@@ -274,12 +278,12 @@ class AggPlanExecutor : public AbstractExecutor {
                         updateAggValue(agg_value, record->data + col_meta.offset, col_meta);
                         
                         // 写回更新后的值
-                        if (col_meta.type == TYPE_INT) {
-                            *(int32_t*)(existing_record->data + curr_offset) = 
-                                std::get<int32_t>(agg_value.value);
+                        if (sel_col.aggFuncType == ast::AggFuncType::AGG_COUNT) {
+                            *(int32_t*)(existing_record->data + curr_offset) = std::get<int32_t>(agg_value.value);
+                        } else if (col_meta.type == TYPE_INT) {
+                            *(int32_t*)(existing_record->data + curr_offset) = std::get<int32_t>(agg_value.value);
                         } else if (col_meta.type == TYPE_FLOAT) {
-                            *(float*)(existing_record->data + curr_offset) = 
-                                std::get<float>(agg_value.value);
+                            *(float*)(existing_record->data + curr_offset) = std::get<float>(agg_value.value);
                         }
                         curr_offset += col_meta.len;
                     }
@@ -289,5 +293,30 @@ class AggPlanExecutor : public AbstractExecutor {
             }
 
             // TODO: 对AVG类型进行最终的除法计算
+            size_t curr_offset = 0;
+            size_t col_idx = 0;
+            for (const auto &group_col : group_by_cols_) {
+                auto col_meta = prev_->get_col_offset(group_col);
+                curr_offset += col_meta.len;
+                col_idx++;
+            }
+            for (auto& group_pair : group_results_) {
+                auto& record = group_pair.second.first;
+                auto& count = group_pair.second.second;
+                if (count > 0) {
+                    size_t curr_offset2 = 0;
+                    for (const auto &sel_col : sel_cols_) {
+                        auto col_meta = prev_->get_col_offset(sel_col);
+                        if (sel_col.aggFuncType == ast::AggFuncType::AGG_AVG) {
+                            if (col_meta.type == TYPE_INT) {
+                                *(int32_t*)(record->data + curr_offset + curr_offset2) /= count;
+                            } else if (col_meta.type == TYPE_FLOAT) {
+                                *(float*)(record->data + curr_offset + curr_offset2) /= count;
+                            }
+                        }
+                        curr_offset2 += col_meta.len;
+                    }
+                }
+            }
         }
 };

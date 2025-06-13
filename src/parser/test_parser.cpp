@@ -15,8 +15,7 @@ See the Mulan PSL v2 for more details. */
 
 int main() {
     std::vector<std::string> sqls = {
-        "select a, b, c, d, e from tb;"
-        "select max(a) as max_a, min(b) as min_b, sum(c) as sum_c, avg(d) as avg_d, count(e) as count_e from tb;",
+        "select count(*) as count_e from tb;"
     };
     for (auto &sql : sqls) {
         std::cout << sql << std::endl;

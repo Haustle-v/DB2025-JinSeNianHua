@@ -380,6 +380,10 @@ aggCol:
     {
         $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_COUNT, $6));
     }
+    |   COUNT '(' '*' ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>("", "", AGG_COUNT, $6));
+    }
     ;
 
 tableList:
