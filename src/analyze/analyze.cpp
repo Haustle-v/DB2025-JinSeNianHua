@@ -59,6 +59,9 @@ std::shared_ptr<Query> Analyze::do_analyze(
     } else {
       // infer table name from column name
       for (auto &sel_col : query->cols) {
+        if (sel_col.col_name == "*") {
+          continue;
+        }
         sel_col = check_column(all_cols, sel_col);  // 列元数据校验
       }
     }

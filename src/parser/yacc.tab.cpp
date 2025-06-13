@@ -2163,7 +2163,7 @@ yyreduce:
   case 70: /* aggCol: COUNT '(' '*' ')' AS alias  */
 #line 384 "yacc.y"
     {
-        (yyval.sv_col) = std::static_pointer_cast<Col>(std::make_shared<AggCol>("", "", AGG_COUNT, (yyvsp[0].sv_str)));
+        (yyval.sv_col) = std::static_pointer_cast<Col>(std::make_shared<AggCol>("", "*", AGG_COUNT, (yyvsp[0].sv_str)));
     }
 #line 2169 "yacc.tab.cpp"
     break;

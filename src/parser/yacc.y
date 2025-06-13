@@ -382,7 +382,7 @@ aggCol:
     }
     |   COUNT '(' '*' ')' AS alias
     {
-        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>("", "", AGG_COUNT, $6));
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>("", "*", AGG_COUNT, $6));
     }
     ;
 
