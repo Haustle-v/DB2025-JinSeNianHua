@@ -156,7 +156,8 @@ Condition reverse_condition(const Condition& cond) {
 // 找到 需要新添加的(右)表 与 已经在(左)jointree中所有的表 相关的连接条件
 std::vector<Condition> extract_join_conditions(std::vector<Condition>& joinconds,
                                                const std::vector<std::string>& tables,
-                                               int index){  // index指的是目前处理到哪一张右表了
+                                               int index,         // index指的是目前处理到哪一张右表了
+                                                bool& reversed){
     std::vector<Condition> result;
     auto it = joinconds.begin();
     while (it != joinconds.end()) {
@@ -230,13 +231,16 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query)
     // 第一层连接
     std::shared_ptr<Plan> left = table_scan_executors[0];
     std::shared_ptr<Plan> right =  table_scan_executors[1];
+    bool reversed = false;
     table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right), 
-                        extract_join_conditions(joinconds, tables, 1), query->join_type_);
+                        extract_join_conditions(joinconds, tables, 1, reversed), reversed, query->join_type_);
+    
     
     // 其余层连接
     for (int i=2; i<=tables.size()-1;i++){  // i是右表的index
+        bool reversed = false;
         table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(table_join_executors),  // 左深树, 把已连接节点放左边
-            std::move(table_scan_executors[i]), extract_join_conditions(joinconds, tables, i));
+            std::move(table_scan_executors[i]), extract_join_conditions(joinconds, tables, i, reversed), reversed);
     } 
     // 这里后需要处理！reverse的时候给jointree一个标记，因为赛题要求jointree输出的条件表达式左右顺序不变
 

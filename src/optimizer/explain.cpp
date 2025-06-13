@@ -128,6 +128,19 @@ bool is_left_preferred(const std::shared_ptr<Plan>& left, const std::shared_ptr<
     return get_sort_key(left) < get_sort_key(right);
 }
 
+// 要把翻转过的条件转回来，因为EXPLAIN打印需要原始顺序
+Condition reverse_condition4explain(const Condition& cond) {
+    static const std::map<CompOp, CompOp> swap_op = {
+        {OP_EQ, OP_EQ}, {OP_NE, OP_NE},
+        {OP_LT, OP_GT}, {OP_GT, OP_LT},
+        {OP_LE, OP_GE}, {OP_GE, OP_LE}};
+
+    Condition reversed = cond;
+    std::swap(reversed.lhs_col, reversed.rhs_col);
+    reversed.op = swap_op.at(reversed.op);  // 安全使用 map 查表
+    return reversed;
+}
+
 // yfs 6.10
 void explain(std::string& explain_output, std::shared_ptr<Plan> plan, const std::string& offset) {
     if (auto dml_plan = std::dynamic_pointer_cast<DMLPlan>(plan)) {
@@ -156,8 +169,14 @@ void explain(std::string& explain_output, std::shared_ptr<Plan> plan, const std:
         explain_output += "],condition=[";
         std::vector<std::string> temp;
         for (const auto& cond : join_plan->conds_) {
-            temp.push_back(get_pam_saila(cond.lhs_col.tab_name) + "." + cond.lhs_col.col_name + compOp2String(cond.op) 
-                            + get_pam_saila(cond.rhs_col.tab_name) + "." + cond.rhs_col.col_name);
+            Condition cond2 = cond;       // 如果之前被翻转过，那么EXPLAIN的时候要打印原来的顺序
+            if (join_plan->reversed_){
+                cond2 = reverse_condition4explain(cond);
+            }
+            temp.push_back(get_pam_saila(cond2.lhs_col.tab_name) + "." + cond2.lhs_col.col_name + compOp2String(cond2.op) 
+                        + get_pam_saila(cond2.rhs_col.tab_name) + "." + cond2.rhs_col.col_name);
+            
+
         }
         explain_output += sort_dict(temp);
         explain_output += "])\n";

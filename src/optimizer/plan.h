@@ -83,13 +83,15 @@ class ScanPlan : public Plan
 class JoinPlan : public Plan
 {
     public:
-        JoinPlan(PlanTag tag, std::shared_ptr<Plan> left, std::shared_ptr<Plan> right, std::vector<Condition> conds,JoinType type_=JoinType::INNER_JOIN)
+        JoinPlan(PlanTag tag, std::shared_ptr<Plan> left, std::shared_ptr<Plan> right, std::vector<Condition> conds, 
+                    bool reverse=false, JoinType type=JoinType::INNER_JOIN)
         {
             Plan::tag = tag;
             left_ = std::move(left);
             right_ = std::move(right);
             conds_ = std::move(conds);
-            type = type_;
+            reversed_ = reverse;
+            type_ = type;
         }
         ~JoinPlan(){}
         // 左节点
@@ -99,7 +101,10 @@ class JoinPlan : public Plan
         // 连接条件
         std::vector<Condition> conds_;
         // future TODO: 后续可以支持的连接类型
-        JoinType type;
+        JoinType type_;
+        // 标记这个join的条件和左右两侧是否被翻转过
+        // 主要是为了EXPLAIN，因为join条件要使用原始的顺序
+        bool reversed_;
 };
 
 class ProjectionPlan : public Plan
