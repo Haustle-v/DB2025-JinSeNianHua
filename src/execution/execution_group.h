@@ -96,13 +96,24 @@ class AggPlanExecutor : public AbstractExecutor {
             
             // 添加聚合列
             for (const auto &sel_col : sel_cols_) {
+                // 如果聚合函数是COUNT，则将类型设置为INT
+                if (sel_col.aggFuncType == ast::AggFuncType::AGG_COUNT) {
+                    ColMeta col_meta = {
+                        .tab_name = sel_col.tab_name,
+                        .name = sel_col.col_name,
+                        .type = TYPE_INT,
+                        .len = sizeof(int32_t),
+                        .offset = curr_offset,
+                        .index = false,
+                    };
+                    cols_.push_back(col_meta);
+                    curr_offset += col_meta.len;
+                    continue;
+                }
                 auto pos = get_col(prev_cols, sel_col);
                 auto col = *pos;
                 col.offset = curr_offset;
                 curr_offset += col.len;
-                if (sel_col.aggFuncType == ast::AggFuncType::AGG_COUNT) {
-                    col.type = TYPE_INT;
-                }
                 cols_.push_back(col);
             }
             
