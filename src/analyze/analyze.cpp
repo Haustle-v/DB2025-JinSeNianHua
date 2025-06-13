@@ -22,9 +22,13 @@ std::shared_ptr<Query> Analyze::do_analyze(
   if (auto x = std::dynamic_pointer_cast<ast::SelectStmt>(parse)) {
     // 处理表名
     query->tables = std::move(x->tabs);
-        if (!x->jointree.empty()) {
+    // 把ast的jointree传递给query
+    if (!x->jointree.empty()) {
         query->join_type_ = x->jointree[0]->type;
     }
+    // 把ast的need_explain传递给query
+    query->need_explain = x->need_explain;
+
     /** TODO: 检查表是否存在 */
     // sqb: down! 5.24
     for (auto &tab_name : query->tables) {
@@ -48,6 +52,7 @@ std::shared_ptr<Query> Analyze::do_analyze(
       get_all_cols_of_left_tab(x->jointree[0]->left, all_cols_of_left_tab);
 
       if (query->cols.empty()) {  // select * 表示 select all
+        query->select_all = true;
         // select all columns
         for (auto &col : all_cols_of_left_tab) {
         TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name};
@@ -60,6 +65,7 @@ std::shared_ptr<Query> Analyze::do_analyze(
       }}
     }else{
     if (query->cols.empty()) {
+      query->select_all = true;
       // select all columns
       for (auto &col : all_cols) {
         TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name};
@@ -134,12 +140,9 @@ TabCol Analyze::check_column(const std::vector<ColMeta> &all_cols,
   } else {
     /** TODO: Make sure target column exists */
     // sqb: down! 5.24
-    if (!(sm_manager_->db_.get_table(target.tab_name).is_col(target.col_name))) {
-      if (!(sm_manager_->db_.get_table(alias_map[target.tab_name]).is_col(target.col_name))){
-          throw ColumnNotFoundError(target.col_name);
-      }else{    
-        target.tab_name = alias_map[target.tab_name];   // 如果发现用的是表的别名，就在这里把别名改为原名
-      }
+    // yfs 6.11 在这里修改了get_table，如果是用别名找到的，则将别名替换成表
+    if (!(sm_manager_->db_.get_table2(target.tab_name).is_col(target.col_name))) {
+        throw ColumnNotFoundError(target.col_name);
     }
   }
   return target;
@@ -241,6 +244,7 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names,
       if (lhs_type == TYPE_FLOAT && rhs_type == TYPE_INT) {
         cond.rhs_val.type = TYPE_FLOAT;
         *(float *)(cond.rhs_val.raw->data) = (float)cond.rhs_val.int_val;
+        cond.rhs_val.type = TYPE_INT;   // yfs 6.10 这里的rhs_val.type我在planner.cpp的value2String需要用到，所以不能变，我这里再改回来了
       } else {
         throw IncompatibleTypeError(coltype2str(lhs_type),
                                     coltype2str(rhs_type));

@@ -219,11 +219,11 @@ struct SelectStmt : public TreeNode {
     std::vector<std::string> tabs;
     std::vector<std::shared_ptr<BinaryExpr>> conds;
     std::vector<std::shared_ptr<JoinExpr>> jointree;
-
     
     bool has_sort;
     std::shared_ptr<OrderBy> order;
 
+    bool need_explain {false};
 
     SelectStmt(std::vector<std::shared_ptr<Col>> cols_,
                std::vector<std::string> tabs_,

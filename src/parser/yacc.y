@@ -6,6 +6,7 @@
 #include <set>
 #include <unordered_map>
 std::unordered_map<std::string, std::string> alias_map;
+std::unordered_map<std::string, std::string> pam_saila;
 
 int yylex(YYSTYPE *yylval, YYLTYPE *yylloc);
 
@@ -26,7 +27,7 @@ using namespace ast;
 // keywords
 %token SHOW TABLES CREATE TABLE DROP DESC INSERT INTO VALUES DELETE FROM ASC ORDER BY
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
-INNER LEFT RIGHT FULL SEMI ON
+INNER LEFT RIGHT FULL SEMI ON EXPLAIN
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
 
@@ -115,6 +116,13 @@ dbStmt:
         SHOW TABLES
     {
         $$ = std::make_shared<ShowTables>();
+    }
+    |   EXPLAIN dml
+    {
+        if (auto select = std::dynamic_pointer_cast<SelectStmt>($2)){
+            select->need_explain = true;
+            $$ = select;
+        }
     }
     ;
 
@@ -391,6 +399,7 @@ tbNameWithAlias:        /*这里多做的一个步骤只是把别名存在映射
     |   tbName alias
     {
         alias_map[$2] = $1;
+        pam_saila[$1] = $2;
         $$ = $1;
     }
 

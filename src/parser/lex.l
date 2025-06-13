@@ -82,6 +82,7 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "JOIN" {return JOIN;}
 "SEMI" { return SEMI; }     /*yfs0527*/
 "ON" { return ON; }     /*yfs0527*/
+"EXPLAIN" {return EXPLAIN;} /*yfs0609*/
 "EXIT" { return EXIT; }
 "HELP" { return HELP; }
 "ORDER" { return ORDER; }

@@ -37,6 +37,10 @@ class Query{
     std::vector<SetClause> set_clauses;
     //insert 的values值
     std::vector<Value> values;
+    // 是否需要explain
+    bool need_explain;
+    // 是否全选，即*，用于EXPLAIN里打印*的情况（而不是把所有列都打印出来）
+    bool select_all {false};
 
     Query(){}
 

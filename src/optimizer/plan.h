@@ -42,7 +42,8 @@ typedef enum PlanTag{
     T_NestLoop,
     T_SortMerge,    // sort merge join
     T_Sort,
-    T_Projection
+    T_Projection,
+    T_Explain       // yfs 6.9
 } PlanTag;
 
 // 查询执行计划
@@ -104,15 +105,17 @@ class JoinPlan : public Plan
 class ProjectionPlan : public Plan
 {
     public:
-        ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols)
+        ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, bool select_all=false)
         {
             Plan::tag = tag;
             subplan_ = std::move(subplan);
             sel_cols_ = std::move(sel_cols);
+            select_all_ = select_all;
         }
         ~ProjectionPlan(){}
         std::shared_ptr<Plan> subplan_;
         std::vector<TabCol> sel_cols_;
+        bool select_all_;    // yfs 6.10
         
 };
 

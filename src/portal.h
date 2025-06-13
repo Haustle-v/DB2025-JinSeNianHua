@@ -30,7 +30,8 @@ typedef enum portalTag{
     PORTAL_ONE_SELECT,
     PORTAL_DML_WITHOUT_SELECT,
     PORTAL_MULTI_QUERY,
-    PORTAL_CMD_UTILITY
+    PORTAL_CMD_UTILITY,
+    PORTAL_EXPLAIN      // yfs 6.9
 } portalTag;
 
 
@@ -73,7 +74,13 @@ class Portal
                     std::unique_ptr<AbstractExecutor> root= convert_plan_executor(p, context);
                     return std::make_shared<PortalStmt>(PORTAL_ONE_SELECT, std::move(p->sel_cols_), std::move(root), plan);
                 }
-                    
+                case T_Explain:
+                {
+                    // 其实这里不需要生成任何算子，但是为了确保return类型正确，能正确走完流程，就还是创建一个PortalStmt吧
+                    std::shared_ptr<ProjectionPlan> p = std::dynamic_pointer_cast<ProjectionPlan>(x->subplan_);
+                    std::unique_ptr<AbstractExecutor> root= convert_plan_executor(p, context);
+                    return std::make_shared<PortalStmt>(PORTAL_EXPLAIN, std::move(p->sel_cols_), std::move(root), plan);
+                }  
                 case T_Update:
                 {
                     std::unique_ptr<AbstractExecutor> scan= convert_plan_executor(x->subplan_, context);
@@ -126,6 +133,10 @@ class Portal
                 ql->select_from(std::move(portal->root), std::move(portal->sel_cols), context);
                 break;
             }
+            case PORTAL_EXPLAIN:    // 啥也不需要做，就是走完流程
+            {
+                break;
+            }
 
             case PORTAL_DML_WITHOUT_SELECT:
             {
@@ -168,7 +179,7 @@ class Portal
         } else if(auto x = std::dynamic_pointer_cast<JoinPlan>(plan)) {
             std::unique_ptr<AbstractExecutor> left = convert_plan_executor(x->left_, context);
             std::unique_ptr<AbstractExecutor> right = convert_plan_executor(x->right_, context);
-            // 在这里执行不同的join
+            // 在这里执行不同的join（传入连接类型）
             std::unique_ptr<AbstractExecutor> join = std::make_unique<NestedLoopJoinExecutor>(
                                 std::move(left), 
                                 std::move(right), std::move(x->conds_), std::move(x->type));
