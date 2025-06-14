@@ -25,7 +25,7 @@ using namespace ast;
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
-%token MAX MIN SUM AVG COUNT AS GROUP HAVING
+%token MAX MIN SUM AVG COUNT AS GROUP HAVING LIMIT
 
 // type-specific tokens
 %token <sv_str> IDENTIFIER VALUE_STRING
@@ -447,7 +447,11 @@ opt_order_clause:
 order_clause:
       col  opt_asc_desc 
     { 
-        $$ = std::make_shared<OrderBy>($1, $2);
+        $$ = std::make_shared<OrderBy>($1, $2, INT32_MAX);
+    }
+    |   col  opt_asc_desc LIMIT VALUE_INT
+    { 
+        $$ = std::make_shared<OrderBy>($1, $2, $4);
     }
     ;   
 

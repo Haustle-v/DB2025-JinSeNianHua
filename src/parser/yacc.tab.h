@@ -99,11 +99,12 @@ extern int yydebug;
     AS = 300,                      /* AS  */
     GROUP = 301,                   /* GROUP  */
     HAVING = 302,                  /* HAVING  */
-    IDENTIFIER = 303,              /* IDENTIFIER  */
-    VALUE_STRING = 304,            /* VALUE_STRING  */
-    VALUE_INT = 305,               /* VALUE_INT  */
-    VALUE_FLOAT = 306,             /* VALUE_FLOAT  */
-    VALUE_BOOL = 307               /* VALUE_BOOL  */
+    LIMIT = 303,                   /* LIMIT  */
+    IDENTIFIER = 304,              /* IDENTIFIER  */
+    VALUE_STRING = 305,            /* VALUE_STRING  */
+    VALUE_INT = 306,               /* VALUE_INT  */
+    VALUE_FLOAT = 307,             /* VALUE_FLOAT  */
+    VALUE_BOOL = 308               /* VALUE_BOOL  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif

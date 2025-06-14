@@ -142,6 +142,7 @@ private:
             std::cout << "ORDER_BY\n";
             print_node(x->cols, offset);
             print_val(x->orderby_dir, offset);
+            print_val(x->limit, offset);
         } else if (auto x = std::dynamic_pointer_cast<InsertStmt>(node)) {
             std::cout << "INSERT\n";
             print_val(x->tab_name, offset);

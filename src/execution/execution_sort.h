@@ -17,16 +17,19 @@ private:
     bool is_first_;                           // 是否是第一次调用
     std::vector<std::unique_ptr<RmRecord>> sorted_records_;  // 排序后的记录
     size_t current_pos_;                      // 当前记录的位置
+    int32_t limit_;
 
 public:
     SortExecutor(std::unique_ptr<AbstractExecutor> prev, 
                 std::vector<TabCol> order_by_cols,
-                std::vector<bool> is_asc) 
+                std::vector<bool> is_asc,
+                int32_t limit) 
         : prev_(std::move(prev)), 
           order_by_cols_(std::move(order_by_cols)),
           is_asc_(std::move(is_asc)),
           is_first_(true),
-          current_pos_(0) {
+          current_pos_(0),
+          limit_(limit) {
         // 复制前一个执行器的列信息
         cols_ = prev_->cols();
         len_ = prev_->tupleLen();
@@ -65,6 +68,10 @@ public:
                 });
 
             sorted_records_ = std::move(records);
+            // 应用 limit 限制
+            if (limit_ > 0 && sorted_records_.size() > static_cast<size_t>(limit_)) {
+                sorted_records_.resize(limit_);
+            }
             current_pos_ = 0;
             is_first_ = false;
         }

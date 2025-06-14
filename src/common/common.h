@@ -96,4 +96,5 @@ struct Order
 {
     std::vector<TabCol> cols;
     ast::OrderByDir orderby_dir;
+    int32_t limit;
 };

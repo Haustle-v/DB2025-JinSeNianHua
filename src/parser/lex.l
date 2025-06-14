@@ -93,6 +93,7 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "AS" { return AS; }
 "GROUP" { return GROUP; }
 "HAVING" { return HAVING; }
+"LIMIT" { return LIMIT; }
 "ENABLE_NESTLOOP" { return ENABLE_NESTLOOP; }
 "ENABLE_SORTMERGE" { return ENABLE_SORTMERGE; }
 "TRUE" { 

@@ -189,8 +189,9 @@ struct OrderBy : public TreeNode
 {
     std::shared_ptr<Col> cols;
     OrderByDir orderby_dir;
-    OrderBy( std::shared_ptr<Col> cols_, OrderByDir orderby_dir_) :
-       cols(std::move(cols_)), orderby_dir(std::move(orderby_dir_)) {}
+    int32_t limit;
+    OrderBy( std::shared_ptr<Col> cols_, OrderByDir orderby_dir_, int32_t limit_) :
+       cols(std::move(cols_)), orderby_dir(std::move(orderby_dir_)), limit(limit_) {}
 };
 
 struct InsertStmt : public TreeNode {

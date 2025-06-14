@@ -106,7 +106,7 @@ std::shared_ptr<Query> Analyze::do_analyze(
                           .alias = "",
                           .aggFuncType = ast::AGG_INVALID};
       order_col = check_column(all_cols, order_col);
-      query->order = {.cols = {std::move(order_col)}, .orderby_dir = x->order->orderby_dir};
+      query->order = {.cols = {std::move(order_col)}, .orderby_dir = x->order->orderby_dir, .limit = x->order->limit};
     }
 
         // WHERE 子句中不能用聚集函数作为条件表达式
