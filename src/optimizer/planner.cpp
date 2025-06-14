@@ -307,12 +307,12 @@ std::shared_ptr<Plan> Planner::generate_sort_plan(std::shared_ptr<Query> query, 
     }
     
     // 目前只支持一个排序条件
-    std::vector<bool> is_desc;
+    std::vector<bool> is_asc;
     for (auto &col : query->order.cols) {
-        is_desc.push_back(query->order.orderby_dir == ast::OrderBy_DESC);
+        is_asc.push_back(query->order.orderby_dir == ast::OrderBy_ASC);
     }
     return std::make_shared<SortPlan>(T_Sort, std::move(plan), query->order.cols, 
-                                    std::move(is_desc));
+                                    std::move(is_asc));
 }
 
 
