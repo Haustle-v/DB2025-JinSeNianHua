@@ -365,8 +365,8 @@ class AggPlanExecutor : public AbstractExecutor {
             }
 
             // 对AVG类型进行最终的除法计算
-            int curr_index = group_by_cols_.size();
             for (auto& group_pair : group_results_) {
+                int curr_index = group_by_cols_.size();
                 auto& record = group_pair.second.first;
                 auto& count = group_pair.second.second;
                 if (count > 0) {

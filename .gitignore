@@ -1,5 +1,4 @@
 build/
 .idea/
 .vscode/
-start_client.exp
-run_client.sh
+*.exp
