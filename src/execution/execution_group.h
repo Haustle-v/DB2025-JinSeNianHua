@@ -79,7 +79,9 @@ class AggPlanExecutor : public AbstractExecutor {
 
         // 存储分组的中间结果, 第二个int64_t用于存储计数
         std::unordered_map<GroupKey, std::pair<std::unique_ptr<RmRecord>, int64_t>, GroupKeyHash> group_results_;
-        std::unordered_map<GroupKey, std::pair<std::unique_ptr<RmRecord>, int64_t>, GroupKeyHash>::iterator current_group_;
+
+        std::vector<GroupKey> insert_order_; // 保证顺序的一致性
+        size_t output_idx_;                     // 用于遍历 insert_order_ 的索引
 
     public:
         AggPlanExecutor(std::unique_ptr<AbstractExecutor> prev, std::vector<TabCol> group_by_cols, std::vector<TabCol> sel_cols) {
@@ -129,31 +131,30 @@ class AggPlanExecutor : public AbstractExecutor {
             if (is_first_) {
                 computeAggregation();
                 is_first_ = false;
-                current_group_ = group_results_.begin();
             }
+            output_idx_ = 0;
         }
 
         void nextTuple() override {
-            current_group_++;
+            output_idx_++;
         }
 
         std::unique_ptr<RmRecord> Next() override {
             if (is_first_) {
                 computeAggregation();
                 is_first_ = false;
-                current_group_ = group_results_.begin();
             }
             
-            if (current_group_ == group_results_.end()) {
+            if (output_idx_ >= insert_order_.size()) {
                 return nullptr;
             }
             
-            auto result = std::make_unique<RmRecord>(*current_group_->second.first);
+            auto result = std::make_unique<RmRecord>(*group_results_[insert_order_[output_idx_]].first);
             return result;
         }
 
         bool is_end() const override {
-            return current_group_ == group_results_.end();
+            return output_idx_ >= insert_order_.size();
         }
 
         ColMeta get_col_offset(const TabCol &target) override {
@@ -259,6 +260,7 @@ class AggPlanExecutor : public AbstractExecutor {
                 GroupKey empty_key;
                 empty_key.key = "";
                 group_results_[empty_key] = std::make_pair(std::move(new_record), 0);
+                insert_order_.push_back(empty_key);
                 return;
             }
 
@@ -314,6 +316,7 @@ class AggPlanExecutor : public AbstractExecutor {
                     }
                     
                     group_results_[group_key] = std::make_pair(std::move(new_record), 1);
+                    insert_order_.push_back(group_key);
                 } else {
                     // 更新已存在分组的聚合值
                     auto &existing_record = group_results_[group_key].first;
