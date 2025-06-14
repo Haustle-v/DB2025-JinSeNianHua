@@ -187,11 +187,10 @@ struct BinaryExpr : public TreeNode {
 
 struct OrderBy : public TreeNode
 {
-    std::shared_ptr<Col> cols;
+    std::shared_ptr<Col> col;
     OrderByDir orderby_dir;
-    int32_t limit;
-    OrderBy( std::shared_ptr<Col> cols_, OrderByDir orderby_dir_, int32_t limit_) :
-       cols(std::move(cols_)), orderby_dir(std::move(orderby_dir_)), limit(limit_) {}
+    OrderBy( std::shared_ptr<Col> col_, OrderByDir orderby_dir_) :
+       col(std::move(col_)), orderby_dir(std::move(orderby_dir_)) {}
 };
 
 struct InsertStmt : public TreeNode {
@@ -243,19 +242,20 @@ struct SelectStmt : public TreeNode {
     std::vector<std::shared_ptr<BinaryExpr>> having_conds;
 
     bool has_sort;
-    std::shared_ptr<OrderBy> order;
-
+    std::vector<std::shared_ptr<OrderBy>> order_by;
+    int limit;
 
     SelectStmt(std::vector<std::shared_ptr<Col>> cols_,
                std::vector<std::string> tabs_,
                std::vector<std::shared_ptr<BinaryExpr>> conds_,
                std::vector<std::shared_ptr<Col>> group_by_cols_,
                std::vector<std::shared_ptr<BinaryExpr>> having_conds_,
-               std::shared_ptr<OrderBy> order_) :
+               std::vector<std::shared_ptr<OrderBy>> order_by_,
+               int limit_) :
             cols(std::move(cols_)), tabs(std::move(tabs_)), conds(std::move(conds_)),
             group_by_cols(std::move(group_by_cols_)), having_conds(std::move(having_conds_)),
-            order(std::move(order_)) {
-                has_sort = (bool)order;
+            order_by(std::move(order_by_)), limit(limit_) {
+                has_sort = !order_by.empty();
                 has_agg = !group_by_cols.empty();
             }
 };
@@ -302,6 +302,7 @@ struct SemValue {
     std::vector<std::shared_ptr<BinaryExpr>> sv_conds;
 
     std::shared_ptr<OrderBy> sv_orderby;
+    std::vector<std::shared_ptr<OrderBy>> sv_orderbys;
 
     SetKnobType sv_setKnobType;
 };

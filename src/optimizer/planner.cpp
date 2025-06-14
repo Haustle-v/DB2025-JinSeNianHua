@@ -307,17 +307,12 @@ std::shared_ptr<Plan> Planner::generate_sort_plan(std::shared_ptr<Query> query, 
     }
 
     // 默认升序ASC
-    if(query->order.orderby_dir == ast::OrderBy_DEFAULT) {
-        query->order.orderby_dir = ast::OrderBy_ASC;
-    }
-    
-    // 目前只支持一个排序条件
-    std::vector<bool> is_asc;
-    for (auto &col : query->order.cols) {
-        is_asc.push_back(query->order.orderby_dir == ast::OrderBy_ASC);
-    }
-    return std::make_shared<SortPlan>(T_Sort, std::move(plan), query->order.cols, 
-                                    std::move(is_asc), query->order.limit);
+    std::vector<TabCol> sel_cols_;
+    std::vector<bool> is_asc_;
+
+    plan = std::make_shared<SortPlan>(T_Sort, std::move(plan), std::move(query->order_bys.cols), 
+                                    std::move(query->order_bys.is_asc), query->order_bys.limit);
+    return plan;
 }
 
 

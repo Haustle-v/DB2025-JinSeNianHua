@@ -140,9 +140,8 @@ private:
             print_node(x->rhs, offset);
         } else if (auto x = std::dynamic_pointer_cast<OrderBy>(node)) {
             std::cout << "ORDER_BY\n";
-            print_node(x->cols, offset);
+            print_node(x->col, offset);
             print_val(x->orderby_dir, offset);
-            print_val(x->limit, offset);
         } else if (auto x = std::dynamic_pointer_cast<InsertStmt>(node)) {
             std::cout << "INSERT\n";
             print_val(x->tab_name, offset);
@@ -163,7 +162,8 @@ private:
             print_node_list(x->conds, offset);
             print_node_list(x->group_by_cols, offset);
             print_node_list(x->having_conds, offset);
-            print_node(x->order, offset);
+            print_node_list(x->order_by, offset);
+            print_val(x->limit, offset);
         } else if (auto x = std::dynamic_pointer_cast<TxnBegin>(node)) {
             std::cout << "BEGIN\n";
         } else if (auto x = std::dynamic_pointer_cast<TxnCommit>(node)) {

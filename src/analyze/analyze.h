@@ -39,7 +39,7 @@ class Query{
     // having 条件
     std::vector<Condition> having_conds;
     // order by 条件
-    Order order;
+    OrderBys order_bys;
     Query(){}
 
 };

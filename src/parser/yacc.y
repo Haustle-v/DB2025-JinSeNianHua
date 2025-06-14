@@ -3,6 +3,7 @@
 #include "yacc.tab.h"
 #include <iostream>
 #include <memory>
+#include <limits.h>
 
 int yylex(YYSTYPE *yylval, YYLTYPE *yylloc);
 
@@ -50,9 +51,11 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %type <sv_set_clauses> setClauses
 %type <sv_cond> condition
 %type <sv_conds> whereClause optWhereClause optHavingClause
-%type <sv_orderby>  order_clause opt_order_clause
+%type <sv_orderby>  order_clause
+%type <sv_orderbys> opt_order_clause order_clauses
 %type <sv_orderby_dir> opt_asc_desc
 %type <sv_setKnobType> set_knob_type
+%type <sv_int> limit_clause
 
 %%
 start:
@@ -155,9 +158,20 @@ dml:
     {
         $$ = std::make_shared<UpdateStmt>($2, $4, $5);
     }
-    |   SELECT selector FROM tableList optWhereClause optGroupByClause optHavingClause opt_order_clause
+    |   SELECT selector FROM tableList optWhereClause optGroupByClause optHavingClause opt_order_clause limit_clause
     {
-        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6, $7, $8);
+        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6, $7, $8, $9);
+    }
+    ;
+
+limit_clause:
+    LIMIT VALUE_INT
+    {
+        $$ = $2;
+    }
+    |   /* epsilon */
+    {
+        $$ = INT_MAX;
     }
     ;
 
@@ -437,28 +451,35 @@ tableList:
     ;
 
 opt_order_clause:
-    ORDER BY order_clause      
+    ORDER BY order_clauses
     { 
         $$ = $3; 
     }
     |   /* epsilon */ { /* ignore*/ }
     ;
 
-order_clause:
-      col  opt_asc_desc 
-    { 
-        $$ = std::make_shared<OrderBy>($1, $2, INT32_MAX);
+order_clauses:
+    order_clause
+    {
+        $$ = std::vector<std::shared_ptr<OrderBy>>{$1};
     }
-    |   col  opt_asc_desc LIMIT VALUE_INT
+    |   order_clauses ',' order_clause
+    {
+        $$.push_back($3);
+    }
+    ;
+
+order_clause:
+      col  opt_asc_desc
     { 
-        $$ = std::make_shared<OrderBy>($1, $2, $4);
+        $$ = std::make_shared<OrderBy>($1, $2);
     }
     ;   
 
 opt_asc_desc:
     ASC          { $$ = OrderBy_ASC;     }
     |  DESC      { $$ = OrderBy_DESC;    }
-    |       { $$ = OrderBy_DEFAULT; }
+    |            { $$ = OrderBy_ASC; }
     ;    
 
 set_knob_type:

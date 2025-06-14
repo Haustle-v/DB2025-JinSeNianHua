@@ -100,13 +100,17 @@ std::shared_ptr<Query> Analyze::do_analyze(
     check_having_clause(query->tables, query->having_conds);
 
     // 处理order by条件
-    if (x->order != nullptr) {
-      TabCol order_col = {.tab_name = x->order->cols->tab_name,
-                          .col_name = x->order->cols->col_name,
+    if (x->has_sort) {
+      for (auto &order_by : x->order_by) {
+        TabCol order_col = {.tab_name = order_by->col->tab_name,
+                          .col_name = order_by->col->col_name,
                           .alias = "",
                           .aggFuncType = ast::AGG_INVALID};
-      order_col = check_column(all_cols, order_col);
-      query->order = {.cols = {std::move(order_col)}, .orderby_dir = x->order->orderby_dir, .limit = x->order->limit};
+        order_col = check_column(all_cols, order_col);
+        query->order_bys.cols.push_back(order_col);
+        query->order_bys.is_asc.push_back(order_by->orderby_dir == ast::OrderBy_ASC);
+      }
+      query->order_bys.limit = x->limit;
     }
 
         // WHERE 子句中不能用聚集函数作为条件表达式

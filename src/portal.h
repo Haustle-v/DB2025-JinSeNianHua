@@ -175,8 +175,9 @@ class Portal
                                 std::move(right), std::move(x->conds_));
             return join;
         } else if(auto x = std::dynamic_pointer_cast<SortPlan>(plan)) {
-            return std::make_unique<SortExecutor>(convert_plan_executor(x->subplan_, context), 
-                                            x->sel_cols_, x->is_asc_, x->limit_);
+            std::unique_ptr<AbstractExecutor> subplan = convert_plan_executor(x->subplan_, context);
+            return std::make_unique<SortExecutor>(std::move(subplan), 
+                                            std::move(x->sel_cols_), std::move(x->is_asc_), x->limit_);
         } else if(auto x = std::dynamic_pointer_cast<AggPlan>(plan)) {
             return std::make_unique<AggPlanExecutor>(convert_plan_executor(x->subplan_, context), 
                                                     x->group_by_cols, x->sel_cols_);

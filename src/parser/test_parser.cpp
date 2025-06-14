@@ -15,7 +15,7 @@ See the Mulan PSL v2 for more details. */
 
 int main() {
     std::vector<std::string> sqls = {
-        "select student_id, score FROM student_grades ORDER BY score DESC LIMIT 3;"
+        "select dept, role, salary from employee_data order by dept asc, salary desc;"
     };
     for (auto &sql : sqls) {
         std::cout << sql << std::endl;
