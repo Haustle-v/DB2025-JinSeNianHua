@@ -43,7 +43,8 @@ typedef enum PlanTag{
     T_SortMerge,    // sort merge join
     T_Sort,
     T_Projection,
-    T_Agg
+    T_Agg,
+    T_Having
 } PlanTag;
 
 // 查询执行计划
@@ -64,6 +65,17 @@ public:
     AggPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> group_by_cols, std::vector<TabCol> sel_cols_) : sel_cols_(std::move(sel_cols_)), subplan_(std::move(subplan)), group_by_cols(std::move(group_by_cols)) { Plan::tag = tag; }
 
     ~AggPlan() override = default;
+};
+
+class HavingPlan : public Plan
+{
+public:
+    std::shared_ptr<Plan> subplan_;
+    std::vector<Condition> having_conds_;
+
+    HavingPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<Condition> having_conds) : subplan_(std::move(subplan)), having_conds_(std::move(having_conds)) { Plan::tag = tag; }
+
+    ~HavingPlan() override = default;
 };
 
 class ScanPlan : public Plan

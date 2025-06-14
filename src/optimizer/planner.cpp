@@ -135,9 +135,23 @@ std::shared_ptr<Plan> Planner::physical_optimization(std::shared_ptr<Query> quer
     // 优化：考虑将TabCol中的字段分开（多加一个TabAggCol继承TabCol）
     plan = generate_agg_plan(query, std::move(plan));
 
+    // 处理having
+    plan = generate_having_plan(query, std::move(plan));
+
     // 处理orderby
     plan = generate_sort_plan(query, std::move(plan)); 
 
+    return plan;
+}
+
+std::shared_ptr<Plan> Planner::generate_having_plan(std::shared_ptr<Query> query, std::shared_ptr<Plan> plan)
+{
+    auto x = std::dynamic_pointer_cast<ast::SelectStmt>(query->parse);
+
+    // 如果有 HAVING 子句，则生成 HAVING 计划
+    if (!x->having_conds.empty() && x->has_agg){
+        plan = std::make_shared<HavingPlan>(T_Having, std::move(plan), std::move(query->having_conds));
+    }
     return plan;
 }
 
@@ -147,6 +161,14 @@ std::shared_ptr<Plan> Planner::generate_agg_plan(std::shared_ptr<Query> query, s
 
     if(!x->has_agg && x->group_by_cols.empty()) {
         return plan;
+    }
+
+    // cols中需要加入having中的列
+    for (auto &cond : query->having_conds){
+        query->cols.push_back(cond.lhs_col);
+        if(!cond.is_rhs_val) {
+            query->cols.push_back(cond.rhs_col);
+        }
     }
 
     // 生成聚合计划

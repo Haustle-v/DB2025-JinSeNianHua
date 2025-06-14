@@ -76,6 +76,10 @@ std::shared_ptr<Query> Analyze::do_analyze(
       query->group_by_cols.push_back(group_col);
     }
 
+    // 处理having条件
+    get_having_clause(x->having_conds, query->having_conds);
+    check_having_clause(query->tables, query->having_conds);
+
     // 处理where条件
     get_clause(x->conds, query->conds);
     check_clause(query->tables, query->conds);
@@ -152,6 +156,41 @@ void Analyze::get_all_cols(const std::vector<std::string> &tab_names,
   }
 }
 
+void Analyze::get_having_clause(
+    const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
+    std::vector<Condition> &conds) {
+  conds.clear();
+  for (auto &expr : sv_conds) {
+    Condition cond;
+    if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(expr->lhs)) {
+      cond.lhs_col = {.tab_name = agg_col->tab_name,
+                      .col_name = agg_col->col_name,
+                      .alias = agg_col->alias,
+                      .aggFuncType = agg_col->agg_type};
+    } else {
+      cond.lhs_col = {.tab_name = expr->lhs->tab_name,
+                    .col_name = expr->lhs->col_name};
+    }
+    
+    cond.op = convert_sv_comp_op(expr->op);
+    if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
+      cond.is_rhs_val = true;
+      cond.rhs_val = convert_sv_value(rhs_val);
+    } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
+      if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(rhs_col)) {
+        cond.rhs_col = {.tab_name = agg_col->tab_name,
+                        .col_name = agg_col->col_name,
+                        .alias = agg_col->alias,
+                        .aggFuncType = agg_col->agg_type};
+      } else {
+        cond.rhs_col = {.tab_name = rhs_col->tab_name,
+                        .col_name = rhs_col->col_name};
+      }
+    }
+    conds.push_back(cond);
+  }
+}
+
 void Analyze::get_clause(
     const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
     std::vector<Condition> &conds) {
@@ -170,6 +209,59 @@ void Analyze::get_clause(
                       .col_name = rhs_col->col_name};
     }
     conds.push_back(cond);
+  }
+}
+
+void Analyze::check_having_clause(const std::vector<std::string> &tab_names,
+                           std::vector<Condition> &conds) {
+  // auto all_cols = get_all_cols(tab_names);
+  std::vector<ColMeta> all_cols;
+  get_all_cols(tab_names, all_cols);
+  // Get raw values in where clause
+  for (auto &cond : conds) {
+    // Infer table name from column name
+    ColType lhs_type;
+    int lhs_col_len;
+    if (cond.lhs_col.col_name != "*") {
+      cond.lhs_col = check_column(all_cols, cond.lhs_col);
+      TabMeta &lhs_tab = sm_manager_->db_.get_table(cond.lhs_col.tab_name);
+      auto lhs_col = lhs_tab.get_col(cond.lhs_col.col_name);
+      lhs_type = lhs_col->type;
+      lhs_col_len = lhs_col->len;
+    } else {
+      if(cond.lhs_col.aggFuncType == ast::AGG_COUNT) {
+        lhs_type = TYPE_INT;
+        lhs_col_len = 4;
+      } else {
+        // 只有 COUNT 的 col 可以为 *
+        throw AmbiguousColumnError(cond.lhs_col.col_name);
+      }
+    }
+    
+    if (!cond.is_rhs_val && cond.rhs_col.col_name != "*") {
+      cond.rhs_col = check_column(all_cols, cond.rhs_col);
+    }
+    
+    ColType rhs_type;
+    if (cond.is_rhs_val) {
+      cond.rhs_val.init_raw(lhs_col_len);
+      rhs_type = cond.rhs_val.type;
+    } else {
+      TabMeta &rhs_tab = sm_manager_->db_.get_table(cond.rhs_col.tab_name);
+      auto rhs_col = rhs_tab.get_col(cond.rhs_col.col_name);
+      rhs_type = rhs_col->type;
+    }
+
+    // sqb: 在这里补充做类型兼容 5.24 注意暂时没考虑浮点数转换为整型
+    if (lhs_type != rhs_type) {
+      if (lhs_type == TYPE_FLOAT && rhs_type == TYPE_INT) {
+        cond.rhs_val.type = TYPE_FLOAT;
+        *(float *)(cond.rhs_val.raw->data) = (float)cond.rhs_val.int_val;
+      } else {
+        throw IncompatibleTypeError(coltype2str(lhs_type),
+                                    coltype2str(rhs_type));
+      }
+    }
   }
 }
 

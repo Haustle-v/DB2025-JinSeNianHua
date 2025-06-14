@@ -157,6 +157,7 @@ private:
             print_val_list(x->tabs, offset);
             print_node_list(x->conds, offset);
             print_node_list(x->group_by_cols, offset);
+            print_node_list(x->having_conds, offset);
         } else if (auto x = std::dynamic_pointer_cast<TxnBegin>(node)) {
             std::cout << "BEGIN\n";
         } else if (auto x = std::dynamic_pointer_cast<TxnCommit>(node)) {

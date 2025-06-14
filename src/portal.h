@@ -24,6 +24,7 @@ See the Mulan PSL v2 for more details. */
 #include "execution/executor_delete.h"
 #include "execution/execution_sort.h"
 #include "execution/execution_group.h"
+#include "execution/execution_having.h"
 #include "common/common.h"
 
 typedef enum portalTag{
@@ -179,6 +180,9 @@ class Portal
         } else if(auto x = std::dynamic_pointer_cast<AggPlan>(plan)) {
             return std::make_unique<AggPlanExecutor>(convert_plan_executor(x->subplan_, context), 
                                                     x->group_by_cols, x->sel_cols_);
+        } else if(auto x = std::dynamic_pointer_cast<HavingPlan>(plan)) {
+            return std::make_unique<HavingPlanExecutor>(convert_plan_executor(x->subplan_, context), 
+                                                        x->having_conds_);
         }
         return nullptr;
     }

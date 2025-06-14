@@ -25,7 +25,7 @@ using namespace ast;
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
-%token MAX MIN SUM AVG COUNT AS GROUP
+%token MAX MIN SUM AVG COUNT AS GROUP HAVING
 
 // type-specific tokens
 %token <sv_str> IDENTIFIER VALUE_STRING
@@ -49,7 +49,7 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %type <sv_set_clause> setClause
 %type <sv_set_clauses> setClauses
 %type <sv_cond> condition
-%type <sv_conds> whereClause optWhereClause
+%type <sv_conds> whereClause optWhereClause optHavingClause
 %type <sv_orderby>  order_clause opt_order_clause
 %type <sv_orderby_dir> opt_asc_desc
 %type <sv_setKnobType> set_knob_type
@@ -155,9 +155,9 @@ dml:
     {
         $$ = std::make_shared<UpdateStmt>($2, $4, $5);
     }
-    |   SELECT selector FROM tableList optWhereClause optGroupByClause opt_order_clause
+    |   SELECT selector FROM tableList optWhereClause optGroupByClause optHavingClause opt_order_clause
     {
-        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6, $7);
+        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6, $7, $8);
     }
     ;
 
@@ -169,6 +169,14 @@ optGroupByClause:
     |   GROUP BY colList
     {
         $$ = $3;
+    }
+    ;
+
+optHavingClause:
+        /* epsilon */ { /* ignore*/ }
+    |   HAVING whereClause
+    {
+        $$ = $2;
     }
     ;
 
@@ -386,6 +394,30 @@ aggCol:
     |   COUNT '(' '*' ')' AS alias
     {
         $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>("", "*", AGG_COUNT, $6));
+    }
+    |   MAX '(' col ')'
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_MAX, ""));
+    }
+    |   MIN '(' col ')' 
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_MIN, ""));
+    }
+    |   SUM '(' col ')'
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_SUM, ""));
+    }
+    |   AVG '(' col ')'
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_AVG, ""));
+    }
+    |   COUNT '(' col ')'
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_COUNT, ""));
+    }
+    |   COUNT '(' '*' ')'
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>("", "*", AGG_COUNT, ""));
     }
     ;
 
