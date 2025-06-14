@@ -91,3 +91,9 @@ struct SetClause {
     TabCol lhs;
     Value rhs;
 };
+
+struct Order
+{
+    std::vector<TabCol> cols;
+    ast::OrderByDir orderby_dir;
+};

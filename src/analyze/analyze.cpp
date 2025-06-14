@@ -76,9 +76,45 @@ std::shared_ptr<Query> Analyze::do_analyze(
       query->group_by_cols.push_back(group_col);
     }
 
+    // SELECT 列表中不能出现没有在 GROUP BY 子句中的非聚集列
+    if (x->has_agg) {
+      for (auto &sel_col : query->cols) {
+        if (sel_col.aggFuncType == ast::AGG_INVALID) {
+          bool found = false;
+          for (auto &group_col : query->group_by_cols) {
+            if (sel_col.tab_name == group_col.tab_name &&
+              sel_col.col_name == group_col.col_name) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            throw GroupByError(sel_col.col_name);
+          }
+        }
+      }
+    }
+
     // 处理having条件
     get_having_clause(x->having_conds, query->having_conds);
     check_having_clause(query->tables, query->having_conds);
+
+    // 处理order by条件
+    if (x->order != nullptr) {
+      TabCol order_col = {.tab_name = x->order->cols->tab_name,
+                          .col_name = x->order->cols->col_name,
+                          .alias = "",
+                          .aggFuncType = ast::AGG_INVALID};
+      order_col = check_column(all_cols, order_col);
+      query->order = {.cols = {std::move(order_col)}, .orderby_dir = x->order->orderby_dir};
+    }
+
+        // WHERE 子句中不能用聚集函数作为条件表达式
+    for (auto &cond : x->conds) {
+      if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(cond->lhs)) {
+        throw GroupByError(agg_col->col_name);
+      }
+    }
 
     // 处理where条件
     get_clause(x->conds, query->conds);

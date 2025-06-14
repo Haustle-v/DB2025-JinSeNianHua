@@ -15,7 +15,7 @@ See the Mulan PSL v2 for more details. */
 
 int main() {
     std::vector<std::string> sqls = {
-        "select id,MAX(score) as max_score from grade group by id having COUNT(*) > 3;"
+        "select id, MAX(score) as max_score from grade where MAX(score) > 90 group by id;"
     };
     for (auto &sql : sqls) {
         std::cout << sql << std::endl;

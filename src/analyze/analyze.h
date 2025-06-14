@@ -38,6 +38,8 @@ class Query{
     std::vector<TabCol> group_by_cols;
     // having 条件
     std::vector<Condition> having_conds;
+    // order by 条件
+    Order order;
     Query(){}
 
 };
