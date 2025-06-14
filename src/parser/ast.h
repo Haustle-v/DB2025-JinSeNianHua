@@ -255,7 +255,7 @@ struct SelectStmt : public TreeNode {
             group_by_cols(std::move(group_by_cols_)), having_conds(std::move(having_conds_)),
             order(std::move(order_)) {
                 has_sort = (bool)order;
-                has_agg = false;
+                has_agg = !group_by_cols.empty();
             }
 };
 
