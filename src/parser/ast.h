@@ -215,6 +215,16 @@ struct SelectStmt : public TreeNode {
   }
 };
 
+// sqb 增加create static_checkpoint 6.9
+struct CreateCheckPoint : public TreeNode {
+  CreateCheckPoint() {}
+};
+
+// sqb 增加crash
+struct CrashStmt : public TreeNode {
+  CrashStmt() {}
+};
+
 // set enable_nestloop
 struct SetStmt : public TreeNode {
   SetKnobType set_knob_type_;

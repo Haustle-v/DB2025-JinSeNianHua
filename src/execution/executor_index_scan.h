@@ -135,6 +135,10 @@ class IndexScanExecutor : public AbstractExecutor {
   //   sqb 索引匹配规则的修改在planner里  没有显式的修改cond的顺序
   // 最左匹配要根据索引进行 一直到第一个范围查询都可用（含）5.30
   void beginTuple() override {
+    // sqb 加入事务并发语句 6.9
+    if (context_ != nullptr) {
+      context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+    }
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_col_names_);
     auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();

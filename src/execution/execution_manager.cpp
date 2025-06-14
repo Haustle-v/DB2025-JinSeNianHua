@@ -116,6 +116,14 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
         txn_mgr_->abort(context->txn_, context->log_mgr_);
         break;
       }
+      case T_CreateCheckPoint: {
+        create_checkpoint(context);
+        break;
+      }
+      case T_Crash: {
+        exit(1);
+        break;
+      }
       default:
         throw InternalError("Unexpected field type");
         break;
@@ -200,3 +208,23 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
 
 // 执行DML语句
 void QlManager::run_dml(std::unique_ptr<AbstractExecutor> exec) { exec->Next(); }
+
+// 创建检查点
+void QlManager::create_checkpoint(Context *context) {
+  // sqb 6.11 单事务下创建检查点 没考虑多事务 没考虑索引
+  // 添加检查点日志 日志刷盘
+  CkptLogRecord log_record{context->txn_->get_transaction_id()};
+  log_record.prev_lsn_ = context->txn_->get_prev_lsn();
+  lsn_t checkpoint_lsn = context->log_mgr_->add_log_to_buffer(&log_record);
+  context->txn_->set_prev_lsn(checkpoint_lsn);
+  context->log_mgr_->flush_log_to_disk();
+  // 缓冲区落盘
+  auto bpm_ptr = sm_manager_->get_bpm();
+  auto dm_ptr = sm_manager_->get_disk_manager();
+  for (auto &entry : sm_manager_->fhs_) {
+    auto fhdl_ptr = entry.second.get();
+    RmFileHdr file_hdr = fhdl_ptr->get_file_hdr();
+    dm_ptr->write_page(fhdl_ptr->GetFd(), RM_FILE_HDR_PAGE, (char *)(&(file_hdr)), sizeof(file_hdr));
+    bpm_ptr->flush_all_pages(fhdl_ptr->GetFd());
+  }
+}

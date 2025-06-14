@@ -156,6 +156,12 @@ class TreePrinter {
       std::cout << "ABORT\n";
     } else if (auto x = std::dynamic_pointer_cast<TxnRollback>(node)) {
       std::cout << "ROLLBACK\n";
+    } else if (auto x = std::dynamic_pointer_cast<CreateCheckPoint>(node)) {
+      // sqb 6.9
+      std::cout << "CREATE STATIC_CHECKPOINT\n";
+    } else if (auto x = std::dynamic_pointer_cast<CrashStmt>(node)) {
+      // sqb 6.9
+      std::cout << "CRASH\n";
     } else {
       assert(0);
     }

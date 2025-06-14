@@ -33,6 +33,8 @@ int main() {
       "select x.a, y.b from x, y where x.a = y.b and c = d;",
       "select x.a, y.b from x join y where x.a = y.b and c = d;",
       "explain select x.a, y.b from x join y where x.a = y.b and c = d;",
+      "crash;",
+      "create static_checkpoint;"
       "exit;",
       "help;",
       "",

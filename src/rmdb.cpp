@@ -300,6 +300,9 @@ int main(int argc, char **argv) {
     recovery->redo();
     recovery->undo();
 
+    // sqb 恢复后重新设置lsn 6.11
+    log_manager->set_global_lsn(recovery->get_max_lsn() + 1);
+
     // 开启服务端，开始接受客户端连接
     start_server();
   } catch (RMDBError &e) {

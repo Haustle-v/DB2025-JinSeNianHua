@@ -43,7 +43,9 @@ typedef enum PlanTag {
   T_NestLoop,
   T_SortMerge,  // sort merge join
   T_Sort,
-  T_Projection
+  T_Projection,
+  T_CreateCheckPoint,  // sqb 6.9
+  T_Crash              // sqb 6.9
 } PlanTag;
 
 // 查询执行计划
@@ -55,8 +57,7 @@ class Plan {
 
 class ScanPlan : public Plan {
  public:
-  ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name,
-           std::vector<Condition> conds,
+  ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
            std::vector<std::string> index_col_names) {
     Plan::tag = tag;
     tab_name_ = std::move(tab_name);
@@ -79,8 +80,7 @@ class ScanPlan : public Plan {
 
 class JoinPlan : public Plan {
  public:
-  JoinPlan(PlanTag tag, std::shared_ptr<Plan> left, std::shared_ptr<Plan> right,
-           std::vector<Condition> conds) {
+  JoinPlan(PlanTag tag, std::shared_ptr<Plan> left, std::shared_ptr<Plan> right, std::vector<Condition> conds) {
     Plan::tag = tag;
     left_ = std::move(left);
     right_ = std::move(right);
@@ -100,8 +100,7 @@ class JoinPlan : public Plan {
 
 class ProjectionPlan : public Plan {
  public:
-  ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan,
-                 std::vector<TabCol> sel_cols) {
+  ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols) {
     Plan::tag = tag;
     subplan_ = std::move(subplan);
     sel_cols_ = std::move(sel_cols);
@@ -113,8 +112,7 @@ class ProjectionPlan : public Plan {
 
 class SortPlan : public Plan {
  public:
-  SortPlan(PlanTag tag, std::shared_ptr<Plan> subplan, TabCol sel_col,
-           bool is_desc) {
+  SortPlan(PlanTag tag, std::shared_ptr<Plan> subplan, TabCol sel_col, bool is_desc) {
     Plan::tag = tag;
     subplan_ = std::move(subplan);
     sel_col_ = sel_col;
@@ -129,9 +127,8 @@ class SortPlan : public Plan {
 // dml语句，包括insert; delete; update; select语句　
 class DMLPlan : public Plan {
  public:
-  DMLPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::string tab_name,
-          std::vector<Value> values, std::vector<Condition> conds,
-          std::vector<SetClause> set_clauses) {
+  DMLPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::string tab_name, std::vector<Value> values,
+          std::vector<Condition> conds, std::vector<SetClause> set_clauses) {
     Plan::tag = tag;
     subplan_ = std::move(subplan);
     tab_name_ = std::move(tab_name);
@@ -150,8 +147,7 @@ class DMLPlan : public Plan {
 // ddl语句, 包括create/drop table; create/drop index;
 class DDLPlan : public Plan {
  public:
-  DDLPlan(PlanTag tag, std::string tab_name, std::vector<std::string> col_names,
-          std::vector<ColDef> cols) {
+  DDLPlan(PlanTag tag, std::string tab_name, std::vector<std::string> col_names, std::vector<ColDef> cols) {
     Plan::tag = tag;
     tab_name_ = std::move(tab_name);
     cols_ = std::move(cols);
@@ -164,7 +160,7 @@ class DDLPlan : public Plan {
 };
 
 // help; show tables; desc tables; begin; abort; commit; rollback语句对应的plan
-// sqb: show index 5.30
+// sqb: show index 5.30  create static_checkpoint crash 6.9
 class OtherPlan : public Plan {
  public:
   OtherPlan(PlanTag tag, std::string tab_name) {
@@ -195,6 +191,5 @@ class plannerInfo {
   std::shared_ptr<Plan> plan;
   std::vector<std::shared_ptr<Plan>> table_scan_executors;
   std::vector<SetClause> set_clauses;
-  plannerInfo(std::shared_ptr<ast::SelectStmt> parse_)
-      : parse(std::move(parse_)) {}
+  plannerInfo(std::shared_ptr<ast::SelectStmt> parse_) : parse(std::move(parse_)) {}
 };

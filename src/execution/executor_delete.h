@@ -39,6 +39,10 @@ class DeleteExecutor : public AbstractExecutor {
   //   sqb: 这里与update类似 rids就是包含了所有待删除记录 顺序处理即可
   //  处理记录与索引 5.29
   std::unique_ptr<RmRecord> Next() override {
+    // sqb 事务并发控制 6.9
+    if (context_ != nullptr) {
+      context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+    }
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
 
     for (auto &rid : rids_) {
@@ -57,7 +61,7 @@ class DeleteExecutor : public AbstractExecutor {
         ix_hdl_ptr->delete_entry(key_buffer, context_->txn_);
       }
 
-      //   删除记录
+      //   删除记录 实际执行中添加了事务控制与日志 6.5
       fh_->delete_record(rid, context_, rec_ptr.get());
     }
     return nullptr;

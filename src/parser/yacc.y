@@ -33,10 +33,10 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %token <sv_bool> VALUE_BOOL
 
 // added keywords
-%token EXPLAIN
+%token EXPLAIN STATIC_CHECKPOINT CRASH
 
 // specify types for non-terminal symbol
-%type <sv_node> stmt dbStmt ddl dml txnStmt setStmt
+%type <sv_node> stmt dbStmt ddl dml txnStmt setStmt sysStmt
 %type <sv_field> field
 %type <sv_fields> fieldList
 %type <sv_type_len> type
@@ -86,6 +86,7 @@ stmt:
     |   dml
     |   txnStmt
     |   setStmt
+    |   sysStmt
     ;
 
 txnStmt:
@@ -104,6 +105,10 @@ txnStmt:
     | TXN_ROLLBACK
     {
         $$ = std::make_shared<TxnRollback>();
+    }
+    | CREATE STATIC_CHECKPOINT
+    {
+        $$ = std::make_shared<CreateCheckPoint>();
     }
     ;
 
@@ -129,6 +134,13 @@ setStmt:
         SET set_knob_type '=' VALUE_BOOL
     {
         $$ = std::make_shared<SetStmt>($2, $4);
+    }
+    ;
+
+sysStmt:
+       CRASH
+    {
+        $$ = std::make_shared<CrashStmt>();
     }
     ;
 

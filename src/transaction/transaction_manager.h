@@ -87,15 +87,6 @@ class TransactionManager {
     return res;
   }
 
-  // sqb 回滚插入的记录 6.4
-  void rollback_insert(WriteRecord &write_rec);
-
-  // sqb 回滚删除的记录 6.4
-  void rollback_delete(WriteRecord &write_rec);
-
-  // sqb 回滚更新的记录 6.4
-  void rollback_update(WriteRecord &write_rec);
-
   static std::unordered_map<txn_id_t, Transaction *> txn_map;  // 全局事务表，存放事务ID与事务对象的映射关系
   std::shared_mutex txn_map_mutex_;
   /** ------------------------以下函数仅可能在MVCC当中使用------------------------------------------*/

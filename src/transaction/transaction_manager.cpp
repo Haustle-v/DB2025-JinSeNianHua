@@ -28,15 +28,21 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
   // 4. 返回当前事务指针
   // 如果需要支持MVCC请在上述过程中添加代码
 
-  // sqb 未涉及mvcc 未涉及日志6.4
+  // sqb 未涉及mvcc 6.5
   if (txn == nullptr) {
     txn = new Transaction(next_txn_id_++);
     txn->set_start_ts(next_timestamp_++);
   }
-  {
-    std::scoped_lock<std::mutex> lock(latch_);
-    txn_map.emplace(txn->get_transaction_id(), txn);
-  }
+  //   txn->set_state(TransactionState::GROWING);
+
+  //   事务控制
+  std::scoped_lock<std::mutex> lock(latch_);
+  txn_map.emplace(txn->get_transaction_id(), txn);
+
+  //   日志
+  BeginLogRecord log_record{txn->get_transaction_id()};
+  lsn_t begin_lsn = log_manager->add_log_to_buffer(&log_record);
+  txn->set_prev_lsn(begin_lsn);
 
   return txn;
 }
@@ -55,7 +61,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   // 5. 更新事务状态
   // 如果需要支持MVCC请在上述过程中添加代码
 
-  // sqb 未考虑mvcc 未考虑日志 6.4
+  // sqb 未考虑mvcc 6.5
   // 直接进行写操作 所以不会存在未提交的写
 
   //  释放锁
@@ -68,6 +74,13 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   txn->get_write_set()->clear();
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
+
+  //   日志与落盘
+  CommitLogRecord log_record{txn->get_transaction_id()};
+  log_record.prev_lsn_ = txn->get_prev_lsn();
+  lsn_t commit_lsn = log_manager->add_log_to_buffer(&log_record);
+  txn->set_prev_lsn(commit_lsn);
+  log_manager->flush_log_to_disk();  // 待优化
 
   txn->set_state(TransactionState::COMMITTED);
 }
@@ -86,23 +99,42 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
   // 5. 更新事务状态
   // 如果需要支持MVCC请在上述过程中添加代码
 
-  // sqb 未考虑mvcc 未考虑日志 6.4
+  // sqb 未考虑mvcc 6.5
 
   //   写操作回滚
   auto write_set_ptr = txn->get_write_set();
   for (auto iter = write_set_ptr->rbegin(); iter != write_set_ptr->rend(); ++iter) {
     auto &write_rec_ptr = *iter;
+    // 给回滚操作加锁 加日志 6.12
+    std::string &tab_name = write_rec_ptr->GetTableName();
+    lock_manager_->lock_exclusive_on_record(txn, write_rec_ptr->GetRid(), sm_manager_->fhs_.at(tab_name)->GetFd());
     switch (write_rec_ptr->GetWriteType()) {
       case WType::INSERT_TUPLE: {
-        rollback_insert(*write_rec_ptr);
+        auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
+        DeleteLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRid(), tab_name};
+        log_record.prev_lsn_ = txn->get_prev_lsn();
+        lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
+        txn->set_prev_lsn(undo_lsn);
+        sm_manager_->rollback_insert(tab_name, write_rec_ptr->GetRid());
         break;
       }
       case WType::DELETE_TUPLE: {
-        rollback_delete(*write_rec_ptr);
+        InsertLogRecord log_record{txn->get_transaction_id(), write_rec_ptr->GetRecord(), write_rec_ptr->GetRid(),
+                                   tab_name};
+        log_record.prev_lsn_ = txn->get_prev_lsn();
+        lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
+        txn->set_prev_lsn(undo_lsn);
+        sm_manager_->rollback_delete(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord());
         break;
       }
       case WType::UPDATE_TUPLE: {
-        rollback_update(*write_rec_ptr);
+        auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
+        UpdateLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRecord(),
+                                   write_rec_ptr->GetRid(), tab_name};
+        log_record.prev_lsn_ = txn->get_prev_lsn();
+        lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
+        txn->set_prev_lsn(undo_lsn);
+        sm_manager_->rollback_update(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord());
         break;
       }
     }
@@ -118,103 +150,12 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 
+  // 日志与落盘
+  AbortLogRecord log_record{txn->get_transaction_id()};
+  log_record.prev_lsn_ = txn->get_prev_lsn();
+  lsn_t abort_lsn = log_manager->add_log_to_buffer(&log_record);
+  txn->set_prev_lsn(abort_lsn);
+  log_manager->flush_log_to_disk();  // 待优化
+
   txn->set_state(TransactionState::ABORTED);
-}
-
-// sqb 回滚插入的记录  三种回滚基本都参照对应算子实现 回滚应该不需要再进行事务记录吧…… 6.4
-void TransactionManager::rollback_insert(WriteRecord &write_rec) {
-  // 插入回滚对应删除 先删索引再删记录
-  std::string &tab_name = write_rec.GetTableName();
-  Rid rid = write_rec.GetRid();
-  IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
-
-  TabMeta &tab_meta = sm_manager_->db_.get_table(tab_name);
-  auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
-  std::unique_ptr<RmRecord> rec_ptr = fhdl_ptr->get_record(rid, nullptr);
-
-  //   删除索引
-  for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name = ix_manager_ptr->get_index_name(tab_name, index_meta.cols);
-    auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
-    char key_buffer[index_meta.col_tot_len];
-    int offset = 0;
-    for (auto &col_meta : index_meta.cols) {
-      memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
-      offset += col_meta.len;
-    }
-    ix_hdl_ptr->delete_entry(key_buffer, nullptr);
-  }
-
-  //   删除记录
-  fhdl_ptr->delete_record(rid, nullptr);
-}
-
-// sqb 回滚插入的记录 6.4
-void TransactionManager::rollback_delete(WriteRecord &write_rec) {
-  // 删除回滚对应插入 先插入记录再插入索引 不同于删除的是 这里不指定位置
-  std::string &tab_name = write_rec.GetTableName();
-  RmRecord &rec = write_rec.GetRecord();
-  IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
-
-  TabMeta &tab_meta = sm_manager_->db_.get_table(tab_name);
-  auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
-
-  //   插入记录
-  Rid rid = fhdl_ptr->insert_record(rec.data, nullptr);
-
-  //   插入索引
-  for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name = ix_manager_ptr->get_index_name(tab_name, index_meta.cols);
-    auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
-    char key_buffer[index_meta.col_tot_len];
-    int offset = 0;
-    for (auto &col_meta : index_meta.cols) {
-      memcpy(key_buffer + offset, rec.data + col_meta.offset, col_meta.len);
-      offset += col_meta.len;
-    }
-    ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
-  }
-}
-
-// sqb 回滚插入的记录 6.4
-void TransactionManager::rollback_update(WriteRecord &write_rec) {
-  // 更新回滚与自身行为一致  先删旧索引 插入新记录 插入新索引
-  std::string &tab_name = write_rec.GetTableName();
-  Rid rid = write_rec.GetRid();
-  RmRecord &old_rec = write_rec.GetRecord();
-  IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
-
-  TabMeta &tab_meta = sm_manager_->db_.get_table(tab_name);
-  auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
-
-  std::unique_ptr<RmRecord> cur_rec_ptr = fhdl_ptr->get_record(rid, nullptr);
-
-  // 删除旧索引
-  for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name = ix_manager_ptr->get_index_name(tab_name, index_meta.cols);
-    auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
-    char key_buffer[index_meta.col_tot_len];
-    int offset = 0;
-    for (auto &col_meta : index_meta.cols) {
-      memcpy(key_buffer + offset, cur_rec_ptr->data + col_meta.offset, col_meta.len);
-      offset += col_meta.len;
-    }
-    ix_hdl_ptr->delete_entry(key_buffer, nullptr);
-  }
-
-  //   插入记录
-  fhdl_ptr->update_record(rid, old_rec.data, nullptr);
-
-  //   插入新索引
-  for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name = ix_manager_ptr->get_index_name(tab_name, index_meta.cols);
-    auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
-    char key_buffer[index_meta.col_tot_len];
-    int offset = 0;
-    for (auto &col_meta : index_meta.cols) {
-      memcpy(key_buffer + offset, old_rec.data + col_meta.offset, col_meta.len);
-      offset += col_meta.len;
-    }
-    ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
-  }
 }

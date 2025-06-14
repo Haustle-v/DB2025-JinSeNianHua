@@ -87,7 +87,9 @@ extern int yydebug;
     VALUE_INT = 297,
     VALUE_FLOAT = 298,
     VALUE_BOOL = 299,
-    EXPLAIN = 300
+    EXPLAIN = 300,
+    STATIC_CHECKPOINT = 301,
+    CRASH = 302
   };
 #endif
 

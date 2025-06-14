@@ -22,6 +22,10 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
   // 2. 初始化一个指向RmRecord的指针（赋值其内部的data和size）
 
   // std::scoped_lock<std::mutex> lock(latch_);
+  // sqb 事务并发控制 6.9
+  //   if (context != nullptr) {
+  //     context->lock_mgr_->lock_shared_on_record(context->txn_, rid, fd_);
+  //   }
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
   std::unique_ptr<RmRecord> record_ptr =
@@ -52,14 +56,29 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
   // 找空闲位置
   int free_slot_no = Bitmap::next_bit(0, page_hdl.bitmap, file_hdr_.num_records_per_page, -1);
   Rid ret{page_hdl.page->get_page_id().page_no, free_slot_no};
-  //   sqb 加入事务控制 6.4
+
+  //   sqb 加入事务控制 日志 6.5
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
+    // 事务并发控制 6.9
+    context->lock_mgr_->lock_exclusive_on_record(context->txn_, ret, fd_);
+
+    // 事务记录
     RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);
     std::string tab_name = disk_manager_->get_file_name(fd_);
     auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name, ret);
     context->txn_->append_write_record(std::move(insert_wrec));
+
+    // 日志记录
+    InsertLogRecord log_record{context->txn_->get_transaction_id(), new_rec, ret, tab_name};
+    log_record.prev_lsn_ = context->txn_->get_prev_lsn();
+    lsn_t insert_lsn = context->log_mgr_->add_log_to_buffer(&log_record);
+    context->txn_->set_prev_lsn(insert_lsn);
+
+    // 当前页的日志
+    page_hdl.page->set_page_lsn(insert_lsn);
   }
+
   memcpy(page_hdl.get_slot(free_slot_no), buf, file_hdr_.record_size);
   Bitmap::set(page_hdl.bitmap, free_slot_no);
 
@@ -112,12 +131,26 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
   //   还是只考虑rid存在的情况
   // std::scoped_lock<std::mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
-  // sqb添加事务控制语句 6.4
+
+  // sqb添加事务控制语句 日志 6.5
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
+    // 事务并发控制 6.9
+    context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
+
+    // 事务记录
     std::string tab_name = disk_manager_->get_file_name(fd_);
     auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name, rid, *old_rec);
     context->txn_->append_write_record(std::move(delete_wrec));
+
+    // 日志记录
+    DeleteLogRecord log_record{context->txn_->get_transaction_id(), *old_rec, rid, tab_name};
+    log_record.prev_lsn_ = context->txn_->get_prev_lsn();
+    lsn_t delete_lsn = context->log_mgr_->add_log_to_buffer(&log_record);
+    context->txn_->set_prev_lsn(delete_lsn);
+
+    // 页日志
+    page_hdl.page->set_page_lsn(delete_lsn);
   }
 
   //   删除先不动内存 因为get那里做了检查
@@ -148,13 +181,28 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
 
-  // sqb添加事务控制语句 6.4
+  // sqb添加事务控制语句 日志 6.5
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
+    // 事务并发控制 6.9
+    context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
+
+    // 事务记录
     std::string tab_name = disk_manager_->get_file_name(fd_);
     auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name, rid, *old_rec);
     context->txn_->append_write_record(std::move(update_wrec));
+
+    // 日志记录
+    RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);
+    UpdateLogRecord log_record{context->txn_->get_transaction_id(), *old_rec, new_rec, rid, tab_name};
+    log_record.prev_lsn_ = context->txn_->get_prev_lsn();
+    lsn_t update_lsn = context->log_mgr_->add_log_to_buffer(&log_record);
+    context->txn_->set_prev_lsn(update_lsn);
+
+    // 页日志
+    page_hdl.page->set_page_lsn(update_lsn);
   }
+
   memcpy(page_hdl.get_slot(rid.slot_no), buf, file_hdr_.record_size);
   // Bitmap::set(page_hdl.bitmap, rid.slot_no);  // 出于保险加上先
 
@@ -245,4 +293,14 @@ void RmFileHandle::release_page_handle(RmPageHandle &page_handle) {
 
   page_handle.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
   file_hdr_.first_free_page_no = page_handle.page->get_page_id().page_no;
+}
+
+// sqb 避免故障恢复时 访问不存在的页报错 暂时只考虑申请一次 6.11
+void RmFileHandle::allocate_pages(const Rid &rid) {
+  if (rid.page_no >= file_hdr_.num_pages) {
+    page_id_t old_fisrt_free_page = file_hdr_.first_free_page_no;
+    RmPageHandle page_hdl = create_page_handle();
+    page_hdl.page_hdr->next_free_page_no = old_fisrt_free_page;  // 可能有问题，也可能压根没用
+    buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
+  }
 }

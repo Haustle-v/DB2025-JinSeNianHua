@@ -41,6 +41,10 @@ class UpdateExecutor : public AbstractExecutor {
   // sqb: updata算子里的rids_是经过seq scan扫描得到的
   // 所以在这里更新全部就好 处理数据与索引 5.29
   std::unique_ptr<RmRecord> Next() override {
+    // sqb 事务并发控制 6.9
+    if (context_ != nullptr) {
+      context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+    }
     // 提前做类型兼容 并为set 子句的值分配空间 它的空间通过raii管理
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     for (auto &single_set_clause : set_clauses_) {
@@ -93,7 +97,7 @@ class UpdateExecutor : public AbstractExecutor {
         }
       }
 
-      // 调整一下 先检查完唯一性后再更新数据  补充事务控制
+      // 调整一下 先检查完唯一性后再更新数据  补充事务控制 6.4
       fh_->update_record(rid, rec_ptr->data, context_, &old_rec);
     }
 

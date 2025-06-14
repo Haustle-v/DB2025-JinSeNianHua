@@ -52,6 +52,7 @@ using timestamp_t = int64_t;  // timestamp type, used for transaction concurrenc
 
 // log file
 static const std::string LOG_FILE_NAME = "db.log";
+static const std::string LOG_CHECKPOINT_POS_FILE = "db.ckpt";  //  sqb 6.11
 
 // replacer
 static const std::string REPLACER_TYPE = "LRU";
