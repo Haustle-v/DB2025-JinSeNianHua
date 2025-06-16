@@ -7,7 +7,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
-
+#include <iomanip>
 // yfs 6.10
 const char* compOp2String(CompOp op) {
     switch (op) {
@@ -27,9 +27,12 @@ std::string value2String(const Value& val) {
         case ColType::TYPE_INT:
             return std::to_string(val.int_val);  // int -> string
         case TYPE_FLOAT:
-            return std::to_string(val.float_val);  // float -> string
+            // return std::to_string(val.float_val);  // float -> string
+            {std::ostringstream oss;
+            oss << std::fixed << std::setprecision(6) << val.float_val;  // 强制保留2位小数
+            return oss.str();}
         case TYPE_STRING:
-            return "‘" + val.str_val + "’";  // string 直接返回(再加两个'')
+            return "'" + val.str_val + "'";  // string 直接返回(再加两个'')
         default:
             return "UNKNOWN_TYPE";
     }
