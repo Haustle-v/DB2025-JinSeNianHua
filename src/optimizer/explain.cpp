@@ -29,7 +29,7 @@ std::string value2String(const Value& val) {
         case TYPE_FLOAT:
             return std::to_string(val.float_val);  // float -> string
         case TYPE_STRING:
-            return "'" + val.str_val + "'";  // string 直接返回(再加两个'')
+            return "‘" + val.str_val + "’";  // string 直接返回(再加两个'')
         default:
             return "UNKNOWN_TYPE";
     }

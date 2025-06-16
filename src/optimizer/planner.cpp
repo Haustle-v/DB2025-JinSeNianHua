@@ -303,7 +303,7 @@ void Planner::projection_pushdown(std::shared_ptr<Plan>& plan, std::vector<TabCo
                         proj_cols.push_back(col);
                     }
             }}
-            // 按照测试说明文档的测试点3，哪怕需要选取的列和这个表的列一样多，也需要project，所以把if判断注释了
+            // 按照测试说明文档的测试点3，哪怕需要选取的列就是这个表所有的列，也需要project，所以把if判断注释了
             // 只能说应该是官方没考虑到这个问题...
             // if (proj_cols.size()<sm_manager_->db_.get_table(scan_plan->tab_name_).cols.size()){
                 std::shared_ptr<Plan> proj_scan_plan = std::make_shared<ProjectionPlan>(T_Projection, std::move(scan_plan), std::move(proj_cols));
