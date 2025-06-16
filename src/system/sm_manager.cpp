@@ -241,6 +241,13 @@ void SmManager::drop_table(const std::string &tab_name, Context *context) {
     throw TableNotFoundError(tab_name);
   }
 
+  // sqb 删表时删除缓冲池的内容 与dropindex类似，缓冲池从1开始 6.16
+  RmFileHandle *rm_hdl_ptr = fhs_[tab_name].get();
+  int record_page_num = rm_hdl_ptr->get_page_num();
+  for (page_id_t page_no = 1; page_no < record_page_num; ++page_no) {
+    buffer_pool_manager_->delete_page({rm_hdl_ptr->GetFd(), page_no});
+  }
+
   //   删除内存中相关表元数据
   rm_manager_->close_file(fhs_[tab_name].get());
   rm_manager_->destroy_file(tab_name);

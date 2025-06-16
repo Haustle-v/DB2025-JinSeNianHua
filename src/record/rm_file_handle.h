@@ -96,6 +96,9 @@ class RmFileHandle {
   // sqb 故障恢复指定插入用
   void allocate_pages(const Rid &rid);
 
+  // sqb 6.16
+  int get_page_num() { return file_hdr_.num_pages; }
+
  private:
   RmPageHandle create_page_handle();
 
