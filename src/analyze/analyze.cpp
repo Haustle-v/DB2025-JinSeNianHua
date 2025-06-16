@@ -66,7 +66,9 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
     //  考虑补充列存在检查 （不一定需要）
     // set原语转换
     for (auto &sv_set_clause : x->set_clauses) {
-      SetClause set_clause{.lhs = {x->tab_name, sv_set_clause->col_name}, .rhs = convert_sv_value(sv_set_clause->val)};
+      SetClause set_clause{.lhs = {x->tab_name, sv_set_clause->col_name},
+                           .rhs = convert_sv_value(sv_set_clause->val),
+                           .is_expr_ = sv_set_clause->is_expr_};
       query->set_clauses.emplace_back(set_clause);
     }
 

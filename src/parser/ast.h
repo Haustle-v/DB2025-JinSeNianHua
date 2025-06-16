@@ -139,9 +139,10 @@ struct Col : public Expr {
 struct SetClause : public TreeNode {
   std::string col_name;
   std::shared_ptr<Value> val;
+  bool is_expr_{false};  // sqb 6.16添加set语句是表达式的支持 仅支持set col=col+val 这里的符号需紧贴
 
-  SetClause(std::string col_name_, std::shared_ptr<Value> val_)
-      : col_name(std::move(col_name_)), val(std::move(val_)) {}
+  SetClause(std::string col_name_, std::shared_ptr<Value> val_, bool is_expr = false)
+      : col_name(std::move(col_name_)), val(std::move(val_)), is_expr_(is_expr) {}
 };
 
 struct BinaryExpr : public TreeNode {

@@ -65,7 +65,28 @@ class UpdateExecutor : public AbstractExecutor {
       //   更新数据
       for (auto &single_set_clause : set_clauses_) {
         auto col_meta_iter = tab_.get_col(single_set_clause.lhs.col_name);
-        memcpy(rec_ptr->data + col_meta_iter->offset, single_set_clause.rhs.raw->data, col_meta_iter->len);
+        // sqb 增加set语句是表达式的支持 6.16
+        if (single_set_clause.is_expr_) {
+          char *lhs_val = rec_ptr->data + col_meta_iter->offset;
+          switch (col_meta_iter->type) {
+            case TYPE_INT: {
+              int ival = *(int *)lhs_val + single_set_clause.rhs.int_val;
+              memcpy(lhs_val, &ival, col_meta_iter->len);
+              break;
+            }
+            case TYPE_FLOAT: {
+              float fval = *(float *)lhs_val + single_set_clause.rhs.float_val;
+              memcpy(lhs_val, &fval, col_meta_iter->len);
+              break;
+            }
+            default: {
+              throw InternalError("Unexpected set type in update executor");
+              break;
+            }
+          }
+        } else {
+          memcpy(rec_ptr->data + col_meta_iter->offset, single_set_clause.rhs.raw->data, col_meta_iter->len);
+        }
       }
 
       //   处理索引

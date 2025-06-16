@@ -11,17 +11,17 @@ See the Mulan PSL v2 for more details. */
 #pragma once
 
 #include <map>
-#include <unordered_map>
+// #include <unordered_map>
+#include <set>
 
 #include "transaction/transaction.h"
-
 
 /**
  * @brief 追踪所有的读时间戳
  *
  */
 class Watermark {
-public:
+ public:
   explicit Watermark(timestamp_t commit_ts) : commit_ts_(commit_ts), watermark_(commit_ts) {}
 
   void AddTxn(timestamp_t read_ts);
@@ -29,13 +29,20 @@ public:
   void RemoveTxn(timestamp_t read_ts);
 
   /** 调用者应在从水印中移除事务之前更新提交时间戳，以便我们能够正确跟踪水印。 */
-  void UpdateCommitTs(timestamp_t commit_ts);
+  // sqb 6.16
+  void UpdateCommitTs(timestamp_t commit_ts) {
+    commit_ts_ = commit_ts;
+    if (current_reads_.empty()) {
+      watermark_ = commit_ts_;
+    }
+  }
 
-  timestamp_t GetWatermark();
+  timestamp_t GetWatermark() { return watermark_; }
 
   mutable timestamp_t commit_ts_;
 
   timestamp_t watermark_;
 
-  std::map<timestamp_t, int> current_reads_;
+  //   std::map<timestamp_t, int> current_reads_;
+  std::multiset<timestamp_t> current_reads_;  // sqb 换个高效的写法
 };

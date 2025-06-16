@@ -28,15 +28,17 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
   // 4. 返回当前事务指针
   // 如果需要支持MVCC请在上述过程中添加代码
 
-  // sqb 未涉及mvcc 未涉及日志6.4
+  // sqb 涉及mvcc 未涉及日志6.16
   if (txn == nullptr) {
     txn = new Transaction(next_txn_id_++);
     txn->set_start_ts(next_timestamp_++);
+    txn->set_read_ts(last_commit_ts_);
   }
-  {
-    std::scoped_lock<std::mutex> lock(latch_);
-    txn_map.emplace(txn->get_transaction_id(), txn);
-  }
+
+  // sqb 加水印 6.16
+  std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
+  txn_map.emplace(txn->get_transaction_id(), txn);
+  running_txns_.AddTxn(txn->get_read_ts());
 
   return txn;
 }
@@ -55,7 +57,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   // 5. 更新事务状态
   // 如果需要支持MVCC请在上述过程中添加代码
 
-  // sqb 未考虑mvcc 未考虑日志 6.4
+  // sqb 考虑mvcc 未考虑日志 6.16
   // 直接进行写操作 所以不会存在未提交的写
 
   //  释放锁
@@ -69,7 +71,13 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 
+  //   sqb 6.16 加水印
+  std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn->set_state(TransactionState::COMMITTED);
+  txn->set_commit_ts(next_timestamp_++);
+  last_commit_ts_ = txn->get_commit_ts();
+  running_txns_.UpdateCommitTs(txn->get_commit_ts());
+  running_txns_.RemoveTxn(txn->get_read_ts());
 }
 
 /**
@@ -86,7 +94,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
   // 5. 更新事务状态
   // 如果需要支持MVCC请在上述过程中添加代码
 
-  // sqb 未考虑mvcc 未考虑日志 6.4
+  // sqb 考虑mvcc 未考虑日志 6.16
 
   //   写操作回滚
   auto write_set_ptr = txn->get_write_set();
@@ -118,7 +126,10 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 
+  //   sqb 6.16 加水印
+  std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn->set_state(TransactionState::ABORTED);
+  running_txns_.RemoveTxn(txn->get_read_ts());
 }
 
 // sqb 回滚插入的记录  三种回滚基本都参照对应算子实现 回滚应该不需要再进行事务记录吧…… 6.4
