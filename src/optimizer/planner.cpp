@@ -182,6 +182,7 @@ std::vector<Condition> extract_join_conditions(std::vector<Condition>& joinconds
         else if ((cond_right_tab_in_jointree && cond_left_tab == curr_tab)) {
             result.push_back(reverse_condition(*it));
             it = joinconds.erase(it);
+            reversed = true;
         } else {
             ++it;
         }
@@ -298,20 +299,21 @@ void Planner::projection_pushdown(std::shared_ptr<Plan>& plan, std::vector<TabCo
             std::unordered_set<std::string> seen_col_names; // 要保证不重复
             for (const auto& col : cols) {
                 if (col.tab_name == scan_plan->tab_name_) {
-                    if (seen_col_names.insert(col.col_name).second){    // 如果该列没有被推入proj
+                    if (seen_col_names.insert(col.col_name).second){    // 如果该列没有被推入proj（防止重复）
                         proj_cols.push_back(col);
                     }
             }}
-
-            if (proj_cols.size()<sm_manager_->db_.get_table(scan_plan->tab_name_).cols.size()){
+            // 按照测试说明文档的测试点3，哪怕需要选取的列和这个表的列一样多，也需要project，所以把if判断注释了
+            // 只能说应该是官方没考虑到这个问题...
+            // if (proj_cols.size()<sm_manager_->db_.get_table(scan_plan->tab_name_).cols.size()){
                 std::shared_ptr<Plan> proj_scan_plan = std::make_shared<ProjectionPlan>(T_Projection, std::move(scan_plan), std::move(proj_cols));
                 join_plan->left_ = std::move(proj_scan_plan);
-            }
+            // }
 
         }else{
             projection_pushdown(join_plan->left_, cols);
         }
-
+        // 右节点同理
         if (auto scan_plan = std::dynamic_pointer_cast<ScanPlan>(join_plan->right_)){
             std::vector<TabCol> proj_cols;
             std::unordered_set<std::string> seen_col_names; // 要保证不重复
@@ -322,10 +324,10 @@ void Planner::projection_pushdown(std::shared_ptr<Plan>& plan, std::vector<TabCo
                     }
             }}
 
-            if (proj_cols.size()<sm_manager_->db_.get_table(scan_plan->tab_name_).cols.size()){
+            // if (proj_cols.size()<sm_manager_->db_.get_table(scan_plan->tab_name_).cols.size()){
                 std::shared_ptr<Plan> proj_scan_plan = std::make_shared<ProjectionPlan>(T_Projection, std::move(scan_plan), std::move(proj_cols));
                 join_plan->right_ = std::move(proj_scan_plan);
-            }
+            // }
         }else{
             projection_pushdown(join_plan->right_, cols);
         }
