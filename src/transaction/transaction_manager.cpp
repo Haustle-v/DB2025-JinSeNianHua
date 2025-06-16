@@ -160,7 +160,10 @@ void TransactionManager::rollback_delete(WriteRecord &write_rec) {
   auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
 
   //   插入记录
-  Rid rid = fhdl_ptr->insert_record(rec.data, nullptr);
+  //   Rid rid = fhdl_ptr->insert_record(rec.data, nullptr);
+  Rid rid = write_rec.GetRid();
+  fhdl_ptr->allocate_pages(rid);
+  fhdl_ptr->insert_record(rid, rec.data);
 
   //   插入索引
   for (auto &index_meta : tab_meta.indexes) {
