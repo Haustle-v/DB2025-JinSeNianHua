@@ -107,6 +107,9 @@ class Transaction {
   inline timestamp_t get_commit_ts() const { return commit_ts_; }
   inline void set_commit_ts(timestamp_t new_commit_ts) { commit_ts_.store(new_commit_ts); }
 
+  //   sqb 临时时间戳标记
+  inline timestamp_t get_temp_ts() const { return TXN_START_ID + txn_id_; }
+
   /** 修改现有的撤销日志 */
   inline auto ModifyUndoLog(int log_idx, UndoLog new_log) {
     std::scoped_lock<std::mutex> lck(latch_);

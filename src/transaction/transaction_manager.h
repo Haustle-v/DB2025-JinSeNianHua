@@ -129,7 +129,8 @@ class TransactionManager {
   UndoLog GetUndoLog(UndoLink link);
 
   /** @brief 获取系统中的最低读时间戳。 */
-  timestamp_t GetWatermark();
+  // sqb 6.17
+  timestamp_t GetWatermark() { return running_txns_.GetWatermark(); }
 
   /** @brief 垃圾回收。仅在所有事务都未访问时调用。 */
   void GarbageCollection();

@@ -35,11 +35,19 @@ struct RmPageHandle {
     slots = bitmap + file_hdr->bitmap_size;
   }
 
-  // 返回指定slot_no的slot存储收地址
-  char *get_slot(int slot_no) const {
-    return slots + slot_no * file_hdr->record_size;  // slots的首地址 + slot个数 *
-                                                     // 每个slot的大小(每个record的大小)
+  //   // 返回指定slot_no的slot存储收地址
+  //   char *get_slot(int slot_no) const {
+  //     return slots + slot_no * file_hdr->record_size;  // slots的首地址 + slot个数 *
+  //                                                      // 每个slot的大小(每个record的大小)
+  //   }
+
+  // sqb 重要改动 为所有record头部添加了tuple meta 6.17
+  char *get_slot_record(int slot_no) const {
+    return slots + slot_no * (file_hdr->record_size + sizeof(TupleMeta)) + sizeof(TupleMeta);
   }
+
+  // sqb 重要改动 为所有record头部添加了tuple meta 6.17
+  char *get_slot_meta(int slot_no) const { return slots + slot_no * (file_hdr->record_size + sizeof(TupleMeta)); }
 };
 
 /* 每个RmFileHandle对应一个表的数据文件，里面有多个page，每个page的数据封装在RmPageHandle中
@@ -98,6 +106,9 @@ class RmFileHandle {
 
   // sqb 6.16
   int get_page_num() { return file_hdr_.num_pages; }
+
+  // sqb 6.17 关于tuple meta的增删改查
+  TupleMeta get_tuple_meta(const Rid &rid) const;
 
  private:
   RmPageHandle create_page_handle();

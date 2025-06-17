@@ -10,6 +10,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include "execution_common.h"  //sqb 6.17 用于支持MVCC
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
@@ -76,7 +77,19 @@ class SeqScanExecutor : public AbstractExecutor {
     // 会先调用begin tuple 和 next tuple  实际是取当前有效rid_
     if (rid_.page_no != INVALID_PAGE_ID) {
       // 有效则读 应该有RVO
-      return fh_->get_record(rid_, context_);
+      //   return fh_->get_record(rid_, context_);
+
+      // sqb 考虑MVCC 6.17
+      TabMeta &tab = sm_manager_->db_.get_table(tab_name_);
+      auto current_tuple_ptr = fh_->get_record(rid_, context_);
+      auto current_tuple_meta = fh_->get_tuple_meta(rid_);
+      std::vector<UndoLog> undo_logs =
+          CollectUndoLogs(rid_, current_tuple_meta, *current_tuple_ptr, context_->txn_mgr_->GetUndoLink(rid_),
+                          context_->txn_, context_->txn_mgr_);
+      std::optional<RmRecord> tuple = ReconstructTuple(&tab, *current_tuple_ptr, current_tuple_meta, undo_logs);
+      if (tuple.has_value()) {
+        return std::make_unique<RmRecord>(*tuple);
+      }
     }
     return nullptr;
   }

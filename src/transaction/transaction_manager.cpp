@@ -232,3 +232,139 @@ void TransactionManager::rollback_update(WriteRecord &write_rec) {
     ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
   }
 }
+
+//------------------------关于MVCC部分的实现,参考15445,sqb---------------
+/**
+ * @brief 更新一个撤销链接，该链接将表堆元组与第一个撤销日志连接起来。
+ * 在更新之前，将调用 `check` 函数以确保有效性。
+ */
+// 不确定
+bool TransactionManager::UpdateUndoLink(Rid rid, std::optional<UndoLink> prev_link,
+                                        std::function<bool(std::optional<UndoLink>)> &&check) {
+  std::unique_lock<std::shared_mutex> verion_table_lock(version_info_mutex_);
+  std::shared_ptr<PageVersionInfo> pvi_ptr = nullptr;
+  auto iter = version_info_.find(rid.page_no);
+  if (iter == version_info_.end()) {
+    // 无则创建
+    pvi_ptr = std::make_shared<PageVersionInfo>();
+    version_info_[rid.page_no] = pvi_ptr;
+  } else {
+    // 有则准备修改
+    pvi_ptr = iter->second;
+  }
+  std::unique_lock<std::shared_mutex> pvi_lock(pvi_ptr->mutex_);
+  verion_table_lock.unlock();
+  auto it = pvi_ptr->prev_version_.find(rid.slot_no);
+  if (it == pvi_ptr->prev_version_.end()) {
+    if (check != nullptr && !check(std::nullopt)) {
+      return false;
+    }
+  } else {
+    if (check != nullptr && !check(it->second.prev_)) {
+      return false;
+    }
+  }
+  if (prev_link.has_value()) {
+    pvi_ptr->prev_version_[rid.page_no].prev_ = prev_link.value();
+  } else {
+    pvi_ptr->prev_version_.erase(rid.page_no);
+  }
+  return true;
+}
+
+/**
+ * @brief 更新一个撤销链接，该链接将表堆元组与第一个撤销日志连接起来。
+ * 在更新之前，将调用 `check` 函数以确保有效性。
+ */
+bool TransactionManager::UpdateVersionLink(Rid rid, std::optional<VersionUndoLink> prev_version,
+                                           std::function<bool(std::optional<VersionUndoLink>)> &&check) {
+  std::unique_lock<std::shared_mutex> verion_table_lock(version_info_mutex_);
+  std::shared_ptr<PageVersionInfo> pvi_ptr = nullptr;
+  auto iter = version_info_.find(rid.page_no);
+  if (iter == version_info_.end()) {
+    // 无则创建
+    pvi_ptr = std::make_shared<PageVersionInfo>();
+    version_info_[rid.page_no] = pvi_ptr;
+  } else {
+    // 有则准备修改
+    pvi_ptr = iter->second;
+  }
+  std::unique_lock<std::shared_mutex> pvi_lock(pvi_ptr->mutex_);
+  verion_table_lock.unlock();
+  auto it = pvi_ptr->prev_version_.find(rid.slot_no);
+  if (it == pvi_ptr->prev_version_.end()) {
+    if (check != nullptr && !check(std::nullopt)) {
+      return false;
+    }
+  } else {
+    if (check != nullptr && !check(it->second)) {
+      return false;
+    }
+  }
+  if (prev_version.has_value()) {
+    pvi_ptr->prev_version_[rid.page_no] = prev_version.value();
+  } else {
+    pvi_ptr->prev_version_.erase(rid.page_no);
+  }
+  return true;
+}
+
+/** @brief 获取表堆元组的第一个撤销日志。 */
+std::optional<UndoLink> TransactionManager::GetUndoLink(Rid rid) {
+  std::shared_lock<std::shared_mutex> version_table_lock(version_info_mutex_);
+  auto iter = version_info_.find(rid.page_no);
+  if (iter == version_info_.end()) {
+    return std::nullopt;
+  }
+  std::shared_ptr<PageVersionInfo> pvi_ptr = iter->second;
+  std::unique_lock<std::shared_mutex> pvi_lock(pvi_ptr->mutex_);
+  version_table_lock.unlock();
+  auto it = pvi_ptr->prev_version_.find(rid.slot_no);
+  if (it == pvi_ptr->prev_version_.end()) {
+    return std::nullopt;
+  }
+  return std::make_optional(it->second.prev_);
+}
+
+/** @brief 获取表堆元组的第一个撤销日志。*/
+std::optional<VersionUndoLink> TransactionManager::GetVersionLink(Rid rid) {
+  std::shared_lock<std::shared_mutex> version_table_lock(version_info_mutex_);
+  auto iter = version_info_.find(rid.page_no);
+  if (iter == version_info_.end()) {
+    return std::nullopt;
+  }
+  std::shared_ptr<PageVersionInfo> pvi_ptr = iter->second;
+  std::unique_lock<std::shared_mutex> pvi_lock(pvi_ptr->mutex_);
+  version_table_lock.unlock();
+  auto it = pvi_ptr->prev_version_.find(rid.slot_no);
+  if (it == pvi_ptr->prev_version_.end()) {
+    return std::nullopt;
+  }
+  return std::make_optional(it->second);
+}
+
+/** @brief 访问事务撤销日志缓冲区并获取撤销日志。如果事务不存在，返回 nullopt。
+ * 如果索引超出范围仍然会抛出异常。 */
+std::optional<UndoLog> TransactionManager::GetUndoLogOptional(UndoLink link) {
+  std::shared_lock<std::shared_mutex> lock(txn_map_mutex_);
+  auto iter = txn_map.find(link.prev_txn_);
+  if (iter == txn_map.end()) {
+    return std::nullopt;
+  }
+  Transaction *txn = iter->second;
+  lock.unlock();
+  return txn->GetUndoLog(link.prev_log_idx_);
+}
+
+/** @brief 访问事务撤销日志缓冲区并获取撤销日志。除非访问当前事务缓冲区，
+ * 否则应该始终调用此函数以获取撤销日志，而不是手动检索事务 shared_ptr 并访问缓冲区。 */
+UndoLog TransactionManager::GetUndoLog(UndoLink link) {
+  auto undo_log = GetUndoLogOptional(link);
+  if (undo_log.has_value()) {
+    return undo_log.value();
+  }
+  throw InternalError("txn try access invalid undo log");
+}
+
+/** @brief 垃圾回收。仅在所有事务都未访问时调用。 */
+void TransactionManager::GarbageCollection() {}

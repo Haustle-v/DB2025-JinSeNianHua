@@ -25,11 +25,22 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
   std::unique_ptr<RmRecord> record_ptr =
-      std::make_unique<RmRecord>(file_hdr_.record_size, page_hdl.get_slot(rid.slot_no));
+      std::make_unique<RmRecord>(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
 
   //   这个bfm不是raii管理页 数据操作注意释放
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
   return record_ptr;
+}
+
+// sqb 6.17 关于tuple meta的查询
+TupleMeta RmFileHandle::get_tuple_meta(const Rid &rid) const {
+  RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
+  assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
+  TupleMeta ret = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
+
+  //   这个bfm不是raii管理页 数据操作注意释放
+  buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
+  return ret;
 }
 
 /**
@@ -60,7 +71,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
     auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name, ret);
     context->txn_->append_write_record(std::move(insert_wrec));
   }
-  memcpy(page_hdl.get_slot(free_slot_no), buf, file_hdr_.record_size);
+  memcpy(page_hdl.get_slot_record(free_slot_no), buf, file_hdr_.record_size);
   Bitmap::set(page_hdl.bitmap, free_slot_no);
 
   page_hdl.page_hdr->num_records++;
@@ -84,7 +95,7 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
   // std::scoped_lock<std::mutex> lock(latch_);
 
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
-  memcpy(page_hdl.get_slot(rid.slot_no), buf, file_hdr_.record_size);
+  memcpy(page_hdl.get_slot_record(rid.slot_no), buf, file_hdr_.record_size);
 
   //   新的插入就得更新
   if (!Bitmap::is_set(page_hdl.bitmap, rid.slot_no)) {
@@ -155,7 +166,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
     auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name, rid, *old_rec);
     context->txn_->append_write_record(std::move(update_wrec));
   }
-  memcpy(page_hdl.get_slot(rid.slot_no), buf, file_hdr_.record_size);
+  memcpy(page_hdl.get_slot_record(rid.slot_no), buf, file_hdr_.record_size);
   // Bitmap::set(page_hdl.bitmap, rid.slot_no);  // 出于保险加上先
 
   //   当前数据为脏
