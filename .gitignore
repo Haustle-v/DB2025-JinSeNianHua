@@ -3,3 +3,4 @@ build/
 .vscode/
 start_client.exp
 run_client.sh
+bustub/

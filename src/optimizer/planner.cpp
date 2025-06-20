@@ -222,10 +222,10 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query)
     {
         return table_scan_executors[0];
     }
-    // 获取where条件
-    auto conds = std::move(query->conds);
-    std::shared_ptr<Plan> table_join_executors;
+    
     auto joinconds = std::move(query->join_conds);     // join的所有条件
+    auto conds = std::move(query->conds);              // where条件中, 以防还有不是Filter的条件，比如select * from A join B on A.a=B.b where A.c>B.d
+    joinconds.insert(joinconds.end(), conds.begin(), conds.end());
 
     // 现在思路不一样了：先找表，再找对应连接条件；而不是根据连接条件去找表
 
@@ -233,6 +233,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query)
     std::shared_ptr<Plan> left = table_scan_executors[0];
     std::shared_ptr<Plan> right =  table_scan_executors[1];
     bool reversed = false;
+    std::shared_ptr<Plan> table_join_executors;
     table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right), 
                         extract_join_conditions(joinconds, tables, 1, reversed), reversed, query->join_type_);
     
@@ -246,11 +247,6 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query)
     // 这里后需要处理！reverse的时候给jointree一个标记，因为赛题要求jointree输出的条件表达式左右顺序不变
 
     return table_join_executors;
-
-    // !!!这里直接return了，其实没考虑这种情况：select * from A join B on A.a=B.b where A.c>B.d (如果真有这样的话应该放在join_cond里)
-    //（也就是，where后还有两表的比较就没考虑了（但如果where后只是什么A.c>100这样的，已经在上面curr_conds里作为FIlter条件考虑了））
-    // 而且也暂时不考虑(不符合规范的)隐式join了，也就是不需要下面"连接剩余表"的代码
-
 
 }
 

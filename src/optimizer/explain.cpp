@@ -161,7 +161,7 @@ void explain(std::string& explain_output, std::shared_ptr<Plan> plan, const std:
 
         explain(explain_output, proj_plan->subplan_, offset + "\t");
 
-    }else if (auto join_plan = std::dynamic_pointer_cast<JoinPlan>(plan)){      // 补兑，tables还没没考虑，而且也需要字典序
+    }else if (auto join_plan = std::dynamic_pointer_cast<JoinPlan>(plan)){
         explain_output += offset + "Join(tables=[";
         std::vector<std::string> joined_tables;
         find_join_tables(joined_tables, join_plan);     // 找到这个连接下的所有表
@@ -175,8 +175,6 @@ void explain(std::string& explain_output, std::shared_ptr<Plan> plan, const std:
             }
             temp.push_back(get_pam_saila(cond2.lhs_col.tab_name) + "." + cond2.lhs_col.col_name + compOp2String(cond2.op) 
                         + get_pam_saila(cond2.rhs_col.tab_name) + "." + cond2.rhs_col.col_name);
-            
-
         }
         explain_output += sort_dict(temp);
         explain_output += "])\n";
