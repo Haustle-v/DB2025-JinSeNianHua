@@ -9,6 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #pragma once
+#include "execution_common.h"  //sqb 6.19 用于支持MVCC
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
@@ -77,7 +78,7 @@ class InsertExecutor : public AbstractExecutor {
     }
 
     // Insert into record file
-    rid_ = fh_->insert_record(rec.data, context_);
+    rid_ = fh_->insert_record(rec.data, context_, &tab_);
 
     // Insert into index
     for (size_t i = 0; i < tab_.indexes.size(); ++i) {

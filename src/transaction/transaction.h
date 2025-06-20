@@ -133,6 +133,14 @@ class Transaction {
     return undo_logs_.size();
   }
 
+  // sqb 6.18 commit时更新所有的undo log对应时间戳
+  inline void CommitAllUndoLogs(timestamp_t commit_ts) {
+    std::scoped_lock<std::mutex> lck(latch_);
+    for (auto &log : undo_logs_) {
+      log.ts_ = commit_ts;
+    }
+  }
+
  private:
   bool txn_mode_;                   // 用于标识当前事务为显式事务还是单条SQL语句的隐式事务
   TransactionState state_;          // 事务状态

@@ -14,12 +14,14 @@ See the Mulan PSL v2 for more details. */
 
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 
 #include "bitmap.h"
 #include "common/context.h"
 #include "rm_defs.h"
 
 class RmManager;
+struct TabMeta;  // sqb
 
 /* 对表数据文件中的页面进行封装 */
 struct RmPageHandle {
@@ -62,8 +64,7 @@ class RmFileHandle {
   int fd_;              // 打开文件后产生的文件句柄
   RmFileHdr file_hdr_;  // 文件头，维护当前表文件的元数据
 
-  // 加把锁试试
-  //   std::mutex latch_;
+  mutable std::shared_mutex latch_;  // sqb 加锁保证线程安全 6.17
 
  public:
   RmFileHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
@@ -88,14 +89,17 @@ class RmFileHandle {
 
   std::unique_ptr<RmRecord> get_record(const Rid &rid, Context *context) const;
 
-  Rid insert_record(char *buf, Context *context);
+  // sqb 再次修改增删改接口 让undo link同时更新
+  Rid insert_record(char *buf, Context *context, const TabMeta *schema = nullptr);
 
   void insert_record(const Rid &rid, char *buf);
 
   // sqb 6.4更改 delete update 接口 便于封装事务与日志
-  void delete_record(const Rid &rid, Context *context, RmRecord *old_rec = nullptr);
+  void delete_record(const Rid &rid, Context *context, RmRecord *old_rec = nullptr, UndoLog undo_log = {},
+                     UndoLink undo_link = {});
 
-  void update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec = nullptr);
+  void update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec = nullptr, UndoLog undo_log = {},
+                     UndoLink undo_link = {});
 
   RmPageHandle create_new_page_handle();
 
@@ -107,8 +111,12 @@ class RmFileHandle {
   // sqb 6.16
   int get_page_num() { return file_hdr_.num_pages; }
 
-  // sqb 6.17 关于tuple meta的增删改查
-  TupleMeta get_tuple_meta(const Rid &rid) const;
+  // sqb 6.17 关于tuple meta undolink的操作
+  auto get_tuple_and_undoLink(const Rid &rid, Context *context)
+      -> std::tuple<TupleMeta, RmRecord, std::optional<UndoLink>>;
+
+  // sqb 事务提交更新所有时间戳 事务回滚时用来
+  void set_meta(const Rid &rid, timestamp_t ts, bool is_delete);
 
  private:
   RmPageHandle create_page_handle();

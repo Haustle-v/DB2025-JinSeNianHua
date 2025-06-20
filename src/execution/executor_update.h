@@ -9,6 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #pragma once
+#include "execution_common.h"  //sqb 6.19 用于支持MVCC
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
@@ -114,8 +115,27 @@ class UpdateExecutor : public AbstractExecutor {
         }
       }
 
-      // 调整一下 先检查完唯一性后再更新数据  补充事务控制
-      fh_->update_record(rid, rec_ptr->data, context_, &old_rec);
+      //   补充版本链 sqb 6.19
+      UndoLog undo_log;
+      UndoLink undo_link;
+      txn_id_t txn_id = context_->txn_->get_transaction_id();
+      std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(rid, context_->txn_mgr_, txn_id);
+      if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ == txn_id) {
+        // 找到事务对应undo log，进行更改
+        UndoLog old_log = context_->txn_mgr_->GetUndoLog(*op_undo_link);
+        undo_log = GenerateUpdatedUndoLog(&tab_, &old_rec, &new_rec, old_log);
+        undo_link = *op_undo_link;
+      } else {
+        // 版本链尾需维护版本链 没有值插入默认无效值
+        UndoLink pre_link;
+        if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ != txn_id) {
+          pre_link = *op_undo_link;
+        }
+        undo_log = GenerateNewUndoLog(&tab_, &old_rec, &new_rec, context_->txn_->get_temp_ts(), pre_link);
+      }
+
+      // 调整一下 先检查完唯一性后再更新数据  补充事务控制 补充MVCC
+      fh_->update_record(rid, rec_ptr->data, context_, &old_rec, undo_log, undo_link);
     }
 
     return nullptr;

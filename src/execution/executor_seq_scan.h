@@ -81,12 +81,10 @@ class SeqScanExecutor : public AbstractExecutor {
 
       // sqb 考虑MVCC 6.17
       TabMeta &tab = sm_manager_->db_.get_table(tab_name_);
-      auto current_tuple_ptr = fh_->get_record(rid_, context_);
-      auto current_tuple_meta = fh_->get_tuple_meta(rid_);
+      auto [current_tuple_meta, current_tuple, undo_link] = fh_->get_tuple_and_undoLink(rid_, context_);
       std::vector<UndoLog> undo_logs =
-          CollectUndoLogs(rid_, current_tuple_meta, *current_tuple_ptr, context_->txn_mgr_->GetUndoLink(rid_),
-                          context_->txn_, context_->txn_mgr_);
-      std::optional<RmRecord> tuple = ReconstructTuple(&tab, *current_tuple_ptr, current_tuple_meta, undo_logs);
+          CollectUndoLogs(rid_, current_tuple_meta, current_tuple, undo_link, context_->txn_, context_->txn_mgr_);
+      std::optional<RmRecord> tuple = ReconstructTuple(&tab, current_tuple, current_tuple_meta, undo_logs);
       if (tuple.has_value()) {
         return std::make_unique<RmRecord>(*tuple);
       }

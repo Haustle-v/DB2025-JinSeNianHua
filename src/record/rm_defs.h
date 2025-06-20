@@ -19,8 +19,8 @@ constexpr int RM_FIRST_RECORD_PAGE = 1;
 constexpr int RM_MAX_RECORD_SIZE = 512;
 
 struct TupleMeta {
-  timestamp_t ts_;
-  bool is_deleted_;
+  timestamp_t ts_{INVALID_TS};
+  bool is_deleted_{true};
 
   friend auto operator==(const TupleMeta &a, const TupleMeta &b) {
     return a.ts_ == b.ts_ && a.is_deleted_ == b.is_deleted_;
@@ -98,4 +98,10 @@ struct RmRecord {
     allocated_ = false;
     data = nullptr;
   }
+
+  //   sqb 6.18 补充等号与不等号
+  friend bool operator==(const RmRecord &a, const RmRecord &b) {
+    return a.size == b.size && memcmp(a.data, b.data, a.size) == 0;
+  }
+  friend bool operator!=(const RmRecord &a, const RmRecord &b) { return !(a == b); }
 };

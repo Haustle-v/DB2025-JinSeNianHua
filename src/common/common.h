@@ -69,6 +69,11 @@ struct Value {
       memcpy(raw->data, str_val.c_str(), str_val.size());
     }
   }
+
+  // sqb 6.18 添加等号与不等号
+  friend bool operator==(const Value &a, const Value &b) { return a.type == b.type && *(a.raw) == *(b.raw); }
+
+  friend bool operator!=(const Value &a, const Value &b) { return !(a == b); }
 };
 
 enum CompOp { OP_EQ, OP_NE, OP_LT, OP_GT, OP_LE, OP_GE };

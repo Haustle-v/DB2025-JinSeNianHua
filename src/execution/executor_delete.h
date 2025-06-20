@@ -9,6 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #pragma once
+#include "execution_common.h"  //sqb 6.19 用于支持MVCC
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
@@ -57,8 +58,27 @@ class DeleteExecutor : public AbstractExecutor {
         ix_hdl_ptr->delete_entry(key_buffer, context_->txn_);
       }
 
+      //   补充版本链 sqb 6.19
+      UndoLog undo_log;
+      UndoLink undo_link;
+      txn_id_t txn_id = context_->txn_->get_transaction_id();
+      std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(rid, context_->txn_mgr_, txn_id);
+      if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ == txn_id) {
+        // 找到事务对应undo log，进行更改
+        UndoLog old_log = context_->txn_mgr_->GetUndoLog(*op_undo_link);
+        undo_log = GenerateUpdatedUndoLog(&tab_, rec_ptr.get(), nullptr, old_log);
+        undo_link = *op_undo_link;
+      } else {
+        // 版本链尾需维护版本链 没有值插入默认无效值
+        UndoLink pre_link;
+        if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ != txn_id) {
+          pre_link = *op_undo_link;
+        }
+        undo_log = GenerateNewUndoLog(&tab_, rec_ptr.get(), nullptr, context_->txn_->get_temp_ts(), pre_link);
+      }
+
       //   删除记录
-      fh_->delete_record(rid, context_, rec_ptr.get());
+      fh_->delete_record(rid, context_, rec_ptr.get(), undo_log, undo_link);
     }
     return nullptr;
   }

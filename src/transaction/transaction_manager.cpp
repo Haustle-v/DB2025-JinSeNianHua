@@ -59,6 +59,22 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
 
   // sqb 考虑mvcc 未考虑日志 6.16
   // 直接进行写操作 所以不会存在未提交的写
+  //   更新所有写操作的提交时间戳
+  std::scoped_lock<std::mutex> lck(commit_mutex_);
+  timestamp_t commit_ts = next_timestamp_++;
+  auto write_set_ptr = txn->get_write_set();
+  for (auto iter = write_set_ptr->rbegin(); iter != write_set_ptr->rend(); ++iter) {
+    Rid rid = (*iter)->GetRid();
+    std::string &tab_name = (*iter)->GetTableName();
+    auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
+    if (((*iter)->GetWriteType() == WType::UPDATE_TUPLE)) {
+      fhdl_ptr->set_meta(rid, commit_ts, (*iter)->GetTupleMeta().is_deleted_);
+    } else {
+      fhdl_ptr->set_meta(rid, commit_ts, !((*iter)->GetTupleMeta().is_deleted_));
+    }
+  }
+  // 更新undo log的时间戳
+  txn->CommitAllUndoLogs(commit_ts);
 
   //  释放锁
   auto lock_set_ptr = txn->get_lock_set();
@@ -74,9 +90,9 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   //   sqb 6.16 加水印
   std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn->set_state(TransactionState::COMMITTED);
-  txn->set_commit_ts(next_timestamp_++);
-  last_commit_ts_ = txn->get_commit_ts();
-  running_txns_.UpdateCommitTs(txn->get_commit_ts());
+  txn->set_commit_ts(commit_ts);
+  last_commit_ts_ = commit_ts;
+  running_txns_.UpdateCommitTs(commit_ts);
   running_txns_.RemoveTxn(txn->get_read_ts());
 }
 
@@ -156,6 +172,10 @@ void TransactionManager::rollback_insert(WriteRecord &write_rec) {
     ix_hdl_ptr->delete_entry(key_buffer, nullptr);
   }
 
+  // 回滚元信息 6.19
+  auto &base_meta = write_rec.GetTupleMeta();
+  fhdl_ptr->set_meta(rid, base_meta.ts_, base_meta.is_deleted_);
+
   //   删除记录
   fhdl_ptr->delete_record(rid, nullptr);
 }
@@ -175,6 +195,10 @@ void TransactionManager::rollback_delete(WriteRecord &write_rec) {
   Rid rid = write_rec.GetRid();
   fhdl_ptr->allocate_pages(rid);
   fhdl_ptr->insert_record(rid, rec.data);
+
+  // 回滚元信息 6.19
+  auto &base_meta = write_rec.GetTupleMeta();
+  fhdl_ptr->set_meta(rid, base_meta.ts_, base_meta.is_deleted_);
 
   //   插入索引
   for (auto &index_meta : tab_meta.indexes) {
@@ -218,6 +242,10 @@ void TransactionManager::rollback_update(WriteRecord &write_rec) {
 
   //   插入记录
   fhdl_ptr->update_record(rid, old_rec.data, nullptr);
+
+  // 回滚元信息 6.19
+  auto &base_meta = write_rec.GetTupleMeta();
+  fhdl_ptr->set_meta(rid, base_meta.ts_, base_meta.is_deleted_);
 
   //   插入新索引
   for (auto &index_meta : tab_meta.indexes) {
@@ -265,9 +293,9 @@ bool TransactionManager::UpdateUndoLink(Rid rid, std::optional<UndoLink> prev_li
     }
   }
   if (prev_link.has_value()) {
-    pvi_ptr->prev_version_[rid.page_no].prev_ = prev_link.value();
+    pvi_ptr->prev_version_[rid.slot_no].prev_ = prev_link.value();
   } else {
-    pvi_ptr->prev_version_.erase(rid.page_no);
+    pvi_ptr->prev_version_.erase(rid.slot_no);
   }
   return true;
 }
@@ -302,9 +330,9 @@ bool TransactionManager::UpdateVersionLink(Rid rid, std::optional<VersionUndoLin
     }
   }
   if (prev_version.has_value()) {
-    pvi_ptr->prev_version_[rid.page_no] = prev_version.value();
+    pvi_ptr->prev_version_[rid.slot_no] = prev_version.value();
   } else {
-    pvi_ptr->prev_version_.erase(rid.page_no);
+    pvi_ptr->prev_version_.erase(rid.slot_no);
   }
   return true;
 }

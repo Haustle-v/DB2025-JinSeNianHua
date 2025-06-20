@@ -9,6 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #include "rm_file_handle.h"
+#include "execution/execution_common.h"  //sqb
 
 /**
  * @description: 获取当前表中记录号为rid的记录
@@ -21,7 +22,7 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
   // 1. 获取指定记录所在的page handle
   // 2. 初始化一个指向RmRecord的指针（赋值其内部的data和size）
 
-  // std::scoped_lock<std::mutex> lock(latch_);
+  std::shared_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
   std::unique_ptr<RmRecord> record_ptr =
@@ -32,15 +33,30 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
   return record_ptr;
 }
 
-// sqb 6.17 关于tuple meta的查询
-TupleMeta RmFileHandle::get_tuple_meta(const Rid &rid) const {
+// sqb 6.17 关于tuple meta undo link的查询 为保证原子性才这么写
+auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
+    -> std::tuple<TupleMeta, RmRecord, std::optional<UndoLink>> {
+  std::shared_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
-  TupleMeta ret = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
 
-  //   这个bfm不是raii管理页 数据操作注意释放
+  TupleMeta tuple_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
+  RmRecord tuple(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
+
+  auto undo_link = context->txn_mgr_->GetUndoLink(rid);
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
-  return ret;
+  return std::make_tuple(tuple_meta, tuple, undo_link);
+}
+
+// sqb 6.17 事务commit时更新所有写操作的时间戳 abort时还要恢复is_delete状态
+void RmFileHandle::set_meta(const Rid &rid, timestamp_t ts, bool is_delete) {
+  std::shared_lock<std::shared_mutex> lock(latch_);
+  RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
+
+  TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
+  base_meta.ts_ = ts;
+  base_meta.is_deleted_ = is_delete;
+  buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 }
 
 /**
@@ -49,7 +65,7 @@ TupleMeta RmFileHandle::get_tuple_meta(const Rid &rid) const {
  * @param {Context*} context
  * @return {Rid} 插入的记录的记录号（位置）
  */
-Rid RmFileHandle::insert_record(char *buf, Context *context) {
+Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *schema) {
   // Todo:
   // 1. 获取当前未满的page handle
   // 2. 在page handle中找到空闲slot位置
@@ -57,7 +73,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
   // 4. 更新page_handle.page_hdr中的数据结构
   // 注意考虑插入一条记录后页面已满的情况，需要更新file_hdr_.first_free_page_no
 
-  // std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = create_page_handle();
 
   // 找空闲位置
@@ -67,8 +83,49 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
     RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);
+
+    //   补充版本链 sqb 6.19
+    UndoLog undo_log;
+    UndoLink undo_link;
+    txn_id_t txn_id = context->txn_->get_transaction_id();
+    std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(ret, context->txn_mgr_, txn_id);
+    if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ == txn_id) {
+      // 找到事务对应undo log，进行更改
+      UndoLog old_log = context->txn_mgr_->GetUndoLog(*op_undo_link);
+      undo_log = GenerateUpdatedUndoLog(schema, nullptr, &new_rec, old_log);
+      undo_link = *op_undo_link;
+    } else {
+      // 版本链尾需维护版本链 没有值插入默认无效值
+      UndoLink pre_link;
+      if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ != txn_id) {
+        pre_link = *op_undo_link;
+      }
+      undo_log = GenerateNewUndoLog(schema, nullptr, &new_rec, context->txn_->get_temp_ts(), pre_link);
+    }
+
+    // 写写冲突检查 6.19
+    TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(ret.slot_no));
+    if (IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
+      throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+    }
+
+    // 元数据更新
+    base_meta.ts_ = context->txn_->get_temp_ts();
+    base_meta.is_deleted_ = false;
+
+    // 当前log是updated log 在事务缓冲区修改 此时无需改动版本链
+    if (undo_link.prev_txn_ == context->txn_->get_transaction_id()) {
+      context->txn_->ModifyUndoLog(undo_link.prev_log_idx_, undo_log);
+    } else {
+      // 当前log为新log 追加到事务缓冲区内 同时更新版本链
+      undo_link = context->txn_->AppendUndoLog(undo_log);
+      context->txn_mgr_->UpdateUndoLink(ret, undo_link);
+    }
+
+    // 事务写入记录
     std::string tab_name = disk_manager_->get_file_name(fd_);
-    auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name, ret);
+    auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name, ret,
+                                                     TupleMeta{context->txn_->get_read_ts(), true});
     context->txn_->append_write_record(std::move(insert_wrec));
   }
   memcpy(page_hdl.get_slot_record(free_slot_no), buf, file_hdr_.record_size);
@@ -92,8 +149,8 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
  */
 void RmFileHandle::insert_record(const Rid &rid, char *buf) {
   // 暂时没有考虑是插入在不存在的page上
-  // std::scoped_lock<std::mutex> lock(latch_);
 
+  std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   memcpy(page_hdl.get_slot_record(rid.slot_no), buf, file_hdr_.record_size);
 
@@ -114,20 +171,42 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
  * @param {Rid&} rid 要删除的记录的记录号（位置）
  * @param {Context*} context
  */
-void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old_rec) {
+void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old_rec, UndoLog undo_log,
+                                 UndoLink undo_link) {
   // Todo:
   // 1. 获取指定记录所在的page handle
   // 2. 更新page_handle.page_hdr中的数据结构
   // 注意考虑删除一条记录后页面未满的情况，需要调用release_page_handle()
 
   //   还是只考虑rid存在的情况
-  // std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   // sqb添加事务控制语句 6.4
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
+    // 写写冲突检查 6.19
+    TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
+    if (IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
+      throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+    }
+
+    // 元数据更新
+    base_meta.ts_ = context->txn_->get_temp_ts();
+    base_meta.is_deleted_ = true;
+
+    // 当前log是updated log 在事务缓冲区修改 此时无需改动版本链
+    if (undo_link.prev_txn_ == context->txn_->get_transaction_id()) {
+      context->txn_->ModifyUndoLog(undo_link.prev_log_idx_, undo_log);
+    } else {
+      // 当前log为新log 追加到事务缓冲区内 同时更新版本链
+      undo_link = context->txn_->AppendUndoLog(undo_log);
+      context->txn_mgr_->UpdateUndoLink(rid, undo_link);
+    }
+
+    // 事务写入记录
     std::string tab_name = disk_manager_->get_file_name(fd_);
-    auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name, rid, *old_rec);
+    auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name, rid, *old_rec,
+                                                     TupleMeta{context->txn_->get_read_ts(), false});
     context->txn_->append_write_record(std::move(delete_wrec));
   }
 
@@ -148,13 +227,14 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
  * @param {char*} buf 新记录的数据
  * @param {Context*} context
  */
-void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec) {
+void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec, UndoLog undo_log,
+                                 UndoLink undo_link) {
   // Todo:
   // 1. 获取指定记录所在的page handle
   // 2. 更新记录
 
   //   暂时只考虑数据存在的情况
-  // std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
 
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
@@ -162,8 +242,29 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
   // sqb添加事务控制语句 6.4
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
+    // 写写冲突检查 6.19
+    TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
+    if (IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
+      throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+    }
+
+    // 元数据更新
+    base_meta.ts_ = context->txn_->get_temp_ts();
+    base_meta.is_deleted_ = false;
+
+    // 当前log是updated log 在事务缓冲区修改 此时无需改动版本链
+    if (undo_link.prev_txn_ == context->txn_->get_transaction_id()) {
+      context->txn_->ModifyUndoLog(undo_link.prev_log_idx_, undo_log);
+    } else {
+      // 当前log为新log 追加到事务缓冲区内 同时更新版本链
+      undo_link = context->txn_->AppendUndoLog(undo_log);
+      context->txn_mgr_->UpdateUndoLink(rid, undo_link);
+    }
+
+    // 事务写入集记录
     std::string tab_name = disk_manager_->get_file_name(fd_);
-    auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name, rid, *old_rec);
+    auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name, rid, *old_rec,
+                                                     TupleMeta{context->txn_->get_read_ts(), false});
     context->txn_->append_write_record(std::move(update_wrec));
   }
   memcpy(page_hdl.get_slot_record(rid.slot_no), buf, file_hdr_.record_size);
