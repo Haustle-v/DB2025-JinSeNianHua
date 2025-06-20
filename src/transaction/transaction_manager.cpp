@@ -63,8 +63,14 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   std::scoped_lock<std::mutex> lck(commit_mutex_);
   timestamp_t commit_ts = next_timestamp_++;
   auto write_set_ptr = txn->get_write_set();
+  std::unordered_set<Rid> reseted_rids;
   for (auto iter = write_set_ptr->rbegin(); iter != write_set_ptr->rend(); ++iter) {
     Rid rid = (*iter)->GetRid();
+    if (reseted_rids.find(rid) != reseted_rids.end()) {
+      continue;
+    } else {
+      reseted_rids.insert(rid);
+    }
     std::string &tab_name = (*iter)->GetTableName();
     auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
     if (((*iter)->GetWriteType() == WType::UPDATE_TUPLE)) {
