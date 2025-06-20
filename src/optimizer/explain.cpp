@@ -194,7 +194,7 @@ void explain(std::string& explain_output, std::shared_ptr<Plan> plan, const std:
     }else if (auto scan_plan = std::dynamic_pointer_cast<ScanPlan>(plan)){
         // 先考虑这个scan有没有Filter
         if (!scan_plan->conds_.empty()){    // 这是在make_one_rel里获取到的curr_cond，只与这个表本身相关，也就是Filter条件
-            explain_output += offset + "Filter(condition[";
+            explain_output += offset + "Filter(condition=[";
             std::vector<std::string> temp;
             for (const auto& cond : scan_plan->conds_) {
                 temp.push_back(get_pam_saila(cond.lhs_col.tab_name) + "." + cond.lhs_col.col_name + compOp2String(cond.op)
