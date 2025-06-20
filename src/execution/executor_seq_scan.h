@@ -29,6 +29,8 @@ class SeqScanExecutor : public AbstractExecutor {
   Rid rid_;
   std::unique_ptr<RecScan> scan_;  // table_iterator
 
+  std::unique_ptr<RmRecord> current_tuple = nullptr;  // sqb MVCC标记有效元组
+
   SmManager *sm_manager_;
 
  public:
@@ -58,10 +60,12 @@ class SeqScanExecutor : public AbstractExecutor {
       scan_ = std::make_unique<RmScan>(fh_);
     }
 
+    TabMeta &tab = sm_manager_->db_.get_table(tab_name_);
     // 需要顺序扫描 满足条件的记录 注意当前框架的记录就是元组
     for (; !scan_->is_end(); scan_->next()) {
-      std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(scan_->rid(), context_);
-      if (check_conds(cols_, conds_, rec_ptr.get())) {
+      //   std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(scan_->rid(), context_);
+      current_tuple = fh_->get_reconstructed_tuple(scan_->rid(), context_, tab);
+      if (current_tuple != nullptr && check_conds(cols_, conds_, current_tuple.get())) {
         break;
       }
     }
@@ -78,16 +82,7 @@ class SeqScanExecutor : public AbstractExecutor {
     if (rid_.page_no != INVALID_PAGE_ID) {
       // 有效则读 应该有RVO
       //   return fh_->get_record(rid_, context_);
-
-      // sqb 考虑MVCC 6.17
-      TabMeta &tab = sm_manager_->db_.get_table(tab_name_);
-      auto [current_tuple_meta, current_tuple, undo_link] = fh_->get_tuple_and_undoLink(rid_, context_);
-      std::vector<UndoLog> undo_logs =
-          CollectUndoLogs(rid_, current_tuple_meta, current_tuple, undo_link, context_->txn_, context_->txn_mgr_);
-      std::optional<RmRecord> tuple = ReconstructTuple(&tab, current_tuple, current_tuple_meta, undo_logs);
-      if (tuple.has_value()) {
-        return std::make_unique<RmRecord>(*tuple);
-      }
+      return std::move(current_tuple);
     }
     return nullptr;
   }

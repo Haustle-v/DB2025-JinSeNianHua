@@ -115,8 +115,14 @@ class RmFileHandle {
   auto get_tuple_and_undoLink(const Rid &rid, Context *context)
       -> std::tuple<TupleMeta, RmRecord, std::optional<UndoLink>>;
 
+  // sqb 6.20 获取对应版本的tuple
+  auto get_reconstructed_tuple(const Rid &rid, Context *context, TabMeta &tab) -> std::unique_ptr<RmRecord>;
+
   // sqb 事务提交更新所有时间戳 事务回滚时用来
   void set_meta(const Rid &rid, timestamp_t ts, bool is_delete);
+
+  // sqb 用于改动rmscan
+  TupleMeta get_meta(const Rid &rid);
 
  private:
   RmPageHandle create_page_handle();

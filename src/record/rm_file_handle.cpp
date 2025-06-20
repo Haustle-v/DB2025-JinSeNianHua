@@ -12,7 +12,7 @@ See the Mulan PSL v2 for more details. */
 #include "execution/execution_common.h"  //sqb
 
 /**
- * @description: 获取当前表中记录号为rid的记录
+ * @description: 获取当前表中记录号为rid的记录  sqb--MVCC下相当于获得最新的tuple
  * @param {Rid&} rid 记录号，指定记录的位置
  * @param {Context*} context
  * @return {unique_ptr<RmRecord>} rid对应的记录对象指针
@@ -50,13 +50,35 @@ auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
 
 // sqb 6.17 事务commit时更新所有写操作的时间戳 abort时还要恢复is_delete状态
 void RmFileHandle::set_meta(const Rid &rid, timestamp_t ts, bool is_delete) {
-  std::shared_lock<std::shared_mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
 
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
   base_meta.ts_ = ts;
   base_meta.is_deleted_ = is_delete;
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
+}
+
+// sqb 用于改动rmscan
+TupleMeta RmFileHandle::get_meta(const Rid &rid) {
+  std::shared_lock<std::shared_mutex> lock(latch_);
+  RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
+  TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
+  buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
+  return base_meta;
+}
+
+// sqb 6.20 获取对应版本的元组，也就是经过重建后的
+auto RmFileHandle::get_reconstructed_tuple(const Rid &rid, Context *context, TabMeta &tab)
+    -> std::unique_ptr<RmRecord> {
+  auto [current_tuple_meta, current_tuple, undo_link] = get_tuple_and_undoLink(rid, context);
+  std::vector<UndoLog> undo_logs =
+      CollectUndoLogs(rid, current_tuple_meta, current_tuple, undo_link, context->txn_, context->txn_mgr_);
+  std::optional<RmRecord> tuple = ReconstructTuple(&tab, current_tuple, current_tuple_meta, undo_logs);
+  if (tuple.has_value()) {
+    return std::make_unique<RmRecord>(*tuple);
+  }
+  return nullptr;
 }
 
 /**
@@ -77,7 +99,23 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
   RmPageHandle page_hdl = create_page_handle();
 
   // 找空闲位置
-  int free_slot_no = Bitmap::next_bit(0, page_hdl.bitmap, file_hdr_.num_records_per_page, -1);
+  // int free_slot_no = Bitmap::next_bit(0, page_hdl.bitmap, file_hdr_.num_records_per_page, -1);
+  int free_slot_no = file_hdr_.num_records_per_page;
+  for (int i = 0; i < file_hdr_.num_records_per_page; ++i) {
+    // bm=0 代表没有 bm=1 is_delete=true 代表逻辑删除 写写冲突检查将允许事务自己插入到为1的地方 其它事务将仍无法处理
+    if (Bitmap::is_set(page_hdl.bitmap, i) == 0) {
+      free_slot_no = i;
+      break;
+    } else {
+      TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(i));
+      //   插入到逻辑删除的位置需要进行写写冲突检查 该函数不应出现写写冲突
+      if (base_meta.is_deleted_ == true &&
+          !(context != nullptr && IsWriteWriteConflict(base_meta.ts_, context->txn_))) {
+        free_slot_no = i;
+        break;
+      }
+    }
+  }
   Rid ret{page_hdl.page->get_page_id().page_no, free_slot_no};
   //   sqb 加入事务控制 6.4
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
@@ -103,13 +141,8 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
       undo_log = GenerateNewUndoLog(schema, nullptr, &new_rec, context->txn_->get_temp_ts(), pre_link);
     }
 
-    // 写写冲突检查 6.19
-    TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(ret.slot_no));
-    if (IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
-      throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
-    }
-
     // 元数据更新
+    TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(ret.slot_no));
     base_meta.ts_ = context->txn_->get_temp_ts();
     base_meta.is_deleted_ = false;
 
@@ -148,8 +181,6 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
  * @param {char*} buf 要插入记录的数据
  */
 void RmFileHandle::insert_record(const Rid &rid, char *buf) {
-  // 暂时没有考虑是插入在不存在的page上
-
   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   memcpy(page_hdl.get_slot_record(rid.slot_no), buf, file_hdr_.record_size);
@@ -182,10 +213,10 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   // sqb添加事务控制语句 6.4
+  TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
     // 写写冲突检查 6.19
-    TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
     if (IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
       throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
     }
@@ -211,7 +242,9 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
   }
 
   //   删除先不动内存 因为get那里做了检查
-  Bitmap ::reset(page_hdl.bitmap, rid.slot_no);
+  //   Bitmap ::reset(page_hdl.bitmap, rid.slot_no);
+  // bitmap不会在将1设为0 相对的，必须设置对应的is_delete
+  base_meta.is_deleted_ = true;
   //   考虑release
   --page_hdl.page_hdr->num_records;
   if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
