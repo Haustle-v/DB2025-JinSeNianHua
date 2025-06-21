@@ -18,53 +18,58 @@ See the Mulan PSL v2 for more details. */
 namespace ast {
 
 class TreePrinter {
- public:
-  static void print(const std::shared_ptr<TreeNode> &node) { print_node(node, 0); }
-
- private:
-  static std::string offset2string(int offset) { return std::string(offset, ' '); }
-
-  template <typename T>
-  static void print_val(const T &val, int offset) {
-    std::cout << offset2string(offset) << val << '\n';
-  }
-
-  template <typename T>
-  static void print_val_list(const std::vector<T> &vals, int offset) {
-    std::cout << offset2string(offset) << "LIST\n";
-    offset += 2;
-    for (auto &val : vals) {
-      print_val(val, offset);
+   public:
+    static void print(const std::shared_ptr<TreeNode>& node) {
+        print_node(node, 0);
     }
-  }
 
-  static std::string type2str(SvType type) {
-    static std::map<SvType, std::string> m{
-        {SV_TYPE_INT, "INT"},
-        {SV_TYPE_FLOAT, "FLOAT"},
-        {SV_TYPE_STRING, "STRING"},
-    };
-    return m.at(type);
-  }
-
-  static std::string op2str(SvCompOp op) {
-    static std::map<SvCompOp, std::string> m{
-        {SV_OP_EQ, "=="}, {SV_OP_NE, "!="}, {SV_OP_LT, "<"}, {SV_OP_GT, ">"}, {SV_OP_LE, "<="}, {SV_OP_GE, ">="},
-    };
-    return m.at(op);
-  }
-
-  template <typename T>
-  static void print_node_list(std::vector<T> nodes, int offset) {
-    std::cout << offset2string(offset);
-    offset += 2;
-    std::cout << "LIST\n";
-    for (auto &node : nodes) {
-      print_node(node, offset);
+   private:
+    static std::string offset2string(int offset) {
+        return std::string(offset, ' ');
     }
-  }
 
-    static void print_node(const std::shared_ptr<TreeNode> &node, int offset) {
+    template <typename T>
+    static void print_val(const T& val, int offset) {
+        std::cout << offset2string(offset) << val << '\n';
+    }
+
+    template <typename T>
+    static void print_val_list(const std::vector<T>& vals, int offset) {
+        std::cout << offset2string(offset) << "LIST\n";
+        offset += 2;
+        for (auto& val : vals) {
+            print_val(val, offset);
+        }
+    }
+
+    static std::string type2str(SvType type) {
+        static std::map<SvType, std::string> m{
+            {SV_TYPE_INT, "INT"},
+            {SV_TYPE_FLOAT, "FLOAT"},
+            {SV_TYPE_STRING, "STRING"},
+        };
+        return m.at(type);
+    }
+
+    static std::string op2str(SvCompOp op) {
+        static std::map<SvCompOp, std::string> m{
+            {SV_OP_EQ, "=="}, {SV_OP_NE, "!="}, {SV_OP_LT, "<"},
+            {SV_OP_GT, ">"},  {SV_OP_LE, "<="}, {SV_OP_GE, ">="},
+        };
+        return m.at(op);
+    }
+
+    template <typename T>
+    static void print_node_list(std::vector<T> nodes, int offset) {
+        std::cout << offset2string(offset);
+        offset += 2;
+        std::cout << "LIST\n";
+        for (auto& node : nodes) {
+            print_node(node, offset);
+        }
+    }
+
+    static void print_node(const std::shared_ptr<TreeNode>& node, int offset) {
         std::cout << offset2string(offset);
         offset += 2;
         if (auto x = std::dynamic_pointer_cast<Help>(node)) {
@@ -85,13 +90,13 @@ class TreePrinter {
             std::cout << "CREATE_INDEX\n";
             print_val(x->tab_name, offset);
             // print_val(x->col_name, offset);
-            for(auto col_name: x->col_names)
+            for (auto col_name : x->col_names)
                 print_val(col_name, offset);
         } else if (auto x = std::dynamic_pointer_cast<DropIndex>(node)) {
             std::cout << "DROP_INDEX\n";
             print_val(x->tab_name, offset);
             // print_val(x->col_name, offset);
-            for(auto col_name: x->col_names)
+            for (auto col_name : x->col_names)
                 print_val(col_name, offset);
         } else if (auto x = std::dynamic_pointer_cast<ColDef>(node)) {
             std::cout << "COL_DEF\n";
@@ -101,8 +106,7 @@ class TreePrinter {
             // sqb 5.30 show index
             std::cout << "SHOW_INDEX\n";
             print_val(x->tab_name, offset);
-        }
-        else if (auto x = std::dynamic_pointer_cast<AggCol>(node)) {
+        } else if (auto x = std::dynamic_pointer_cast<AggCol>(node)) {
             std::cout << "AGG_COL\n";
             print_val(x->tab_name, offset);
             print_val(x->col_name, offset);
@@ -154,9 +158,9 @@ class TreePrinter {
         } else if (auto x = std::dynamic_pointer_cast<SelectStmt>(node)) {
             // sqb 增加explain支持
             if (x->need_explain) {
-              std::cout << "EXPLAIN SELECT\n";
+                std::cout << "EXPLAIN SELECT\n";
             } else {
-              std::cout << "SELECT\n";
+                std::cout << "SELECT\n";
             }
             print_node_list(x->cols, offset);
             print_val_list(x->tabs, offset);
@@ -177,7 +181,5 @@ class TreePrinter {
             assert(0);
         }
     }
-  }
 };
-
-}  // namespace ast
+} // namespace ast
