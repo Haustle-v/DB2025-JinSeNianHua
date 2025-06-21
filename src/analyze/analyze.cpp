@@ -89,6 +89,8 @@ std::shared_ptr<Query> Analyze::do_analyze(
             }
           }
           if (!found) {
+            // debug test
+            assert(false);
             throw GroupByError(sel_col.col_name);
           }
         }
@@ -113,12 +115,12 @@ std::shared_ptr<Query> Analyze::do_analyze(
       query->order_bys.limit = x->limit;
     }
 
-    // // WHERE 子句中不能用聚集函数作为条件表达式
-    // for (auto &cond : x->conds) {
-    //   if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(cond->lhs)) {
-    //     throw GroupByError(agg_col->col_name);
-    //   }
-    // }
+    // WHERE 子句中不能用聚集函数作为条件表达式
+    for (auto &cond : x->conds) {
+      if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(cond->lhs)) {
+        throw GroupByError(agg_col->col_name);
+      }
+    }
 
     // 处理where条件
     get_clause(x->conds, query->conds);
