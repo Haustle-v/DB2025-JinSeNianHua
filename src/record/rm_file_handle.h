@@ -95,11 +95,10 @@ class RmFileHandle {
   void insert_record(const Rid &rid, char *buf);
 
   // sqb 6.4更改 delete update 接口 便于封装事务与日志
-  void delete_record(const Rid &rid, Context *context, RmRecord *old_rec = nullptr, UndoLog undo_log = {},
-                     UndoLink undo_link = {});
+  void delete_record(const Rid &rid, Context *context, RmRecord *old_rec = nullptr, const TabMeta *schema = nullptr);
 
-  void update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec = nullptr, UndoLog undo_log = {},
-                     UndoLink undo_link = {});
+  void update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec = nullptr,
+                     const TabMeta *schema = nullptr);
 
   RmPageHandle create_new_page_handle();
 
