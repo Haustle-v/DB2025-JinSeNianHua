@@ -125,24 +125,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
     RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);
 
     //   补充版本链 sqb 6.19
-    UndoLog undo_log;
-    UndoLink undo_link;
-    txn_id_t txn_id = context->txn_->get_transaction_id();
-    std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(ret, context->txn_mgr_, txn_id);
-    if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ == txn_id) {
-      // 找到事务对应undo log，进行更改
-      UndoLog old_log = context->txn_mgr_->GetUndoLog(*op_undo_link);
-      undo_log = GenerateUpdatedUndoLog(schema, nullptr, &new_rec, old_log);
-      undo_link = *op_undo_link;
-    } else {
-      // 版本链尾需维护版本链 没有值插入默认无效值
-      UndoLink pre_link;
-      if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ != txn_id) {
-        pre_link = *op_undo_link;
-      }
-      undo_log = GenerateNewUndoLog(schema, nullptr, &new_rec, context->txn_->get_temp_ts(), pre_link);
-    }
-
+    auto [undo_log, undo_link] = generateUndoLogAndLink(ret, nullptr, &new_rec, context, schema);
     // 元数据时间戳更新
     base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -222,24 +205,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
     }
 
     //   补充版本链 sqb 6.19
-    UndoLog undo_log;
-    UndoLink undo_link;
-    txn_id_t txn_id = context->txn_->get_transaction_id();
-    std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(rid, context->txn_mgr_, txn_id);
-    if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ == txn_id) {
-      // 找到事务对应undo log，进行更改
-      UndoLog old_log = context->txn_mgr_->GetUndoLog(*op_undo_link);
-      undo_log = GenerateUpdatedUndoLog(schema, old_rec, nullptr, old_log);
-      undo_link = *op_undo_link;
-    } else {
-      // 版本链尾需维护版本链 没有值插入默认无效值
-      UndoLink pre_link;
-      if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ != txn_id) {
-        pre_link = *op_undo_link;
-      }
-      undo_log = GenerateNewUndoLog(schema, old_rec, nullptr, context->txn_->get_temp_ts(), pre_link);
-    }
-
+    auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, nullptr, context, schema);
     // 元数据时间戳更新
     base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -300,25 +266,8 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
     }
 
     //   补充版本链 sqb 6.19
-    UndoLog undo_log;
-    UndoLink undo_link;
-    txn_id_t txn_id = context->txn_->get_transaction_id();
     RmRecord new_rec(file_hdr_.record_size, buf);
-    std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(rid, context->txn_mgr_, txn_id);
-    if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ == txn_id) {
-      // 找到事务对应undo log，进行更改
-      UndoLog old_log = context->txn_mgr_->GetUndoLog(*op_undo_link);
-      undo_log = GenerateUpdatedUndoLog(schema, old_rec, &new_rec, old_log);
-      undo_link = *op_undo_link;
-    } else {
-      // 版本链尾需维护版本链 没有值插入默认无效值
-      UndoLink pre_link;
-      if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ != txn_id) {
-        pre_link = *op_undo_link;
-      }
-      undo_log = GenerateNewUndoLog(schema, old_rec, &new_rec, context->txn_->get_temp_ts(), pre_link);
-    }
-
+    auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, &new_rec, context, schema);
     // 元数据更新
     base_meta.ts_ = context->txn_->get_temp_ts();
 

@@ -95,7 +95,7 @@ inline auto CollectUndoLogs(Rid rid, const TupleMeta &base_meta, const RmRecord 
     UndoLog log = txn_mgr->GetUndoLog(link);
 
     // 由于目前的回滚直接回复 所以版本链检查需跳过abort事务
-    if (txn->get_state() == TransactionState::ABORTED) {
+    if (txn_mgr->CheckIsAbort(link.prev_txn_)) {
       link = log.prev_version_;
       continue;
     }
@@ -244,4 +244,27 @@ inline std::optional<UndoLink> WalkLinkToTxnLink(const Rid &rid, TransactionMana
     link = log.prev_version_;
   }
   return std::nullopt;
+}
+
+inline std::tuple<UndoLog, UndoLink> generateUndoLogAndLink(const Rid &rid, const RmRecord *old_rec,
+                                                            const RmRecord *new_rec, const Context *context,
+                                                            const TabMeta *schema) {
+  UndoLog undo_log;
+  UndoLink undo_link;
+  txn_id_t txn_id = context->txn_->get_transaction_id();
+  std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(rid, context->txn_mgr_, txn_id);
+  if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ == txn_id) {
+    // 找到事务对应undo log，进行更改
+    UndoLog old_log = context->txn_mgr_->GetUndoLog(*op_undo_link);
+    undo_log = GenerateUpdatedUndoLog(schema, old_rec, new_rec, old_log);
+    undo_link = *op_undo_link;
+  } else {
+    // 版本链尾需维护版本链 没有值插入默认无效值
+    UndoLink pre_link;
+    if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ != txn_id) {
+      pre_link = *op_undo_link;
+    }
+    undo_log = GenerateNewUndoLog(schema, old_rec, new_rec, context->txn_->get_temp_ts(), pre_link);
+  }
+  return std::make_tuple(undo_log, undo_link);
 }

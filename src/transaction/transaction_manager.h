@@ -96,6 +96,16 @@ class TransactionManager {
   // sqb 回滚更新的记录 6.4
   void rollback_update(WriteRecord &write_rec);
 
+  // sqb 检查日志记录中的归滚用
+  inline bool CheckIsAbort(txn_id_t txn_id) {
+    std::shared_lock<std::shared_mutex> lock(txn_map_mutex_);
+    auto iter = txn_map.find(txn_id);
+    if (iter != txn_map.end()) {
+      return iter->second->get_state() == TransactionState::ABORTED;
+    }
+    return false;
+  }
+
   static std::unordered_map<txn_id_t, Transaction *> txn_map;  // 全局事务表，存放事务ID与事务对象的映射关系
   std::shared_mutex txn_map_mutex_;
   /** ------------------------以下函数仅可能在MVCC当中使用------------------------------------------*/
