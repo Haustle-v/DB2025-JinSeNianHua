@@ -62,7 +62,8 @@ struct CreateTable : public TreeNode {
   std::string tab_name;
   std::vector<std::shared_ptr<Field>> fields;
 
-  CreateTable(std::string tab_name_, std::vector<std::shared_ptr<Field>> fields_)
+  CreateTable(std::string tab_name_,
+              std::vector<std::shared_ptr<Field>> fields_)
       : tab_name(std::move(tab_name_)), fields(std::move(fields_)) {}
 };
 
@@ -133,7 +134,21 @@ struct Col : public Expr {
   std::string tab_name;
   std::string col_name;
 
-  Col(std::string tab_name_, std::string col_name_) : tab_name(std::move(tab_name_)), col_name(std::move(col_name_)) {}
+  Col(std::string tab_name_, std::string col_name_)
+      : tab_name(std::move(tab_name_)), col_name(std::move(col_name_)) {}
+};
+
+enum AggFuncType { AGG_INVALID, AGG_COUNT, AGG_MAX, AGG_MIN, AGG_SUM, AGG_AVG };
+
+struct AggCol : public Col {
+  AggFuncType agg_type;
+  std::string alias;
+
+  AggCol(std::string tab_name_, std::string col_name_, AggFuncType agg_type_,
+         std::string alias_)
+      : Col(std::move(tab_name_), std::move(col_name_)),
+        agg_type(agg_type_),
+        alias(std::move(alias_)) {}
 };
 
 struct SetClause : public TreeNode {
@@ -149,15 +164,16 @@ struct BinaryExpr : public TreeNode {
   SvCompOp op;
   std::shared_ptr<Expr> rhs;
 
-  BinaryExpr(std::shared_ptr<Col> lhs_, SvCompOp op_, std::shared_ptr<Expr> rhs_)
+  BinaryExpr(std::shared_ptr<Col> lhs_, SvCompOp op_,
+             std::shared_ptr<Expr> rhs_)
       : lhs(std::move(lhs_)), op(op_), rhs(std::move(rhs_)) {}
 };
 
 struct OrderBy : public TreeNode {
-  std::shared_ptr<Col> cols;
+  std::shared_ptr<Col> col;
   OrderByDir orderby_dir;
-  OrderBy(std::shared_ptr<Col> cols_, OrderByDir orderby_dir_)
-      : cols(std::move(cols_)), orderby_dir(std::move(orderby_dir_)) {}
+  OrderBy(std::shared_ptr<Col> col_, OrderByDir orderby_dir_)
+      : col(std::move(col_)), orderby_dir(std::move(orderby_dir_)) {}
 };
 
 struct InsertStmt : public TreeNode {
@@ -172,7 +188,8 @@ struct DeleteStmt : public TreeNode {
   std::string tab_name;
   std::vector<std::shared_ptr<BinaryExpr>> conds;
 
-  DeleteStmt(std::string tab_name_, std::vector<std::shared_ptr<BinaryExpr>> conds_)
+  DeleteStmt(std::string tab_name_,
+             std::vector<std::shared_ptr<BinaryExpr>> conds_)
       : tab_name(std::move(tab_name_)), conds(std::move(conds_)) {}
 };
 
@@ -181,9 +198,12 @@ struct UpdateStmt : public TreeNode {
   std::vector<std::shared_ptr<SetClause>> set_clauses;
   std::vector<std::shared_ptr<BinaryExpr>> conds;
 
-  UpdateStmt(std::string tab_name_, std::vector<std::shared_ptr<SetClause>> set_clauses_,
+  UpdateStmt(std::string tab_name_,
+             std::vector<std::shared_ptr<SetClause>> set_clauses_,
              std::vector<std::shared_ptr<BinaryExpr>> conds_)
-      : tab_name(std::move(tab_name_)), set_clauses(std::move(set_clauses_)), conds(std::move(conds_)) {}
+      : tab_name(std::move(tab_name_)),
+        set_clauses(std::move(set_clauses_)),
+        conds(std::move(conds_)) {}
 };
 
 struct JoinExpr : public TreeNode {
@@ -192,8 +212,12 @@ struct JoinExpr : public TreeNode {
   std::vector<std::shared_ptr<BinaryExpr>> conds;
   JoinType type;
 
-  JoinExpr(std::string left_, std::string right_, std::vector<std::shared_ptr<BinaryExpr>> conds_, JoinType type_)
-      : left(std::move(left_)), right(std::move(right_)), conds(std::move(conds_)), type(type_) {}
+  JoinExpr(std::string left_, std::string right_,
+           std::vector<std::shared_ptr<BinaryExpr>> conds_, JoinType type_)
+      : left(std::move(left_)),
+        right(std::move(right_)),
+        conds(std::move(conds_)),
+        type(type_) {}
 };
 
 // sqb 增加对explain的支持 need_explain将会在语法分析时被赋值
@@ -203,15 +227,31 @@ struct SelectStmt : public TreeNode {
   std::vector<std::shared_ptr<BinaryExpr>> conds;
   std::vector<std::shared_ptr<JoinExpr>> jointree;
 
+  bool has_agg;
+  std::vector<std::shared_ptr<Col>> group_by_cols;
+  std::vector<std::shared_ptr<BinaryExpr>> having_conds;
+
   bool has_sort;
-  std::shared_ptr<OrderBy> order;
+  std::vector<std::shared_ptr<OrderBy>> order_by;
+  int limit;
 
   bool need_explain{false};
 
-  SelectStmt(std::vector<std::shared_ptr<Col>> cols_, std::vector<std::string> tabs_,
-             std::vector<std::shared_ptr<BinaryExpr>> conds_, std::shared_ptr<OrderBy> order_)
-      : cols(std::move(cols_)), tabs(std::move(tabs_)), conds(std::move(conds_)), order(std::move(order_)) {
-    has_sort = (bool)order;
+  SelectStmt(std::vector<std::shared_ptr<Col>> cols_,
+             std::vector<std::string> tabs_,
+             std::vector<std::shared_ptr<BinaryExpr>> conds_,
+             std::vector<std::shared_ptr<Col>> group_by_cols_,
+             std::vector<std::shared_ptr<BinaryExpr>> having_conds_,
+             std::vector<std::shared_ptr<OrderBy>> order_by_, int limit_)
+      : cols(std::move(cols_)),
+        tabs(std::move(tabs_)),
+        conds(std::move(conds_)),
+        group_by_cols(std::move(group_by_cols_)),
+        having_conds(std::move(having_conds_)),
+        order_by(std::move(order_by_)),
+        limit(limit_) {
+    has_sort = !order_by.empty();
+    has_agg = !group_by_cols.empty();
   }
 };
 
@@ -230,7 +270,8 @@ struct SetStmt : public TreeNode {
   SetKnobType set_knob_type_;
   bool bool_val_;
 
-  SetStmt(SetKnobType &type, bool bool_value) : set_knob_type_(type), bool_val_(bool_value) {}
+  SetStmt(SetKnobType &type, bool bool_value)
+      : set_knob_type_(type), bool_val_(bool_value) {}
 };
 
 // Semantic value
@@ -266,6 +307,7 @@ struct SemValue {
   std::vector<std::shared_ptr<BinaryExpr>> sv_conds;
 
   std::shared_ptr<OrderBy> sv_orderby;
+  std::vector<std::shared_ptr<OrderBy>> sv_orderbys;
 
   SetKnobType sv_setKnobType;
 };

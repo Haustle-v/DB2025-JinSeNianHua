@@ -75,11 +75,13 @@ void QlManager::run_mutli_query(std::shared_ptr<Plan> plan, Context *context) {
 
 // 执行help; show tables; desc table; begin; commit; abort;语句
 // sqb show index 5.30
-void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Context *context) {
+void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id,
+                                Context *context) {
   if (auto x = std::dynamic_pointer_cast<OtherPlan>(plan)) {
     switch (x->tag) {
       case T_Help: {
-        memcpy(context->data_send_ + *(context->offset_), help_info, strlen(help_info));
+        memcpy(context->data_send_ + *(context->offset_), help_info,
+               strlen(help_info));
         *(context->offset_) = strlen(help_info);
         break;
       }
@@ -148,12 +150,16 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
 }
 
 // 执行select语句，select语句的输出除了需要返回客户端外，还需要写入output.txt文件中
-void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, std::vector<TabCol> sel_cols,
-                            Context *context) {
+void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot,
+                            std::vector<TabCol> sel_cols, Context *context) {
   std::vector<std::string> captions;
   captions.reserve(sel_cols.size());
   for (auto &sel_col : sel_cols) {
-    captions.push_back(sel_col.col_name);
+    if (sel_col.aggFuncType != ast::AGG_INVALID) {
+      captions.push_back(sel_col.alias);
+    } else {
+      captions.push_back(sel_col.col_name);
+    }
   }
 
   // Print header into buffer
@@ -173,7 +179,8 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
   // Print records
   size_t num_rec = 0;
   // 执行query_plan
-  for (executorTreeRoot->beginTuple(); !executorTreeRoot->is_end(); executorTreeRoot->nextTuple()) {
+  for (executorTreeRoot->beginTuple(); !executorTreeRoot->is_end();
+       executorTreeRoot->nextTuple()) {
     auto Tuple = executorTreeRoot->Next();
     std::vector<std::string> columns;
     for (auto &col : executorTreeRoot->cols()) {
@@ -207,7 +214,9 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
 }
 
 // 执行DML语句
-void QlManager::run_dml(std::unique_ptr<AbstractExecutor> exec) { exec->Next(); }
+void QlManager::run_dml(std::unique_ptr<AbstractExecutor> exec) {
+  exec->Next();
+}
 
 // 创建检查点
 void QlManager::create_checkpoint(Context *context) {
@@ -224,7 +233,8 @@ void QlManager::create_checkpoint(Context *context) {
   for (auto &entry : sm_manager_->fhs_) {
     auto fhdl_ptr = entry.second.get();
     RmFileHdr file_hdr = fhdl_ptr->get_file_hdr();
-    dm_ptr->write_page(fhdl_ptr->GetFd(), RM_FILE_HDR_PAGE, (char *)(&(file_hdr)), sizeof(file_hdr));
+    dm_ptr->write_page(fhdl_ptr->GetFd(), RM_FILE_HDR_PAGE,
+                       (char *)(&(file_hdr)), sizeof(file_hdr));
     bpm_ptr->flush_all_pages(fhdl_ptr->GetFd());
   }
 }

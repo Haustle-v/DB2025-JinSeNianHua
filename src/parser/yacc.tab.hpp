@@ -82,14 +82,23 @@ extern int yydebug;
     NEQ = 292,
     GEQ = 293,
     T_EOF = 294,
-    IDENTIFIER = 295,
-    VALUE_STRING = 296,
-    VALUE_INT = 297,
-    VALUE_FLOAT = 298,
-    VALUE_BOOL = 299,
-    EXPLAIN = 300,
-    STATIC_CHECKPOINT = 301,
-    CRASH = 302
+    MAX = 295,
+    MIN = 296,
+    SUM = 297,
+    AVG = 298,
+    COUNT = 299,
+    AS = 300,
+    GROUP = 301,
+    HAVING = 302,
+    LIMIT = 303,
+    IDENTIFIER = 304,
+    VALUE_STRING = 305,
+    VALUE_INT = 306,
+    VALUE_FLOAT = 307,
+    VALUE_BOOL = 308,
+    EXPLAIN = 309,
+    STATIC_CHECKPOINT = 310,
+    CRASH = 311
   };
 #endif
 

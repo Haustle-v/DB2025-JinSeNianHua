@@ -1,7 +1,7 @@
 /* Copyright (c) 2023 Renmin University of China
 RMDB is licensed under Mulan PSL v2.
-You can use this software according to the terms and conditions of the Mulan PSL v2.
-You may obtain a copy of Mulan PSL v2 at:
+You can use this software according to the terms and conditions of the Mulan PSL
+v2. You may obtain a copy of Mulan PSL v2 at:
         http://license.coscl.org.cn/MulanPSL2
 THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
 EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
@@ -34,6 +34,12 @@ class Query {
   std::vector<SetClause> set_clauses;
   // insert 的values值
   std::vector<Value> values;
+  // group by 条件
+  std::vector<TabCol> group_by_cols;
+  // having 条件
+  std::vector<Condition> having_conds;
+  // order by 条件
+  OrderBys order_bys;
 
   // sqb explain 标识
   bool need_explain{false};
@@ -53,9 +59,18 @@ class Analyze {
 
  private:
   TabCol check_column(const std::vector<ColMeta> &all_cols, TabCol target);
-  void get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols);
-  void get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds, std::vector<Condition> &conds);
-  void check_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds);
+  void get_all_cols(const std::vector<std::string> &tab_names,
+                    std::vector<ColMeta> &all_cols);
+  void get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
+                  std::vector<Condition> &conds);
+  void check_clause(const std::vector<std::string> &tab_names,
+                    std::vector<Condition> &conds);
   Value convert_sv_value(const std::shared_ptr<ast::Value> &sv_val);
   CompOp convert_sv_comp_op(ast::SvCompOp op);
+  void get_having_clause(
+      const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
+      std::vector<Condition> &conds);
+  void check_having_clause(const std::vector<std::string> &tab_names,
+                           std::vector<Condition> &conds,
+                           const std::vector<TabCol> &group_by_cols);
 };

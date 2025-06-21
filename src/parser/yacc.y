@@ -3,6 +3,7 @@
 #include "yacc.tab.h"
 #include <iostream>
 #include <memory>
+#include <limits.h>
 
 int yylex(YYSTYPE *yylval, YYLTYPE *yylloc);
 
@@ -25,6 +26,7 @@ using namespace ast;
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
+%token MAX MIN SUM AVG COUNT AS GROUP HAVING LIMIT
 
 // type-specific tokens
 %token <sv_str> IDENTIFIER VALUE_STRING
@@ -44,17 +46,19 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %type <sv_expr> expr
 %type <sv_val> value
 %type <sv_vals> valueList
-%type <sv_str> tbName colName
+%type <sv_str> tbName colName alias
 %type <sv_strs> tableList colNameList
-%type <sv_col> col
-%type <sv_cols> colList selector
+%type <sv_col> col aggCol
+%type <sv_cols> colList selector optGroupByClause
 %type <sv_set_clause> setClause
 %type <sv_set_clauses> setClauses
 %type <sv_cond> condition
-%type <sv_conds> whereClause optWhereClause
-%type <sv_orderby>  order_clause opt_order_clause
+%type <sv_conds> whereClause optWhereClause optHavingClause
+%type <sv_orderby>  order_clause
+%type <sv_orderbys> opt_order_clause order_clauses
 %type <sv_orderby_dir> opt_asc_desc
 %type <sv_setKnobType> set_knob_type
+%type <sv_int> limit_clause
 
 %%
 start:
@@ -180,9 +184,39 @@ dml:
     {
         $$ = std::make_shared<UpdateStmt>($2, $4, $5);
     }
-    |   SELECT selector FROM tableList optWhereClause opt_order_clause
+    |   SELECT selector FROM tableList optWhereClause optGroupByClause optHavingClause opt_order_clause limit_clause
     {
-        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6);
+        $$ = std::make_shared<SelectStmt>($2, $4, $5, $6, $7, $8, $9);
+    }
+    ;
+
+limit_clause:
+    LIMIT VALUE_INT
+    {
+        $$ = $2;
+    }
+    |   /* epsilon */
+    {
+        $$ = INT_MAX;
+    }
+    ;
+
+optGroupByClause:
+        /* empty */
+    {
+        $$ = {};
+    }
+    |   GROUP BY colList
+    {
+        $$ = $3;
+    }
+    ;
+
+optHavingClause:
+        /* epsilon */ { /* ignore*/ }
+    |   HAVING whereClause
+    {
+        $$ = $2;
     }
     ;
 
@@ -295,6 +329,10 @@ col:
     {
         $$ = std::make_shared<Col>("", $1);
     }
+    |   aggCol
+    {
+        $$ = $1;
+    }
     ;
 
 colList:
@@ -372,6 +410,57 @@ selector:
     |   colList
     ;
 
+aggCol:
+        MAX '(' col ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_MAX, $6));
+    }
+    |   MIN '(' col ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_MIN, $6));
+    }
+    |   SUM '(' col ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_SUM, $6));
+    }
+    |   AVG '(' col ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_AVG, $6));
+    }
+    |   COUNT '(' col ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_COUNT, $6));
+    }
+    |   COUNT '(' '*' ')' AS alias
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>("", "*", AGG_COUNT, $6));
+    }
+    |   MAX '(' col ')'
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_MAX, ""));
+    }
+    |   MIN '(' col ')' 
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_MIN, ""));
+    }
+    |   SUM '(' col ')'
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_SUM, ""));
+    }
+    |   AVG '(' col ')'
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_AVG, ""));
+    }
+    |   COUNT '(' col ')'
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>($3->tab_name, $3->col_name, AGG_COUNT, ""));
+    }
+    |   COUNT '(' '*' ')'
+    {
+        $$ = std::static_pointer_cast<Col>(std::make_shared<AggCol>("", "*", AGG_COUNT, ""));
+    }
+    ;
+
 tableList:
         tbName
     {
@@ -388,15 +477,26 @@ tableList:
     ;
 
 opt_order_clause:
-    ORDER BY order_clause      
+    ORDER BY order_clauses
     { 
         $$ = $3; 
     }
     |   /* epsilon */ { /* ignore*/ }
     ;
 
+order_clauses:
+    order_clause
+    {
+        $$ = std::vector<std::shared_ptr<OrderBy>>{$1};
+    }
+    |   order_clauses ',' order_clause
+    {
+        $$.push_back($3);
+    }
+    ;
+
 order_clause:
-      col  opt_asc_desc 
+      col  opt_asc_desc
     { 
         $$ = std::make_shared<OrderBy>($1, $2);
     }
@@ -405,7 +505,7 @@ order_clause:
 opt_asc_desc:
     ASC          { $$ = OrderBy_ASC;     }
     |  DESC      { $$ = OrderBy_DESC;    }
-    |       { $$ = OrderBy_DEFAULT; }
+    |            { $$ = OrderBy_ASC; }
     ;    
 
 set_knob_type:
@@ -416,4 +516,6 @@ set_knob_type:
 tbName: IDENTIFIER;
 
 colName: IDENTIFIER;
+
+alias: IDENTIFIER;
 %%

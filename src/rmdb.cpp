@@ -129,7 +129,7 @@ void *client_handler(void *sock_fd) {
       if (ast::parse_tree != nullptr) {
         try {
           // analyze and rewrite
-          std::shared_ptr<Query> query = analyze->do_analyze(ast::parse_tree);
+          std::shared_ptr<Query> query = analyze->do_analyze(ast::parse_tree); // 将语法树转换为plan树
           yy_delete_buffer(buf);
           finish_analyze = true;
           pthread_mutex_unlock(buffer_mutex);

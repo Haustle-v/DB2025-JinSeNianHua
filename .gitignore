@@ -4,3 +4,4 @@ build/
 start_client.exp
 run_client.sh
 .clang-format
+*.exp

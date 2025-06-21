@@ -17,11 +17,16 @@ See the Mulan PSL v2 for more details. */
 #include <vector>
 #include "defs.h"
 #include "record/rm_defs.h"
+#include "parser/ast.h"
 
 
 struct TabCol {
     std::string tab_name;
     std::string col_name;
+
+    std::string alias;
+
+    ast::AggFuncType aggFuncType;
 
     friend bool operator<(const TabCol &x, const TabCol &y) {
         return std::make_pair(x.tab_name, x.col_name) < std::make_pair(y.tab_name, y.col_name);
@@ -85,4 +90,11 @@ struct Condition {
 struct SetClause {
     TabCol lhs;
     Value rhs;
+};
+
+struct OrderBys
+{
+    std::vector<TabCol> cols;
+    std::vector<bool> is_asc;
+    int limit;
 };
