@@ -64,100 +64,118 @@ class TreePrinter {
     }
   }
 
-  static void print_node(const std::shared_ptr<TreeNode> &node, int offset) {
-    std::cout << offset2string(offset);
-    offset += 2;
-    if (auto x = std::dynamic_pointer_cast<Help>(node)) {
-      std::cout << "HELP\n";
-    } else if (auto x = std::dynamic_pointer_cast<ShowTables>(node)) {
-      std::cout << "SHOW_TABLES\n";
-    } else if (auto x = std::dynamic_pointer_cast<CreateTable>(node)) {
-      std::cout << "CREATE_TABLE\n";
-      print_val(x->tab_name, offset);
-      print_node_list(x->fields, offset);
-    } else if (auto x = std::dynamic_pointer_cast<DropTable>(node)) {
-      std::cout << "DROP_TABLE\n";
-      print_val(x->tab_name, offset);
-    } else if (auto x = std::dynamic_pointer_cast<DescTable>(node)) {
-      std::cout << "DESC_TABLE\n";
-      print_val(x->tab_name, offset);
-    } else if (auto x = std::dynamic_pointer_cast<CreateIndex>(node)) {
-      std::cout << "CREATE_INDEX\n";
-      print_val(x->tab_name, offset);
-      // print_val(x->col_name, offset);
-      for (auto col_name : x->col_names) print_val(col_name, offset);
-    } else if (auto x = std::dynamic_pointer_cast<DropIndex>(node)) {
-      std::cout << "DROP_INDEX\n";
-      print_val(x->tab_name, offset);
-      // print_val(x->col_name, offset);
-      for (auto col_name : x->col_names) print_val(col_name, offset);
-    } else if (auto x = std::dynamic_pointer_cast<ShowIndex>(node)) {
-      // sqb 5.30 show index
-      std::cout << "SHOW_INDEX\n";
-      print_val(x->tab_name, offset);
-    } else if (auto x = std::dynamic_pointer_cast<ColDef>(node)) {
-      std::cout << "COL_DEF\n";
-      print_val(x->col_name, offset);
-      print_node(x->type_len, offset);
-    } else if (auto x = std::dynamic_pointer_cast<Col>(node)) {
-      std::cout << "COL\n";
-      print_val(x->tab_name, offset);
-      print_val(x->col_name, offset);
-    } else if (auto x = std::dynamic_pointer_cast<TypeLen>(node)) {
-      std::cout << "TYPE_LEN\n";
-      print_val(type2str(x->type), offset);
-      print_val(x->len, offset);
-    } else if (auto x = std::dynamic_pointer_cast<IntLit>(node)) {
-      std::cout << "INT_LIT\n";
-      print_val(x->val, offset);
-    } else if (auto x = std::dynamic_pointer_cast<FloatLit>(node)) {
-      std::cout << "FLOAT_LIT\n";
-      print_val(x->val, offset);
-    } else if (auto x = std::dynamic_pointer_cast<StringLit>(node)) {
-      std::cout << "STRING_LIT\n";
-      print_val(x->val, offset);
-    } else if (auto x = std::dynamic_pointer_cast<SetClause>(node)) {
-      std::cout << "SET_CLAUSE\n";
-      print_val(x->col_name, offset);
-      print_node(x->val, offset);
-    } else if (auto x = std::dynamic_pointer_cast<BinaryExpr>(node)) {
-      std::cout << "BINARY_EXPR\n";
-      print_node(x->lhs, offset);
-      print_val(op2str(x->op), offset);
-      print_node(x->rhs, offset);
-    } else if (auto x = std::dynamic_pointer_cast<InsertStmt>(node)) {
-      std::cout << "INSERT\n";
-      print_val(x->tab_name, offset);
-      print_node_list(x->vals, offset);
-    } else if (auto x = std::dynamic_pointer_cast<DeleteStmt>(node)) {
-      std::cout << "DELETE\n";
-      print_val(x->tab_name, offset);
-      print_node_list(x->conds, offset);
-    } else if (auto x = std::dynamic_pointer_cast<UpdateStmt>(node)) {
-      std::cout << "UPDATE\n";
-      print_val(x->tab_name, offset);
-      print_node_list(x->set_clauses, offset);
-      print_node_list(x->conds, offset);
-    } else if (auto x = std::dynamic_pointer_cast<SelectStmt>(node)) {
-      // sqb 增加explain支持
-      if (x->need_explain) {
-        std::cout << "EXPLAIN SELECT\n";
-      } else {
-        std::cout << "SELECT\n";
-      }
-      print_node_list(x->cols, offset);
-      print_val_list(x->tabs, offset);
-      print_node_list(x->conds, offset);
-    } else if (auto x = std::dynamic_pointer_cast<TxnBegin>(node)) {
-      std::cout << "BEGIN\n";
-    } else if (auto x = std::dynamic_pointer_cast<TxnCommit>(node)) {
-      std::cout << "COMMIT\n";
-    } else if (auto x = std::dynamic_pointer_cast<TxnAbort>(node)) {
-      std::cout << "ABORT\n";
-    } else if (auto x = std::dynamic_pointer_cast<TxnRollback>(node)) {
-      std::cout << "ROLLBACK\n";
-    } else {
-      assert(0);
+    static void print_node(const std::shared_ptr<TreeNode> &node, int offset) {
+        std::cout << offset2string(offset);
+        offset += 2;
+        if (auto x = std::dynamic_pointer_cast<Help>(node)) {
+            std::cout << "HELP\n";
+        } else if (auto x = std::dynamic_pointer_cast<ShowTables>(node)) {
+            std::cout << "SHOW_TABLES\n";
+        } else if (auto x = std::dynamic_pointer_cast<CreateTable>(node)) {
+            std::cout << "CREATE_TABLE\n";
+            print_val(x->tab_name, offset);
+            print_node_list(x->fields, offset);
+        } else if (auto x = std::dynamic_pointer_cast<DropTable>(node)) {
+            std::cout << "DROP_TABLE\n";
+            print_val(x->tab_name, offset);
+        } else if (auto x = std::dynamic_pointer_cast<DescTable>(node)) {
+            std::cout << "DESC_TABLE\n";
+            print_val(x->tab_name, offset);
+        } else if (auto x = std::dynamic_pointer_cast<CreateIndex>(node)) {
+            std::cout << "CREATE_INDEX\n";
+            print_val(x->tab_name, offset);
+            // print_val(x->col_name, offset);
+            for(auto col_name: x->col_names)
+                print_val(col_name, offset);
+        } else if (auto x = std::dynamic_pointer_cast<DropIndex>(node)) {
+            std::cout << "DROP_INDEX\n";
+            print_val(x->tab_name, offset);
+            // print_val(x->col_name, offset);
+            for(auto col_name: x->col_names)
+                print_val(col_name, offset);
+        } else if (auto x = std::dynamic_pointer_cast<ColDef>(node)) {
+            std::cout << "COL_DEF\n";
+            print_val(x->col_name, offset);
+            print_node(x->type_len, offset);
+        } else if (auto x = std::dynamic_pointer_cast<ShowIndex>(node)) {
+            // sqb 5.30 show index
+            std::cout << "SHOW_INDEX\n";
+            print_val(x->tab_name, offset);
+        }
+        else if (auto x = std::dynamic_pointer_cast<AggCol>(node)) {
+            std::cout << "AGG_COL\n";
+            print_val(x->tab_name, offset);
+            print_val(x->col_name, offset);
+            print_val(x->agg_type, offset);
+            print_val(x->alias, offset);
+        } else if (auto x = std::dynamic_pointer_cast<Col>(node)) {
+            std::cout << "COL\n";
+            print_val(x->tab_name, offset);
+            print_val(x->col_name, offset);
+        } else if (auto x = std::dynamic_pointer_cast<TypeLen>(node)) {
+            std::cout << "TYPE_LEN\n";
+            print_val(type2str(x->type), offset);
+            print_val(x->len, offset);
+        } else if (auto x = std::dynamic_pointer_cast<IntLit>(node)) {
+            std::cout << "INT_LIT\n";
+            print_val(x->val, offset);
+        } else if (auto x = std::dynamic_pointer_cast<FloatLit>(node)) {
+            std::cout << "FLOAT_LIT\n";
+            print_val(x->val, offset);
+        } else if (auto x = std::dynamic_pointer_cast<StringLit>(node)) {
+            std::cout << "STRING_LIT\n";
+            print_val(x->val, offset);
+        } else if (auto x = std::dynamic_pointer_cast<SetClause>(node)) {
+            std::cout << "SET_CLAUSE\n";
+            print_val(x->col_name, offset);
+            print_node(x->val, offset);
+        } else if (auto x = std::dynamic_pointer_cast<BinaryExpr>(node)) {
+            std::cout << "BINARY_EXPR\n";
+            print_node(x->lhs, offset);
+            print_val(op2str(x->op), offset);
+            print_node(x->rhs, offset);
+        } else if (auto x = std::dynamic_pointer_cast<OrderBy>(node)) {
+            std::cout << "ORDER_BY\n";
+            print_node(x->col, offset);
+            print_val(x->orderby_dir, offset);
+        } else if (auto x = std::dynamic_pointer_cast<InsertStmt>(node)) {
+            std::cout << "INSERT\n";
+            print_val(x->tab_name, offset);
+            print_node_list(x->vals, offset);
+        } else if (auto x = std::dynamic_pointer_cast<DeleteStmt>(node)) {
+            std::cout << "DELETE\n";
+            print_val(x->tab_name, offset);
+            print_node_list(x->conds, offset);
+        } else if (auto x = std::dynamic_pointer_cast<UpdateStmt>(node)) {
+            std::cout << "UPDATE\n";
+            print_val(x->tab_name, offset);
+            print_node_list(x->set_clauses, offset);
+            print_node_list(x->conds, offset);
+        } else if (auto x = std::dynamic_pointer_cast<SelectStmt>(node)) {
+            // sqb 增加explain支持
+            if (x->need_explain) {
+              std::cout << "EXPLAIN SELECT\n";
+            } else {
+              std::cout << "SELECT\n";
+            }
+            print_node_list(x->cols, offset);
+            print_val_list(x->tabs, offset);
+            print_node_list(x->conds, offset);
+            print_node_list(x->group_by_cols, offset);
+            print_node_list(x->having_conds, offset);
+            print_node_list(x->order_by, offset);
+            print_val(x->limit, offset);
+        } else if (auto x = std::dynamic_pointer_cast<TxnBegin>(node)) {
+            std::cout << "BEGIN\n";
+        } else if (auto x = std::dynamic_pointer_cast<TxnCommit>(node)) {
+            std::cout << "COMMIT\n";
+        } else if (auto x = std::dynamic_pointer_cast<TxnAbort>(node)) {
+            std::cout << "ABORT\n";
+        } else if (auto x = std::dynamic_pointer_cast<TxnRollback>(node)) {
+            std::cout << "ROLLBACK\n";
+        } else {
+            assert(0);
+        }
     }
   }
 };

@@ -43,7 +43,9 @@ typedef enum PlanTag {
   T_NestLoop,
   T_SortMerge,  // sort merge join
   T_Sort,
-  T_Projection
+  T_Projection,
+  T_Agg,
+  T_Having
 } PlanTag;
 
 // 查询执行计划
@@ -53,28 +55,53 @@ class Plan {
   virtual ~Plan() = default;
 };
 
-class ScanPlan : public Plan {
- public:
-  ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name,
-           std::vector<Condition> conds,
-           std::vector<std::string> index_col_names) {
-    Plan::tag = tag;
-    tab_name_ = std::move(tab_name);
-    conds_ = std::move(conds);
-    TabMeta &tab = sm_manager->db_.get_table(tab_name_);
-    cols_ = tab.cols;
-    len_ = cols_.back().offset + cols_.back().len;
-    fed_conds_ = conds_;
-    index_col_names_ = index_col_names;
-  }
-  ~ScanPlan() {}
-  // 以下变量同ScanExecutor中的变量
-  std::string tab_name_;
-  std::vector<ColMeta> cols_;
-  std::vector<Condition> conds_;
-  size_t len_;
-  std::vector<Condition> fed_conds_;
-  std::vector<std::string> index_col_names_;
+class AggPlan : public Plan
+{
+public:
+    std::vector<TabCol> sel_cols_;
+    std::shared_ptr<Plan> subplan_;
+    std::vector<TabCol> group_by_cols;
+
+    AggPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> group_by_cols, std::vector<TabCol> sel_cols_) : sel_cols_(std::move(sel_cols_)), subplan_(std::move(subplan)), group_by_cols(std::move(group_by_cols)) { Plan::tag = tag; }
+
+    ~AggPlan() override = default;
+};
+
+class HavingPlan : public Plan
+{
+public:
+    std::shared_ptr<Plan> subplan_;
+    std::vector<Condition> having_conds_;
+
+    HavingPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<Condition> having_conds) : subplan_(std::move(subplan)), having_conds_(std::move(having_conds)) { Plan::tag = tag; }
+
+    ~HavingPlan() override = default;
+};
+
+class ScanPlan : public Plan
+{
+    public:
+        ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds, std::vector<std::string> index_col_names)
+        {
+            Plan::tag = tag;
+            tab_name_ = std::move(tab_name);
+            conds_ = std::move(conds);
+            TabMeta &tab = sm_manager->db_.get_table(tab_name_);
+            cols_ = tab.cols;
+            len_ = cols_.back().offset + cols_.back().len;
+            fed_conds_ = conds_;
+            index_col_names_ = index_col_names;
+        
+        }
+        ~ScanPlan(){}
+        // 以下变量同ScanExecutor中的变量
+        std::string tab_name_;                     
+        std::vector<ColMeta> cols_;                
+        std::vector<Condition> conds_;             
+        size_t len_;                               
+        std::vector<Condition> fed_conds_;
+        std::vector<std::string> index_col_names_;
+    
 };
 
 class JoinPlan : public Plan {
@@ -111,19 +138,23 @@ class ProjectionPlan : public Plan {
   std::vector<TabCol> sel_cols_;
 };
 
-class SortPlan : public Plan {
- public:
-  SortPlan(PlanTag tag, std::shared_ptr<Plan> subplan, TabCol sel_col,
-           bool is_desc) {
-    Plan::tag = tag;
-    subplan_ = std::move(subplan);
-    sel_col_ = sel_col;
-    is_desc_ = is_desc;
-  }
-  ~SortPlan() {}
-  std::shared_ptr<Plan> subplan_;
-  TabCol sel_col_;
-  bool is_desc_;
+class SortPlan : public Plan
+{
+    public:
+        SortPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, std::vector<bool> is_asc, int limit)
+        {
+            Plan::tag = tag;
+            subplan_ = std::move(subplan);
+            sel_cols_ = std::move(sel_cols);
+            is_asc_ = std::move(is_asc);
+            limit_ = limit;
+        }
+        ~SortPlan(){}
+        std::shared_ptr<Plan> subplan_;
+        std::vector<TabCol> sel_cols_;
+        std::vector<bool> is_asc_;
+        int limit_;
+        
 };
 
 // dml语句，包括insert; delete; update; select语句　

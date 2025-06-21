@@ -85,6 +85,15 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "ORDER" { return ORDER; }
 "BY" {  return BY;  }
 "ASC" { return ASC; }
+"MAX" { return MAX; }
+"MIN" { return MIN; }
+"SUM" { return SUM; }
+"AVG" { return AVG; }
+"COUNT" { return COUNT; }
+"AS" { return AS; }
+"GROUP" { return GROUP; }
+"HAVING" { return HAVING; }
+"LIMIT" { return LIMIT; }
 "ENABLE_NESTLOOP" { return ENABLE_NESTLOOP; }
 "ENABLE_SORTMERGE" { return ENABLE_SORTMERGE; }
 "EXPLAIN" { return EXPLAIN; }

@@ -431,7 +431,7 @@ union yyalloc
 /* YYNTOKENS -- Number of terminals.  */
 #define YYNTOKENS  56
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  31
+#define YYNNTS  37
 /* YYNRULES -- Number of rules.  */
 #define YYNRULES  78
 /* YYNSTATES -- Number of states.  */

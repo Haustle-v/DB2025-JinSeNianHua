@@ -142,11 +142,15 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
 // 执行select语句，select语句的输出除了需要返回客户端外，还需要写入output.txt文件中
 void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, std::vector<TabCol> sel_cols,
                             Context *context) {
-  std::vector<std::string> captions;
-  captions.reserve(sel_cols.size());
-  for (auto &sel_col : sel_cols) {
-    captions.push_back(sel_col.col_name);
-  }
+    std::vector<std::string> captions;
+    captions.reserve(sel_cols.size());
+    for (auto &sel_col : sel_cols) {
+        if (sel_col.aggFuncType != ast::AGG_INVALID) {
+            captions.push_back(sel_col.alias);
+        } else {
+            captions.push_back(sel_col.col_name);
+        }
+    }
 
   // Print header into buffer
   RecordPrinter rec_printer(sel_cols.size());

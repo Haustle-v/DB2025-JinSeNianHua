@@ -10,7 +10,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
-#include "defs.h"
+#include "../defs.h"
 
 int yyparse();
 
