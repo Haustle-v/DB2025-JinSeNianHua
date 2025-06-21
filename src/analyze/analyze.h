@@ -62,6 +62,6 @@ private:
     Value convert_sv_value(const std::shared_ptr<ast::Value> &sv_val);
     CompOp convert_sv_comp_op(ast::SvCompOp op);
     void get_having_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds, std::vector<Condition> &conds);
-    void check_having_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds);
+    void check_having_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds, const std::vector<TabCol> &group_by_cols);
 };
 

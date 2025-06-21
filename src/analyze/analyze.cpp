@@ -97,7 +97,7 @@ std::shared_ptr<Query> Analyze::do_analyze(
 
     // 处理having条件
     get_having_clause(x->having_conds, query->having_conds);
-    check_having_clause(query->tables, query->having_conds);
+    check_having_clause(query->tables, query->having_conds, query->group_by_cols);
 
     // 处理order by条件
     if (x->has_sort) {
@@ -113,12 +113,12 @@ std::shared_ptr<Query> Analyze::do_analyze(
       query->order_bys.limit = x->limit;
     }
 
-        // WHERE 子句中不能用聚集函数作为条件表达式
-    for (auto &cond : x->conds) {
-      if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(cond->lhs)) {
-        throw GroupByError(agg_col->col_name);
-      }
-    }
+    // // WHERE 子句中不能用聚集函数作为条件表达式
+    // for (auto &cond : x->conds) {
+    //   if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(cond->lhs)) {
+    //     throw GroupByError(agg_col->col_name);
+    //   }
+    // }
 
     // 处理where条件
     get_clause(x->conds, query->conds);
@@ -253,12 +253,25 @@ void Analyze::get_clause(
 }
 
 void Analyze::check_having_clause(const std::vector<std::string> &tab_names,
-                           std::vector<Condition> &conds) {
+                           std::vector<Condition> &conds,
+                           const std::vector<TabCol> &group_by_cols) {
   // auto all_cols = get_all_cols(tab_names);
   std::vector<ColMeta> all_cols;
   get_all_cols(tab_names, all_cols);
   // Get raw values in where clause
   for (auto &cond : conds) {
+    if (cond.lhs_col.aggFuncType == ast::AGG_INVALID) {
+      bool found_in_group_by = false;
+      for (const auto &group_col : group_by_cols) {
+        if (cond.lhs_col.col_name == group_col.col_name) {
+          found_in_group_by = true;
+          break;
+        }
+      }
+      if (!found_in_group_by) {
+        throw GroupByError(cond.lhs_col.col_name);
+      }
+    }
     // Infer table name from column name
     ColType lhs_type;
     int lhs_col_len;
@@ -296,7 +309,8 @@ void Analyze::check_having_clause(const std::vector<std::string> &tab_names,
     if (lhs_type != rhs_type) {
       if (lhs_type == TYPE_FLOAT && rhs_type == TYPE_INT) {
         cond.rhs_val.type = TYPE_FLOAT;
-        *(float *)(cond.rhs_val.raw->data) = (float)cond.rhs_val.int_val;
+        cond.rhs_val.float_val = (float)cond.rhs_val.int_val;
+        *(float *)(cond.rhs_val.raw->data) = cond.rhs_val.float_val;
       } else {
         throw IncompatibleTypeError(coltype2str(lhs_type),
                                     coltype2str(rhs_type));
@@ -334,7 +348,8 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names,
     if (lhs_type != rhs_type) {
       if (lhs_type == TYPE_FLOAT && rhs_type == TYPE_INT) {
         cond.rhs_val.type = TYPE_FLOAT;
-        *(float *)(cond.rhs_val.raw->data) = (float)cond.rhs_val.int_val;
+        cond.rhs_val.float_val = (float)cond.rhs_val.int_val;
+        *(float *)(cond.rhs_val.raw->data) = cond.rhs_val.float_val;
       } else {
         throw IncompatibleTypeError(coltype2str(lhs_type),
                                     coltype2str(rhs_type));

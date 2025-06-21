@@ -6,10 +6,10 @@
 #include <variant>
 #include "parser/ast.h"
 #include <limits>
+#include <string>
 
 class AggPlanExecutor : public AbstractExecutor {
     private:
-        // AggValue 结构体保持修复后的版本，以支持 AVG
         struct AggValue {
             std::variant<int32_t, float> value;
             ColType type;
@@ -65,7 +65,6 @@ class AggPlanExecutor : public AbstractExecutor {
         size_t output_idx_;
 
     public:
-        // 【修复】构造函数保持修复后的版本，以正确处理AVG(INT)的元数据
         AggPlanExecutor(std::unique_ptr<AbstractExecutor> prev, std::vector<TabCol> group_by_cols, std::vector<TabCol> sel_cols) {
             prev_ = std::move(prev);
             group_by_cols_ = std::move(group_by_cols);
@@ -101,7 +100,6 @@ class AggPlanExecutor : public AbstractExecutor {
             len_ = curr_offset;
         }
 
-        // 其他接口方法保持不变...
         void beginTuple() override {
             if (is_first_) {
                 computeAggregation();
@@ -151,7 +149,6 @@ class AggPlanExecutor : public AbstractExecutor {
 
 
     private:
-        // 【修复】updateAggValue 保持修复后的版本，以防止AVG(INT)溢出
         void updateAggValue(AggValue& agg_value, const char* data, const ColMeta& col_meta) {
             if (agg_value.agg_type == ast::AggFuncType::AGG_COUNT) {
                 std::get<int32_t>(agg_value.value)++;
@@ -196,7 +193,6 @@ class AggPlanExecutor : public AbstractExecutor {
         void computeAggregation() {
             prev_->beginTuple();
             
-            // 【修复】空输入的处理保持修复后的健壮版本
             if (prev_->is_end() && group_by_cols_.empty()) {
                 auto new_record = std::make_unique<RmRecord>(len_);
                 int curr_index = 0;
@@ -221,9 +217,13 @@ class AggPlanExecutor : public AbstractExecutor {
 
                 GroupKey group_key;
                 std::string key_str;
-                for (const auto &group_col : group_by_cols_) {
-                    auto col_meta = prev_->get_col_offset(group_col);
-                    key_str.append(record->data + col_meta.offset, col_meta.len);
+                if (group_by_cols_.empty()) {
+                    key_str = "__grand_total_group__";
+                } else {
+                    for (const auto &group_col : group_by_cols_) {
+                        auto col_meta = prev_->get_col_offset(group_col);
+                        key_str.append(record->data + col_meta.offset, col_meta.len);
+                    }
                 }
                 group_key.key = key_str;
 
@@ -238,14 +238,16 @@ class AggPlanExecutor : public AbstractExecutor {
                     }
                     
                     for (const auto& sel_col : sel_cols_) {
-                        // 【保留】恢复您原有的COUNT(*)特殊处理逻辑
-                        if (sel_col.col_name == "*" && sel_col.aggFuncType == ast::AggFuncType::AGG_COUNT) {
+                        if (sel_col.aggFuncType == ast::AggFuncType::AGG_COUNT) {
                             *(int32_t*)(new_record->data + cols_[curr_index].offset) = 1;
                             curr_index++;
                             continue;
                         }
 
-                        // 其他聚合函数使用修复后的逻辑
+                        if (sel_col.col_name == "*" ) {
+                            throw std::runtime_error("COUNT(*) is not supported");
+                        }
+
                         auto col_meta = cols_[curr_index];
                         auto prev_col_meta = prev_->get_col_offset(sel_col);
                         AggValue agg_value(col_meta.type, sel_col.aggFuncType);
@@ -263,34 +265,55 @@ class AggPlanExecutor : public AbstractExecutor {
                     insert_order_.push_back(group_key);
                 } else {
                     auto &existing_record_pair = group_results_[group_key];
+                    auto &existing_record = existing_record_pair.first;
                     existing_record_pair.second++;
+
                     int curr_index = group_by_cols_.size();
-                    
                     for (const auto& sel_col : sel_cols_) {
-                        // 【保留】恢复您原有的COUNT(*)特殊处理逻辑
-                        if (sel_col.col_name == "*" && sel_col.aggFuncType == ast::AggFuncType::AGG_COUNT) {
-                            *(int32_t*)(existing_record_pair.first->data + cols_[curr_index].offset) += 1;
+                        const auto& col_meta = cols_[curr_index];
+                        char* dest_ptr = existing_record->data + col_meta.offset;
+                        if (sel_col.aggFuncType == ast::AggFuncType::AGG_COUNT) {
+                            *(reinterpret_cast<int32_t*>(dest_ptr)) += 1;
                             curr_index++;
                             continue;
                         }
-                        
-                        // 其他聚合函数使用修复后的逻辑
-                        auto col_meta = cols_[curr_index];
-                        auto prev_col_meta = prev_->get_col_offset(sel_col);
-                        AggValue agg_value(col_meta.type, sel_col.aggFuncType);
-                        
-                        if (std::holds_alternative<int32_t>(agg_value.value)) {
-                             agg_value.value = *(int32_t*)(existing_record_pair.first->data + col_meta.offset);
-                        } else {
-                             agg_value.value = *(float*)(existing_record_pair.first->data + col_meta.offset);
-                        }
-                        
-                        updateAggValue(agg_value, record->data + prev_col_meta.offset, prev_col_meta);
-                        
-                        if (std::holds_alternative<int32_t>(agg_value.value)) {
-                           *(int32_t*)(existing_record_pair.first->data + col_meta.offset) = std::get<int32_t>(agg_value.value);
-                        } else {
-                           *(float*)(existing_record_pair.first->data + col_meta.offset) = std::get<float>(agg_value.value);
+
+                        const auto& prev_col_meta = prev_->get_col_offset(sel_col);
+                        const char* src_ptr = record->data + prev_col_meta.offset;
+
+                        if (prev_col_meta.type == TYPE_INT) {
+                            int32_t new_val = *reinterpret_cast<const int32_t*>(src_ptr);
+                            switch(sel_col.aggFuncType) {
+                                case ast::AggFuncType::AGG_SUM:
+                                    *reinterpret_cast<int32_t*>(dest_ptr) += new_val;
+                                    break;
+                                case ast::AggFuncType::AGG_AVG:
+                                    // AVG(int) 的中间和存储为 float
+                                    *reinterpret_cast<float*>(dest_ptr) += new_val;
+                                    break;
+                                case ast::AggFuncType::AGG_MIN:
+                                    *reinterpret_cast<int32_t*>(dest_ptr) = std::min(*reinterpret_cast<int32_t*>(dest_ptr), new_val);
+                                    break;
+                                case ast::AggFuncType::AGG_MAX:
+                                    *reinterpret_cast<int32_t*>(dest_ptr) = std::max(*reinterpret_cast<int32_t*>(dest_ptr), new_val);
+                                    break;
+                                default: break;
+                            }
+                        } else if (prev_col_meta.type == TYPE_FLOAT) {
+                            float new_val = *reinterpret_cast<const float*>(src_ptr);
+                            switch(sel_col.aggFuncType) {
+                                case ast::AggFuncType::AGG_SUM:
+                                case ast::AggFuncType::AGG_AVG:
+                                    *reinterpret_cast<float*>(dest_ptr) += new_val;
+                                    break;
+                                case ast::AggFuncType::AGG_MIN:
+                                    *reinterpret_cast<float*>(dest_ptr) = std::min(*reinterpret_cast<float*>(dest_ptr), new_val);
+                                    break;
+                                case ast::AggFuncType::AGG_MAX:
+                                    *reinterpret_cast<float*>(dest_ptr) = std::max(*reinterpret_cast<float*>(dest_ptr), new_val);
+                                    break;
+                                default: break;
+                            }
                         }
                         curr_index++;
                     }
@@ -299,7 +322,6 @@ class AggPlanExecutor : public AbstractExecutor {
                 prev_->nextTuple();
             }
 
-            // 【修复】最终的AVG除法计算保持修复后的版本
             for (auto& group_pair : group_results_) {
                 int curr_index = group_by_cols_.size();
                 auto& record = group_pair.second.first;
