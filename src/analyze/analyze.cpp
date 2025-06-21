@@ -90,7 +90,6 @@ std::shared_ptr<Query> Analyze::do_analyze(
           }
           if (!found) {
             // debug test
-            assert(false);
             throw GroupByError(sel_col.col_name);
           }
         }
@@ -218,16 +217,8 @@ void Analyze::get_having_clause(
     if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
       cond.is_rhs_val = true;
       cond.rhs_val = convert_sv_value(rhs_val);
-    } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
-      if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(rhs_col)) {
-        cond.rhs_col = {.tab_name = agg_col->tab_name,
-                        .col_name = agg_col->col_name,
-                        .alias = agg_col->alias,
-                        .aggFuncType = agg_col->agg_type};
-      } else {
-        cond.rhs_col = {.tab_name = rhs_col->tab_name,
-                        .col_name = rhs_col->col_name};
-      }
+    } else {
+      throw RMDBError("Unexpected sv value type");
     }
     conds.push_back(cond);
   }
