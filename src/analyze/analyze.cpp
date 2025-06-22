@@ -19,6 +19,13 @@ std::shared_ptr<Query> Analyze::do_analyze(
     std::shared_ptr<ast::TreeNode> parse) {
   std::shared_ptr<Query> query = std::make_shared<Query>();
   if (auto x = std::dynamic_pointer_cast<ast::SelectStmt>(parse)) {
+    // 测试
+    // for (auto &sv_sel_col : x->cols) {
+    //   if(sv_sel_col->col_name == x->group_by_cols[0]->col_name) {
+    //     assert(false);
+    //   }
+    // }
+    // throw RMDBError();
     // 处理表名
     query->tables = std::move(x->tabs);
     /** TODO: 检查表是否存在 */
@@ -53,7 +60,7 @@ std::shared_ptr<Query> Analyze::do_analyze(
     if (query->cols.empty()) {
       // select all columns
       for (auto &col : all_cols) {
-        TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name};
+        TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name, .alias = "", .aggFuncType = ast::AGG_INVALID};
         query->cols.push_back(sel_col);
       }
     } else {

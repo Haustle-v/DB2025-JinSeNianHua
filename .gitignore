@@ -2,3 +2,4 @@ build/
 .idea/
 .vscode/
 *.exp
+gittest.sh
