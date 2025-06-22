@@ -256,7 +256,7 @@ struct SelectStmt : public TreeNode {
             group_by_cols(std::move(group_by_cols_)), having_conds(std::move(having_conds_)),
             order_by(std::move(order_by_)), limit(limit_) {
                 has_sort = !order_by.empty();
-                has_agg = !group_by_cols.empty();
+                has_agg = false;  // 初始化为false，让Analyze阶段根据实际聚合函数来设置
             }
 };
 

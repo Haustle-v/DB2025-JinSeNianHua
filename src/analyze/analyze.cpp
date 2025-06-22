@@ -55,6 +55,11 @@ std::shared_ptr<Query> Analyze::do_analyze(
       }
     }
 
+    // 如果有GROUP BY子句，也要设置has_agg为true，因为GROUP BY本身就表示这是一个聚合查询
+    if (!x->group_by_cols.empty()) {
+        x->has_agg = true;
+    }
+
     std::vector<ColMeta> all_cols;
     get_all_cols(query->tables, all_cols);
     if (query->cols.empty()) {
