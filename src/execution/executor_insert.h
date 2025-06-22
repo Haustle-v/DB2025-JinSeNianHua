@@ -39,9 +39,9 @@ class InsertExecutor : public AbstractExecutor {
 
   std::unique_ptr<RmRecord> Next() override {
     // sqb 事务并发控制 6.9
-    if (context_ != nullptr) {
-      context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
-    }
+    // if (context_ != nullptr) {
+    //   context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+    // }
     // Make record buffer
     RmRecord rec(fh_->get_file_hdr().record_size);
     for (size_t i = 0; i < values_.size(); i++) {
