@@ -61,7 +61,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
     // 事务并发控制 6.9
-    context->lock_mgr_->lock_exclusive_on_record(context->txn_, ret, fd_);
+    // context->lock_mgr_->lock_exclusive_on_record(context->txn_, ret, fd_);
 
     // 事务记录
     RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);
@@ -136,7 +136,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
     // 事务并发控制 6.9
-    context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
+    // context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
 
     // 事务记录
     std::string tab_name = disk_manager_->get_file_name(fd_);
@@ -185,7 +185,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
     // 事务并发控制 6.9
-    context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
+    // context->lock_mgr_->lock_exclusive_on_record(context->txn_, rid, fd_);
 
     // 事务记录
     std::string tab_name = disk_manager_->get_file_name(fd_);
