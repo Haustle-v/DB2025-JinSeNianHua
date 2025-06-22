@@ -48,9 +48,9 @@ class SeqScanExecutor : public AbstractExecutor {
   // sqb 5.23
   void beginTuple() override {
     // sqb 加入事务并发语句 6.9
-    // if (context_ != nullptr) {
-    //   context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
-    // }
+    if (context_ != nullptr) {
+      context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
+    }
     nextTuple();
   }
 
