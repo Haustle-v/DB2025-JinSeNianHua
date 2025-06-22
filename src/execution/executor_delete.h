@@ -40,9 +40,9 @@ class DeleteExecutor : public AbstractExecutor {
   //  处理记录与索引 5.29
   std::unique_ptr<RmRecord> Next() override {
     // sqb 事务并发控制 6.9
-    if (context_ != nullptr) {
-      context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
-    }
+    // if (context_ != nullptr) {
+    //   context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+    // }
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
 
     for (auto &rid : rids_) {

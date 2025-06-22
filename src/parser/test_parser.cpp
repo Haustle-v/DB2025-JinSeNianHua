@@ -34,7 +34,8 @@ int main() {
       "select x.a, y.b from x join y where x.a = y.b and c = d;",
       "explain select x.a, y.b from x join y where x.a = y.b and c = d;",
       "crash;",
-      "create static_checkpoint;"
+      "create static_checkpoint;",
+      "update tb set a = a-1;",
       "exit;",
       "help;",
       "",

@@ -400,6 +400,14 @@ setClause:
     {
         $$ = std::make_shared<SetClause>($1, $3);
     }
+    |   colName '=' colName value
+    {
+        $$ = std::make_shared<SetClause>($1, $4, true);
+    }
+    |   colName '=' colName '+' value
+    {
+        $$ = std::make_shared<SetClause>($1, $5, true);
+    }
     ;
 
 selector:

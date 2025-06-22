@@ -15,8 +15,7 @@ See the Mulan PSL v2 for more details. */
  * @param {shared_ptr<ast::TreeNode>} parse parser生成的结果集
  * @return {shared_ptr<Query>} Query
  */
-std::shared_ptr<Query> Analyze::do_analyze(
-    std::shared_ptr<ast::TreeNode> parse) {
+std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse) {
   std::shared_ptr<Query> query = std::make_shared<Query>();
   if (auto x = std::dynamic_pointer_cast<ast::SelectStmt>(parse)) {
     // 处理表名
@@ -33,11 +32,10 @@ std::shared_ptr<Query> Analyze::do_analyze(
     for (auto &sv_sel_col : x->cols) {
       // 如果 col 为 AggCol 类型
       if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(sv_sel_col)) {
-        TabCol tab_agg_col = {
-            .tab_name = agg_col->tab_name,
-            .col_name = agg_col->col_name,
-            .alias = agg_col->alias,
-            .aggFuncType = static_cast<ast::AggFuncType>(agg_col->agg_type)};
+        TabCol tab_agg_col = {.tab_name = agg_col->tab_name,
+                              .col_name = agg_col->col_name,
+                              .alias = agg_col->alias,
+                              .aggFuncType = static_cast<ast::AggFuncType>(agg_col->agg_type)};
         query->cols.push_back(tab_agg_col);
         x->has_agg = true;
       } else {
@@ -83,8 +81,7 @@ std::shared_ptr<Query> Analyze::do_analyze(
         if (sel_col.aggFuncType == ast::AGG_INVALID) {
           bool found = false;
           for (auto &group_col : query->group_by_cols) {
-            if (sel_col.tab_name == group_col.tab_name &&
-                sel_col.col_name == group_col.col_name) {
+            if (sel_col.tab_name == group_col.tab_name && sel_col.col_name == group_col.col_name) {
               found = true;
               break;
             }
@@ -98,8 +95,7 @@ std::shared_ptr<Query> Analyze::do_analyze(
 
     // 处理having条件
     get_having_clause(x->having_conds, query->having_conds);
-    check_having_clause(query->tables, query->having_conds,
-                        query->group_by_cols);
+    check_having_clause(query->tables, query->having_conds, query->group_by_cols);
 
     // 处理order by条件
     if (x->has_sort) {
@@ -110,8 +106,7 @@ std::shared_ptr<Query> Analyze::do_analyze(
                             .aggFuncType = ast::AGG_INVALID};
         order_col = check_column(all_cols, order_col);
         query->order_bys.cols.push_back(order_col);
-        query->order_bys.is_asc.push_back(order_by->orderby_dir ==
-                                          ast::OrderBy_ASC);
+        query->order_bys.is_asc.push_back(order_by->orderby_dir == ast::OrderBy_ASC);
       }
       query->order_bys.limit = x->limit;
     }
@@ -142,7 +137,8 @@ std::shared_ptr<Query> Analyze::do_analyze(
     // set原语转换
     for (auto &sv_set_clause : x->set_clauses) {
       SetClause set_clause{.lhs = {x->tab_name, sv_set_clause->col_name},
-                           .rhs = convert_sv_value(sv_set_clause->val)};
+                           .rhs = convert_sv_value(sv_set_clause->val),
+                           .is_expr_ = sv_set_clause->is_expr_};
       query->set_clauses.emplace_back(set_clause);
     }
 
@@ -166,8 +162,7 @@ std::shared_ptr<Query> Analyze::do_analyze(
   return query;
 }
 
-TabCol Analyze::check_column(const std::vector<ColMeta> &all_cols,
-                             TabCol target) {
+TabCol Analyze::check_column(const std::vector<ColMeta> &all_cols, TabCol target) {
   if (target.tab_name.empty()) {
     // Table name not specified, infer table name from column name
     std::string tab_name;
@@ -193,8 +188,7 @@ TabCol Analyze::check_column(const std::vector<ColMeta> &all_cols,
   return target;
 }
 
-void Analyze::get_all_cols(const std::vector<std::string> &tab_names,
-                           std::vector<ColMeta> &all_cols) {
+void Analyze::get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols) {
   for (auto &sel_tab_name : tab_names) {
     // 这里db_不能写成get_db(), 注意要传指针
     const auto &sel_tab_cols = sm_manager_->db_.get_table(sel_tab_name).cols;
@@ -202,9 +196,8 @@ void Analyze::get_all_cols(const std::vector<std::string> &tab_names,
   }
 }
 
-void Analyze::get_having_clause(
-    const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
-    std::vector<Condition> &conds) {
+void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
+                                std::vector<Condition> &conds) {
   conds.clear();
   for (auto &expr : sv_conds) {
     Condition cond;
@@ -214,8 +207,7 @@ void Analyze::get_having_clause(
                       .alias = agg_col->alias,
                       .aggFuncType = agg_col->agg_type};
     } else {
-      cond.lhs_col = {.tab_name = expr->lhs->tab_name,
-                      .col_name = expr->lhs->col_name};
+      cond.lhs_col = {.tab_name = expr->lhs->tab_name, .col_name = expr->lhs->col_name};
     }
 
     cond.op = convert_sv_comp_op(expr->op);
@@ -229,37 +221,31 @@ void Analyze::get_having_clause(
                         .alias = agg_col->alias,
                         .aggFuncType = agg_col->agg_type};
       } else {
-        cond.rhs_col = {.tab_name = rhs_col->tab_name,
-                        .col_name = rhs_col->col_name};
+        cond.rhs_col = {.tab_name = rhs_col->tab_name, .col_name = rhs_col->col_name};
       }
     }
     conds.push_back(cond);
   }
 }
 
-void Analyze::get_clause(
-    const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
-    std::vector<Condition> &conds) {
+void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds, std::vector<Condition> &conds) {
   conds.clear();
   for (auto &expr : sv_conds) {
     Condition cond;
-    cond.lhs_col = {.tab_name = expr->lhs->tab_name,
-                    .col_name = expr->lhs->col_name};
+    cond.lhs_col = {.tab_name = expr->lhs->tab_name, .col_name = expr->lhs->col_name};
     cond.op = convert_sv_comp_op(expr->op);
     if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
       cond.is_rhs_val = true;
       cond.rhs_val = convert_sv_value(rhs_val);
     } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
       cond.is_rhs_val = false;
-      cond.rhs_col = {.tab_name = rhs_col->tab_name,
-                      .col_name = rhs_col->col_name};
+      cond.rhs_col = {.tab_name = rhs_col->tab_name, .col_name = rhs_col->col_name};
     }
     conds.push_back(cond);
   }
 }
 
-void Analyze::check_having_clause(const std::vector<std::string> &tab_names,
-                                  std::vector<Condition> &conds,
+void Analyze::check_having_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds,
                                   const std::vector<TabCol> &group_by_cols) {
   // auto all_cols = get_all_cols(tab_names);
   std::vector<ColMeta> all_cols;
@@ -318,15 +304,13 @@ void Analyze::check_having_clause(const std::vector<std::string> &tab_names,
         cond.rhs_val.float_val = (float)cond.rhs_val.int_val;
         *(float *)(cond.rhs_val.raw->data) = cond.rhs_val.float_val;
       } else {
-        throw IncompatibleTypeError(coltype2str(lhs_type),
-                                    coltype2str(rhs_type));
+        throw IncompatibleTypeError(coltype2str(lhs_type), coltype2str(rhs_type));
       }
     }
   }
 }
 
-void Analyze::check_clause(const std::vector<std::string> &tab_names,
-                           std::vector<Condition> &conds) {
+void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds) {
   // auto all_cols = get_all_cols(tab_names);
   std::vector<ColMeta> all_cols;
   get_all_cols(tab_names, all_cols);
@@ -357,8 +341,7 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names,
         cond.rhs_val.float_val = (float)cond.rhs_val.int_val;
         *(float *)(cond.rhs_val.raw->data) = cond.rhs_val.float_val;
       } else {
-        throw IncompatibleTypeError(coltype2str(lhs_type),
-                                    coltype2str(rhs_type));
+        throw IncompatibleTypeError(coltype2str(lhs_type), coltype2str(rhs_type));
       }
     }
   }
@@ -368,8 +351,7 @@ Value Analyze::convert_sv_value(const std::shared_ptr<ast::Value> &sv_val) {
   Value val;
   if (auto int_lit = std::dynamic_pointer_cast<ast::IntLit>(sv_val)) {
     val.set_int(int_lit->val);
-  } else if (auto float_lit =
-                 std::dynamic_pointer_cast<ast::FloatLit>(sv_val)) {
+  } else if (auto float_lit = std::dynamic_pointer_cast<ast::FloatLit>(sv_val)) {
     val.set_float(float_lit->val);
   } else if (auto str_lit = std::dynamic_pointer_cast<ast::StringLit>(sv_val)) {
     val.set_str(str_lit->val);

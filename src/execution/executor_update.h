@@ -42,9 +42,9 @@ class UpdateExecutor : public AbstractExecutor {
   // 所以在这里更新全部就好 处理数据与索引 5.29
   std::unique_ptr<RmRecord> Next() override {
     // sqb 事务并发控制 6.9
-    if (context_ != nullptr) {
-      context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
-    }
+    // if (context_ != nullptr) {
+    //   context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+    // }
     // 提前做类型兼容 并为set 子句的值分配空间 它的空间通过raii管理
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     for (auto &single_set_clause : set_clauses_) {
@@ -69,7 +69,28 @@ class UpdateExecutor : public AbstractExecutor {
       //   更新数据
       for (auto &single_set_clause : set_clauses_) {
         auto col_meta_iter = tab_.get_col(single_set_clause.lhs.col_name);
-        memcpy(rec_ptr->data + col_meta_iter->offset, single_set_clause.rhs.raw->data, col_meta_iter->len);
+        // sqb 增加set语句是表达式的支持 6.16
+        if (single_set_clause.is_expr_) {
+          char *lhs_val = rec_ptr->data + col_meta_iter->offset;
+          switch (col_meta_iter->type) {
+            case TYPE_INT: {
+              int ival = *(int *)lhs_val + single_set_clause.rhs.int_val;
+              memcpy(lhs_val, &ival, col_meta_iter->len);
+              break;
+            }
+            case TYPE_FLOAT: {
+              float fval = *(float *)lhs_val + single_set_clause.rhs.float_val;
+              memcpy(lhs_val, &fval, col_meta_iter->len);
+              break;
+            }
+            default: {
+              throw InternalError("Unexpected set type in update executor");
+              break;
+            }
+          }
+        } else {
+          memcpy(rec_ptr->data + col_meta_iter->offset, single_set_clause.rhs.raw->data, col_meta_iter->len);
+        }
       }
 
       //   处理索引
