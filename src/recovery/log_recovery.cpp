@@ -146,7 +146,12 @@ void RecoveryManager::redo() {
           }
 
           std::string tab_name(insert_record.table_name_, insert_record.table_name_size_);
-          RmFileHandle *fhdl_ptr = sm_manager_->fhs_[tab_name].get();
+          auto iter = sm_manager_->fhs_.find(tab_name);
+          if (iter == sm_manager_->fhs_.end()) {
+            break;
+          }
+          RmFileHandle *fhdl_ptr = iter->second.get();
+          // RmFileHandle *fhdl_ptr = sm_manager_->fhs_[tab_name].get();
           PageId page_id{fhdl_ptr->GetFd(), insert_record.rid_.page_no};
           // 检查页是否存在，不存在直接redo
           if (page_id.page_no >= fhdl_ptr->get_file_hdr().num_pages) {
@@ -174,7 +179,12 @@ void RecoveryManager::redo() {
           }
 
           std::string tab_name(delete_record.table_name_, delete_record.table_name_size_);
-          RmFileHandle *fhdl_ptr = sm_manager_->fhs_[tab_name].get();
+          auto iter = sm_manager_->fhs_.find(tab_name);
+          if (iter == sm_manager_->fhs_.end()) {
+            break;
+          }
+          RmFileHandle *fhdl_ptr = iter->second.get();
+          // RmFileHandle *fhdl_ptr = sm_manager_->fhs_[tab_name].get();
           PageId page_id{fhdl_ptr->GetFd(), delete_record.rid_.page_no};
           // 检查页是否存在，不存在直接redo
           if (page_id.page_no >= fhdl_ptr->get_file_hdr().num_pages) {
@@ -202,7 +212,12 @@ void RecoveryManager::redo() {
           }
 
           std::string tab_name(update_record.table_name_, update_record.table_name_size_);
-          RmFileHandle *fhdl_ptr = sm_manager_->fhs_[tab_name].get();
+          auto iter = sm_manager_->fhs_.find(tab_name);
+          if (iter == sm_manager_->fhs_.end()) {
+            break;
+          }
+          RmFileHandle *fhdl_ptr = iter->second.get();
+          // RmFileHandle *fhdl_ptr = sm_manager_->fhs_[tab_name].get();
           PageId page_id{fhdl_ptr->GetFd(), update_record.rid_.page_no};
           // 检查页是否存在，不存在直接redo
           if (page_id.page_no >= fhdl_ptr->get_file_hdr().num_pages) {
@@ -281,6 +296,9 @@ void RecoveryManager::undo() {
             insert_record.deserialize(buffer_.buffer_ + cur_offset);
           }
           std::string tab_name(insert_record.table_name_, insert_record.table_name_size_, insert_record.lsn_);
+          if (sm_manager_->fhs_.find(tab_name) == sm_manager_->fhs_.end()) {
+            break;
+          }
           sm_manager_->rollback_insert(tab_name, insert_record.rid_);
           break;
         }
@@ -294,6 +312,9 @@ void RecoveryManager::undo() {
             delete_record.deserialize(buffer_.buffer_ + cur_offset);
           }
           std::string tab_name(delete_record.table_name_, delete_record.table_name_size_);
+          if (sm_manager_->fhs_.find(tab_name) == sm_manager_->fhs_.end()) {
+            break;
+          }
           sm_manager_->rollback_delete(tab_name, delete_record.rid_, delete_record.delete_value_, delete_record.lsn_);
           break;
         }
@@ -307,6 +328,9 @@ void RecoveryManager::undo() {
             update_record.deserialize(buffer_.buffer_ + cur_offset);
           }
           std::string tab_name(update_record.table_name_, update_record.table_name_size_);
+          if (sm_manager_->fhs_.find(tab_name) == sm_manager_->fhs_.end()) {
+            break;
+          }
           sm_manager_->rollback_update(tab_name, update_record.rid_, update_record.old_value_, update_record.lsn_);
         }
         default:
