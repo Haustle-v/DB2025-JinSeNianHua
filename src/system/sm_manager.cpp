@@ -392,7 +392,7 @@ void SmManager::record_insert_helper(const std::string &tab_name, const Rid &rid
 
   //   插入记录
   //   Rid rid = fhdl_ptr->insert_record(rec.data, nullptr);
-  fhdl_ptr->allocate_pages(rid);
+  // fhdl_ptr->allocate_pages(rid);
   // fhdl_ptr->insert_record(rid, rec.data);
 
   // //   插入索引
@@ -421,7 +421,7 @@ void SmManager::record_delete_helper(const std::string &tab_name, const Rid &rid
   //   先删索引再删记录
   TabMeta &tab_meta = db_.get_table(tab_name);
   auto fhdl_ptr = fhs_.at(tab_name).get();
-  fhdl_ptr->allocate_pages(rid);
+  // fhdl_ptr->allocate_pages(rid);
   // std::unique_ptr<RmRecord> rec_ptr = fhdl_ptr->get_record(rid, nullptr);
 
   // //   删除索引
@@ -454,7 +454,7 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
   // 更新回滚与自身行为一致  先删旧索引 插入新记录 插入新索引
   TabMeta &tab_meta = db_.get_table(tab_name);
   auto fhdl_ptr = fhs_.at(tab_name).get();
-  fhdl_ptr->allocate_pages(rid);
+  // fhdl_ptr->allocate_pages(rid);
   // std::unique_ptr<RmRecord> cur_rec_ptr = fhdl_ptr->get_record(rid, nullptr);
 
   // // 删除旧索引
