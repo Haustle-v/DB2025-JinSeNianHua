@@ -393,7 +393,7 @@ void SmManager::record_insert_helper(const std::string &tab_name, const Rid &rid
   //   插入记录
   //   Rid rid = fhdl_ptr->insert_record(rec.data, nullptr);
   fhdl_ptr->allocate_pages(rid);
-  fhdl_ptr->insert_record(rid, rec.data);
+  // fhdl_ptr->insert_record(rid, rec.data);
 
   //   插入索引
   for (auto &index_meta : tab_meta.indexes) {
@@ -405,7 +405,7 @@ void SmManager::record_insert_helper(const std::string &tab_name, const Rid &rid
       memcpy(key_buffer + offset, rec.data + col_meta.offset, col_meta.len);
       offset += col_meta.len;
     }
-    ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
+    // ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
   }
 
   // 给redo与undo加上lsn
@@ -434,11 +434,11 @@ void SmManager::record_delete_helper(const std::string &tab_name, const Rid &rid
       memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
       offset += col_meta.len;
     }
-    ix_hdl_ptr->delete_entry(key_buffer, nullptr);
+    // ix_hdl_ptr->delete_entry(key_buffer, nullptr);
   }
 
   //   删除记录
-  fhdl_ptr->delete_record(rid, nullptr);
+  // fhdl_ptr->delete_record(rid, nullptr);
 
   // 给redo与undo加上lsn
   if (lsn != INVALID_LSN) {
@@ -467,11 +467,11 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
       memcpy(key_buffer + offset, cur_rec_ptr->data + col_meta.offset, col_meta.len);
       offset += col_meta.len;
     }
-    ix_hdl_ptr->delete_entry(key_buffer, nullptr);
+    // ix_hdl_ptr->delete_entry(key_buffer, nullptr);
   }
 
   //   插入记录
-  fhdl_ptr->update_record(rid, new_rec.data, nullptr);
+  // fhdl_ptr->update_record(rid, new_rec.data, nullptr);
 
   //   插入新索引
   for (auto &index_meta : tab_meta.indexes) {
@@ -483,7 +483,7 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
       memcpy(key_buffer + offset, new_rec.data + col_meta.offset, col_meta.len);
       offset += col_meta.len;
     }
-    ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
+    // ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
   }
 
   // 给redo与undo加上lsn
