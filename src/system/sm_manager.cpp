@@ -408,13 +408,13 @@ void SmManager::record_insert_helper(const std::string &tab_name, const Rid &rid
   //   // ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
   // }
 
-  // 给redo与undo加上lsn
-  if (lsn != INVALID_LSN) {
-    PageId page_id{fhdl_ptr->GetFd(), rid.page_no};
-    Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
-    page_ptr->set_page_lsn(lsn);
-    buffer_pool_manager_->unpin_page(page_id, true);
-  }
+  // // 给redo与undo加上lsn
+  // if (lsn != INVALID_LSN) {
+  //   PageId page_id{fhdl_ptr->GetFd(), rid.page_no};
+  //   Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
+  //   page_ptr->set_page_lsn(lsn);
+  //   buffer_pool_manager_->unpin_page(page_id, true);
+  // }
 }
 
 void SmManager::record_delete_helper(const std::string &tab_name, const Rid &rid, const lsn_t lsn) {
@@ -440,13 +440,13 @@ void SmManager::record_delete_helper(const std::string &tab_name, const Rid &rid
   //   删除记录
   // fhdl_ptr->delete_record(rid, nullptr);
 
-  // 给redo与undo加上lsn
-  if (lsn != INVALID_LSN) {
-    PageId page_id{fhdl_ptr->GetFd(), rid.page_no};
-    Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
-    page_ptr->set_page_lsn(lsn);
-    buffer_pool_manager_->unpin_page(page_id, true);
-  }
+  // // 给redo与undo加上lsn
+  // if (lsn != INVALID_LSN) {
+  //   PageId page_id{fhdl_ptr->GetFd(), rid.page_no};
+  //   Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
+  //   page_ptr->set_page_lsn(lsn);
+  //   buffer_pool_manager_->unpin_page(page_id, true);
+  // }
 }
 
 void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid, const RmRecord &new_rec,
@@ -486,11 +486,11 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
   //   // ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
   // }
 
-  // 给redo与undo加上lsn
-  if (lsn != INVALID_LSN) {
-    PageId page_id{fhdl_ptr->GetFd(), rid.page_no};
-    Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
-    page_ptr->set_page_lsn(lsn);
-    buffer_pool_manager_->unpin_page(page_id, true);
-  }
+  // // 给redo与undo加上lsn
+  // if (lsn != INVALID_LSN) {
+  //   PageId page_id{fhdl_ptr->GetFd(), rid.page_no};
+  //   Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
+  //   page_ptr->set_page_lsn(lsn);
+  //   buffer_pool_manager_->unpin_page(page_id, true);
+  // }
 }
