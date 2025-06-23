@@ -299,6 +299,6 @@ void RmFileHandle::release_page_handle(RmPageHandle &page_handle) {
 void RmFileHandle::allocate_pages(const Rid &rid) {
   while (rid.page_no >= file_hdr_.num_pages) {
     RmPageHandle page_hdl = create_new_page_handle();
-    buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
+    buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
   }
 }
