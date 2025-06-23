@@ -102,14 +102,11 @@ void SmManager::open_db(const std::string &db_name) {
 
   //   加载数据文件
   for (auto &table_and_meta : db_.tabs_) {
-    fhs_.emplace(table_and_meta.first,
-                 rm_manager_->open_file(table_and_meta.first));
+    fhs_.emplace(table_and_meta.first, rm_manager_->open_file(table_and_meta.first));
     // 加载表的索引文件
     for (auto &index_meta : table_and_meta.second.indexes) {
-      std::string index_name =
-          ix_manager_->get_index_name(table_and_meta.first, index_meta.cols);
-      ihs_.emplace(index_name, ix_manager_->open_index(table_and_meta.first,
-                                                       index_meta.cols));
+      std::string index_name = ix_manager_->get_index_name(table_and_meta.first, index_meta.cols);
+      ihs_.emplace(index_name, ix_manager_->open_index(table_and_meta.first, index_meta.cols));
     }
   }
 }
@@ -190,8 +187,7 @@ void SmManager::desc_table(const std::string &tab_name, Context *context) {
   printer.print_separator(context);
   // Print fields
   for (auto &col : tab.cols) {
-    std::vector<std::string> field_info = {col.name, coltype2str(col.type),
-                                           col.index ? "YES" : "NO"};
+    std::vector<std::string> field_info = {col.name, coltype2str(col.type), col.index ? "YES" : "NO"};
     printer.print_record(field_info, context);
   }
   // Print footer
@@ -204,9 +200,7 @@ void SmManager::desc_table(const std::string &tab_name, Context *context) {
  * @param {vector<ColDef>&} col_defs 表的字段
  * @param {Context*} context
  */
-void SmManager::create_table(const std::string &tab_name,
-                             const std::vector<ColDef> &col_defs,
-                             Context *context) {
+void SmManager::create_table(const std::string &tab_name, const std::vector<ColDef> &col_defs, Context *context) {
   if (db_.is_table(tab_name)) {
     throw TableExistsError(tab_name);
   }
@@ -225,9 +219,8 @@ void SmManager::create_table(const std::string &tab_name,
     tab.cols.push_back(col);
   }
   // Create & open record file
-  int record_size =
-      curr_offset;  // record_size就是col
-                    // meta所占的大小（表的元数据也是以记录的形式进行存储的）
+  int record_size = curr_offset;  // record_size就是col
+                                  // meta所占的大小（表的元数据也是以记录的形式进行存储的）
   rm_manager_->create_file(tab_name, record_size);
   db_.tabs_[tab_name] = tab;
   // fhs_[tab_name] = rm_manager_->open_file(tab_name);
@@ -275,9 +268,7 @@ void SmManager::drop_table(const std::string &tab_name, Context *context) {
  * @param {vector<string>&} col_names 索引包含的字段名称
  * @param {Context*} context
  */
-void SmManager::create_index(const std::string &tab_name,
-                             const std::vector<std::string> &col_names,
-                             Context *context) {
+void SmManager::create_index(const std::string &tab_name, const std::vector<std::string> &col_names, Context *context) {
   // sqb 5.29
   if (ix_manager_->exists(tab_name, col_names)) {
     throw IndexExistsError(tab_name, col_names);
@@ -302,8 +293,7 @@ void SmManager::create_index(const std::string &tab_name,
     auto rec_ptr = file_hdl_ptr->get_record(scan.rid(), context);
     int curr_offset = 0;
     for (auto &col_meta : index_cols_meta) {
-      memcpy(key_buffer + curr_offset, rec_ptr->data + col_meta.offset,
-             col_meta.len);
+      memcpy(key_buffer + curr_offset, rec_ptr->data + col_meta.offset, col_meta.len);
       curr_offset += col_meta.len;
     }
     ix_hdl_ptr->insert_entry(key_buffer, scan.rid(), context->txn_);
@@ -315,8 +305,7 @@ void SmManager::create_index(const std::string &tab_name,
                      .col_num = static_cast<int>(col_names.size()),
                      .cols = index_cols_meta};
   tab.indexes.emplace_back(index);
-  ihs_.emplace(ix_manager_->get_index_name(tab_name, col_names),
-               std::move(ix_hdl_ptr));
+  ihs_.emplace(ix_manager_->get_index_name(tab_name, col_names), std::move(ix_hdl_ptr));
   flush_meta();
 }
 
@@ -326,9 +315,7 @@ void SmManager::create_index(const std::string &tab_name,
  * @param {vector<string>&} col_names 索引包含的字段名称
  * @param {Context*} context
  */
-void SmManager::drop_index(const std::string &tab_name,
-                           const std::vector<std::string> &col_names,
-                           Context *context) {
+void SmManager::drop_index(const std::string &tab_name, const std::vector<std::string> &col_names, Context *context) {
   // sqb 5.29
   if (!ix_manager_->exists(tab_name, col_names)) {
     throw IndexNotFoundError(tab_name, col_names);
@@ -361,8 +348,7 @@ void SmManager::drop_index(const std::string &tab_name,
  * @param {vector<ColMeta>&} 索引包含的字段元数据
  * @param {Context*} context
  */
-void SmManager::drop_index(const std::string &tab_name,
-                           const std::vector<ColMeta> &cols, Context *context) {
+void SmManager::drop_index(const std::string &tab_name, const std::vector<ColMeta> &cols, Context *context) {
   // sqb 5.29
   std::vector<std::string> col_names;
   for (auto &col_meta : cols) {
@@ -398,8 +384,7 @@ void SmManager::show_index(const std::string &tab_name, Context *context) {
 }
 
 // sqb 定义redo undo的helper 减少重复代码 6.8
-void SmManager::record_insert_helper(const std::string &tab_name,
-                                     const Rid &rid, const RmRecord &rec,
+void SmManager::record_insert_helper(const std::string &tab_name, const Rid &rid, const RmRecord &rec,
                                      const lsn_t lsn) {
   // 先插入记录再插入索引
   TabMeta &tab_meta = db_.get_table(tab_name);
@@ -412,8 +397,7 @@ void SmManager::record_insert_helper(const std::string &tab_name,
 
   //   插入索引
   for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name =
-        ix_manager_->get_index_name(tab_name, index_meta.cols);
+    std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
     auto ix_hdl_ptr = ihs_[index_name].get();
     char key_buffer[index_meta.col_tot_len];
     int offset = 0;
@@ -433,23 +417,21 @@ void SmManager::record_insert_helper(const std::string &tab_name,
   }
 }
 
-void SmManager::record_delete_helper(const std::string &tab_name,
-                                     const Rid &rid, const lsn_t lsn) {
+void SmManager::record_delete_helper(const std::string &tab_name, const Rid &rid, const lsn_t lsn) {
   //   先删索引再删记录
   TabMeta &tab_meta = db_.get_table(tab_name);
   auto fhdl_ptr = fhs_.at(tab_name).get();
+  fhdl_ptr->allocate_pages(rid);
   std::unique_ptr<RmRecord> rec_ptr = fhdl_ptr->get_record(rid, nullptr);
 
   //   删除索引
   for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name =
-        ix_manager_->get_index_name(tab_name, index_meta.cols);
+    std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
     auto ix_hdl_ptr = ihs_[index_name].get();
     char key_buffer[index_meta.col_tot_len];
     int offset = 0;
     for (auto &col_meta : index_meta.cols) {
-      memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset,
-             col_meta.len);
+      memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
       offset += col_meta.len;
     }
     ix_hdl_ptr->delete_entry(key_buffer, nullptr);
@@ -467,24 +449,22 @@ void SmManager::record_delete_helper(const std::string &tab_name,
   }
 }
 
-void SmManager::record_update_helper(const std::string &tab_name,
-                                     const Rid &rid, const RmRecord &new_rec,
+void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid, const RmRecord &new_rec,
                                      const lsn_t lsn) {
   // 更新回滚与自身行为一致  先删旧索引 插入新记录 插入新索引
   TabMeta &tab_meta = db_.get_table(tab_name);
   auto fhdl_ptr = fhs_.at(tab_name).get();
+  fhdl_ptr->allocate_pages(rid);
   std::unique_ptr<RmRecord> cur_rec_ptr = fhdl_ptr->get_record(rid, nullptr);
 
   // 删除旧索引
   for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name =
-        ix_manager_->get_index_name(tab_name, index_meta.cols);
+    std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
     auto ix_hdl_ptr = ihs_[index_name].get();
     char key_buffer[index_meta.col_tot_len];
     int offset = 0;
     for (auto &col_meta : index_meta.cols) {
-      memcpy(key_buffer + offset, cur_rec_ptr->data + col_meta.offset,
-             col_meta.len);
+      memcpy(key_buffer + offset, cur_rec_ptr->data + col_meta.offset, col_meta.len);
       offset += col_meta.len;
     }
     ix_hdl_ptr->delete_entry(key_buffer, nullptr);
@@ -495,8 +475,7 @@ void SmManager::record_update_helper(const std::string &tab_name,
 
   //   插入新索引
   for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name =
-        ix_manager_->get_index_name(tab_name, index_meta.cols);
+    std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
     auto ix_hdl_ptr = ihs_[index_name].get();
     char key_buffer[index_meta.col_tot_len];
     int offset = 0;

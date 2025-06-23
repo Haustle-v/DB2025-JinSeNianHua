@@ -59,4 +59,5 @@ class RecoveryManager {
   lsn_t last_lsn_{INVALID_LSN};                      // 用于恢复后重新设置global lsn
   std::unordered_map<lsn_t, uint64_t> lsn_to_pos_;   // lsn与对应位置，以log buffer做块大小，高32位表示块号 低32位做偏移
   int log_file_size_;
+  // std::unordered_map<std::string, int> tables_max_page_;  // 用于标记每张表最大的数据页，提前分配
 };

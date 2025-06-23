@@ -32,6 +32,7 @@ void RecoveryManager::analyze() {
     decode_lsn_pos(checkpoint_pos, cur_block_id, cur_offset);
   }
 
+  LogRecord *log_record = new LogRecord();
   for (; cur_block_id < block_num; ++cur_block_id, cur_offset -= LOG_BUFFER_SIZE) {
     // 将日志读入缓冲区
     if (cur_block_id == block_num - 1) {
@@ -43,7 +44,6 @@ void RecoveryManager::analyze() {
 
     // 验证日志 记录att，记录最小rec lsn，记录lsn对应偏移
     while (cur_offset < boundary) {
-      LogRecord log_record;
       //   读取并验证日志头
       if (cur_offset + LOG_HEADER_SIZE > boundary) {
         // 注意处于块末尾的特殊处理 直接从磁盘读 不完整的日志直接停止
@@ -51,41 +51,41 @@ void RecoveryManager::analyze() {
             LOG_HEADER_SIZE) {
           break;
         }
-        log_record.deserialize(log_header);
+        log_record->deserialize(log_header);
       } else {
-        log_record.deserialize(buffer_.buffer_ + cur_offset);
+        log_record->deserialize(buffer_.buffer_ + cur_offset);
       }
 
       //   验证日志体的完整
-      if (cur_offset + log_record.log_tot_len_ > boundary) {
-        if (disk_manager_->read_log(log_body, log_record.log_tot_len_, cur_block_id * LOG_BUFFER_SIZE + cur_offset) !=
-            log_record.log_tot_len_) {
+      if (cur_offset + log_record->log_tot_len_ > boundary) {
+        if (disk_manager_->read_log(log_body, log_record->log_tot_len_, cur_block_id * LOG_BUFFER_SIZE + cur_offset) !=
+            log_record->log_tot_len_) {
           break;
         }
       }
 
       //   更新相关数据结构
-      lsn_to_pos_.emplace(log_record.lsn_, encode_lsn_pos(cur_block_id, cur_offset));
-      cur_offset += log_record.log_tot_len_;
-      last_lsn_ = log_record.lsn_;
-      switch (log_record.log_type_) {
+      lsn_to_pos_.emplace(log_record->lsn_, encode_lsn_pos(cur_block_id, cur_offset));
+      cur_offset += log_record->log_tot_len_;
+      last_lsn_ = log_record->lsn_;
+      switch (log_record->log_type_) {
         case LogType::begin:
-          active_txns_.emplace(log_record.log_tid_, log_record.lsn_);
+          active_txns_.emplace(log_record->log_tid_, log_record->lsn_);
           break;
         case LogType::commit:
         case LogType::ABORT:
-          active_txns_.erase(log_record.log_tid_);
+          active_txns_.erase(log_record->log_tid_);
           break;
         case LogType::INSERT:
         case LogType::DELETE:
         case LogType::UPDATE:
-          first_lsn_ = std::min(first_lsn_, log_record.lsn_);
-          active_txns_[log_record.log_tid_] = log_record.lsn_;
+          first_lsn_ = std::min(first_lsn_, log_record->lsn_);
+          active_txns_[log_record->log_tid_] = log_record->lsn_;
           break;
         case LogType::CHECKPOINT:
           //  sqb 出于保险加 目前单事务下检查点恢复 应该不会走到这 6.11
           // 非常不确定！
-          first_lsn_ = log_record.lsn_;
+          first_lsn_ = log_record->lsn_;
           break;
         default:
           throw InternalError("unsupport log type!");
@@ -93,6 +93,7 @@ void RecoveryManager::analyze() {
       }
     }
   }
+  delete log_record;
 }
 
 /**
@@ -149,7 +150,7 @@ void RecoveryManager::redo() {
           PageId page_id{fhdl_ptr->GetFd(), insert_record.rid_.page_no};
           // 检查页是否存在，不存在直接redo
           if (page_id.page_no >= fhdl_ptr->get_file_hdr().num_pages) {
-            sm_manager_->redo_insert(tab_name, insert_record.rid_, insert_record.insert_value_);
+            sm_manager_->redo_insert(tab_name, insert_record.rid_, insert_record.insert_value_, insert_record.lsn_);
             break;
           }
           // 页存在判断lsn
@@ -175,6 +176,11 @@ void RecoveryManager::redo() {
           std::string tab_name(delete_record.table_name_, delete_record.table_name_size_);
           RmFileHandle *fhdl_ptr = sm_manager_->fhs_[tab_name].get();
           PageId page_id{fhdl_ptr->GetFd(), delete_record.rid_.page_no};
+          // 检查页是否存在，不存在直接redo
+          if (page_id.page_no >= fhdl_ptr->get_file_hdr().num_pages) {
+            sm_manager_->redo_delete(tab_name, delete_record.rid_, delete_record.lsn_);
+            break;
+          }
           // 页存在判断lsn
           Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
           if (delete_record.lsn_ > page_ptr->get_page_lsn()) {
@@ -198,6 +204,11 @@ void RecoveryManager::redo() {
           std::string tab_name(update_record.table_name_, update_record.table_name_size_);
           RmFileHandle *fhdl_ptr = sm_manager_->fhs_[tab_name].get();
           PageId page_id{fhdl_ptr->GetFd(), update_record.rid_.page_no};
+          // 检查页是否存在，不存在直接redo
+          if (page_id.page_no >= fhdl_ptr->get_file_hdr().num_pages) {
+            sm_manager_->redo_update(tab_name, update_record.rid_, update_record.new_value_, update_record.lsn_);
+            break;
+          }
           // 页存在判断lsn
           Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
           if (update_record.lsn_ > page_ptr->get_page_lsn()) {

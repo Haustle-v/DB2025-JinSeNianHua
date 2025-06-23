@@ -249,7 +249,7 @@ RmPageHandle RmFileHandle::create_new_page_handle() {
   //   对空页框进行初始化
   RmPageHandle page_hdl{&file_hdr_, new_page};
   Bitmap::init(page_hdl.bitmap, file_hdr_.bitmap_size);
-  page_hdl.page_hdr->next_free_page_no = -1;
+  page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
 
   //   更新file_hdr_
   file_hdr_.num_pages++;
@@ -295,12 +295,10 @@ void RmFileHandle::release_page_handle(RmPageHandle &page_handle) {
   file_hdr_.first_free_page_no = page_handle.page->get_page_id().page_no;
 }
 
-// sqb 避免故障恢复时 访问不存在的页报错 暂时只考虑申请一次 6.11
+// sqb 避免故障恢复时 访问不存在的页报错  6.11
 void RmFileHandle::allocate_pages(const Rid &rid) {
-  if (rid.page_no >= file_hdr_.num_pages) {
-    page_id_t old_fisrt_free_page = file_hdr_.first_free_page_no;
-    RmPageHandle page_hdl = create_page_handle();
-    page_hdl.page_hdr->next_free_page_no = old_fisrt_free_page;  // 可能有问题，也可能压根没用
+  while (rid.page_no >= file_hdr_.num_pages) {
+    RmPageHandle page_hdl = create_new_page_handle();
     buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
   }
 }
