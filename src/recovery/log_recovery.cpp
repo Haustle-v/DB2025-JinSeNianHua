@@ -241,7 +241,7 @@ void RecoveryManager::undo() {
           } else {
             insert_record.deserialize(buffer_.buffer_ + cur_offset);
           }
-          std::string tab_name(insert_record.table_name_, insert_record.table_name_size_, insert_record.lsn_);
+          std::string tab_name(insert_record.table_name_, insert_record.table_name_size_);
           redo_delete(tab_name, insert_record.rid_, insert_record.lsn_);
           break;
         }
