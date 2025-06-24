@@ -284,29 +284,29 @@ void SmManager::create_index(const std::string &tab_name, const std::vector<std:
     index_cols_meta.emplace_back(*col__meta_iter);
   }
 
-  //   创建索引 插入记录
-  ix_manager_->create_index(tab_name, index_cols_meta);
-  auto ix_hdl_ptr = ix_manager_->open_index(tab_name, col_names);
-  auto file_hdl_ptr = fhs_[tab_name].get();
-  char key_buffer[col_len];
-  for (RmScan scan(file_hdl_ptr); !scan.is_end(); scan.next()) {
-    auto rec_ptr = file_hdl_ptr->get_record(scan.rid(), context);
-    int curr_offset = 0;
-    for (auto &col_meta : index_cols_meta) {
-      memcpy(key_buffer + curr_offset, rec_ptr->data + col_meta.offset, col_meta.len);
-      curr_offset += col_meta.len;
-    }
-    ix_hdl_ptr->insert_entry(key_buffer, scan.rid(), context->txn_);
-  }
+  //   //   创建索引 插入记录
+  //   ix_manager_->create_index(tab_name, index_cols_meta);
+  //   auto ix_hdl_ptr = ix_manager_->open_index(tab_name, col_names);
+  //   auto file_hdl_ptr = fhs_[tab_name].get();
+  //   char key_buffer[col_len];
+  //   for (RmScan scan(file_hdl_ptr); !scan.is_end(); scan.next()) {
+  //     auto rec_ptr = file_hdl_ptr->get_record(scan.rid(), context);
+  //     int curr_offset = 0;
+  //     for (auto &col_meta : index_cols_meta) {
+  //       memcpy(key_buffer + curr_offset, rec_ptr->data + col_meta.offset, col_meta.len);
+  //       curr_offset += col_meta.len;
+  //     }
+  //     ix_hdl_ptr->insert_entry(key_buffer, scan.rid(), context->txn_);
+  //   }
 
-  //   将索引元数据添加
-  IndexMeta index = {.tab_name = tab_name,
-                     .col_tot_len = col_len,
-                     .col_num = static_cast<int>(col_names.size()),
-                     .cols = index_cols_meta};
-  tab.indexes.emplace_back(index);
-  ihs_.emplace(ix_manager_->get_index_name(tab_name, col_names), std::move(ix_hdl_ptr));
-  flush_meta();
+  //   //   将索引元数据添加
+  //   IndexMeta index = {.tab_name = tab_name,
+  //                      .col_tot_len = col_len,
+  //                      .col_num = static_cast<int>(col_names.size()),
+  //                      .cols = index_cols_meta};
+  //   tab.indexes.emplace_back(index);
+  //   ihs_.emplace(ix_manager_->get_index_name(tab_name, col_names), std::move(ix_hdl_ptr));
+  //   flush_meta();
 }
 
 /**
