@@ -322,7 +322,11 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<std::s
   }
 
   std::string index_name = ix_manager_->get_index_name(tab_name, col_names);
-  IxIndexHandle *ix_hdl_ptr = ihs_[index_name].get();
+  auto iter = ihs_.find(index_name);
+  if (iter == ihs_.end()) {
+    throw IndexNotFoundError(tab_name, col_names);
+  }
+  IxIndexHandle *ix_hdl_ptr = iter->second.get();
   int index_page_num = ix_hdl_ptr->get_page_num();
 
   // 缓冲池要删除索引对应页 因为创建时索引写入磁盘绕过了缓冲池
