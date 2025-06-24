@@ -350,10 +350,10 @@ void RecoveryManager::undo() {
     for (auto &col_meta : index.cols) {
       col_names.emplace_back(col_meta.name);
     }
-    // try {
-    //   sm_manager_->drop_index(index.tab_name, col_names, nullptr);
-    //   sm_manager_->create_index(index.tab_name, col_names, nullptr);
-    // } catch (RMDBError &e) {
-    // }
+    try {
+      sm_manager_->drop_index(index.tab_name, col_names, nullptr);
+      // sm_manager_->create_index(index.tab_name, col_names, nullptr);
+    } catch (RMDBError &e) {
+    }
   }
 }
