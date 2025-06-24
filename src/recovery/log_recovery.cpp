@@ -352,8 +352,8 @@ void RecoveryManager::undo() {
     }
     try {
       sm_manager_->drop_index(index.tab_name, col_names, nullptr);
-    } catch (IndexNotFoundError &e) {
+      sm_manager_->create_index(index.tab_name, col_names, nullptr);
+    } catch (RMDBError &e) {
     }
-    sm_manager_->create_index(index.tab_name, col_names, nullptr);
   }
 }
