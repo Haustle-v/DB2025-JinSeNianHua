@@ -117,7 +117,7 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
         break;
       }
       case T_CreateCheckPoint: {
-        // create_checkpoint(context);
+        create_checkpoint(context);
         break;
       }
       case T_Crash: {
