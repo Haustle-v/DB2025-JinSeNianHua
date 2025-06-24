@@ -153,7 +153,7 @@ void RecoveryManager::redo() {
 
           std::string tab_name(insert_record.table_name_, insert_record.table_name_size_);
           redo_insert(tab_name, insert_record.rid_, insert_record.insert_value_, insert_record.lsn_);
-        }
+        } break;
         case LogType::DELETE: {
           DeleteLogRecord delete_record;
           //   读取完整日志
@@ -166,7 +166,7 @@ void RecoveryManager::redo() {
 
           std::string tab_name(delete_record.table_name_, delete_record.table_name_size_);
           redo_delete(tab_name, delete_record.rid_, delete_record.lsn_);
-        }
+        } break;
         case LogType::UPDATE: {
           UpdateLogRecord update_record;
           //   读取完整日志
@@ -179,7 +179,7 @@ void RecoveryManager::redo() {
 
           std::string tab_name(update_record.table_name_, update_record.table_name_size_);
           redo_update(tab_name, update_record.rid_, update_record.new_value_, update_record.lsn_);
-        }
+        } break;
         default:
           break;
       }
@@ -243,8 +243,7 @@ void RecoveryManager::undo() {
           }
           std::string tab_name(insert_record.table_name_, insert_record.table_name_size_);
           redo_delete(tab_name, insert_record.rid_, insert_record.lsn_);
-          break;
-        }
+        } break;
         case LogType::DELETE: {
           DeleteLogRecord delete_record;
           //   读取完整日志
@@ -256,8 +255,7 @@ void RecoveryManager::undo() {
           }
           std::string tab_name(delete_record.table_name_, delete_record.table_name_size_);
           redo_insert(tab_name, delete_record.rid_, delete_record.delete_value_, delete_record.lsn_);
-          break;
-        }
+        } break;
         case LogType::UPDATE: {
           UpdateLogRecord update_record;
           //   读取完整日志
@@ -269,7 +267,7 @@ void RecoveryManager::undo() {
           }
           std::string tab_name(update_record.table_name_, update_record.table_name_size_);
           redo_update(tab_name, update_record.rid_, update_record.old_value_, update_record.lsn_);
-        }
+        } break;
         default:
           break;
       }
