@@ -343,6 +343,9 @@ void RecoveryManager::undo() {
   // 重建索引
   std::vector<IndexMeta> all_indexes = sm_manager_->db_.get_all_indexes();
   for (auto &index : all_indexes) {
+    if (sm_manager_->fhs_.find(index.tab_name) == sm_manager_->fhs_.end()) {
+      continue;
+    }
     std::vector<std::string> col_names;
     for (auto &col_meta : index.cols) {
       col_names.emplace_back(col_meta.name);
