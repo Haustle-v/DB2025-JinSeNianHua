@@ -341,13 +341,13 @@ void RecoveryManager::undo() {
   }
 
   // 重建索引
-  //   std::vector<IndexMeta> all_indexes = sm_manager_->db_.get_all_indexes();
-  //   for (auto &index : all_indexes) {
-  //     std::vector<std::string> col_names;
-  //     for (auto &col_meta : index.cols) {
-  //       col_names.emplace_back(col_meta.name);
-  //     }
-  //     sm_manager_->drop_index(index.tab_name, col_names, nullptr);
-  //     sm_manager_->create_index(index.tab_name, col_names, nullptr);
-  //   }
+  std::vector<IndexMeta> all_indexes = sm_manager_->db_.get_all_indexes();
+  for (auto &index : all_indexes) {
+    std::vector<std::string> col_names;
+    for (auto &col_meta : index.cols) {
+      col_names.emplace_back(col_meta.name);
+    }
+    sm_manager_->drop_index(index.tab_name, col_names, nullptr);
+    sm_manager_->create_index(index.tab_name, col_names, nullptr);
+  }
 }

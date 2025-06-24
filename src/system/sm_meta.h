@@ -200,16 +200,16 @@ class DbMeta {
   }
 
   // sqb 6.8 返回所有索引，便于恢复时重建
-  //   std::vector<IndexMeta> get_all_indexes() {
-  //     std::vector<IndexMeta> res;
-  //     int index_num = 0;
-  //     for (auto &tab_and_meta : tabs_) {
-  //       index_num += tab_and_meta.second.indexes.size();
-  //     }
-  //     res.reserve(index_num);
-  //     for (auto &tab_and_meta : tabs_) {
-  //       res.insert(res.end(), tab_and_meta.second.indexes.begin(), tab_and_meta.second.indexes.end());
-  //     }
-  //     return res;
-  //   }
+  std::vector<IndexMeta> get_all_indexes() {
+    std::vector<IndexMeta> res;
+    int index_num = 0;
+    for (auto &tab_and_meta : tabs_) {
+      index_num += tab_and_meta.second.indexes.size();
+    }
+    res.reserve(index_num);
+    for (auto &tab_and_meta : tabs_) {
+      res.insert(res.end(), tab_and_meta.second.indexes.begin(), tab_and_meta.second.indexes.end());
+    }
+    return res;
+  }
 };
