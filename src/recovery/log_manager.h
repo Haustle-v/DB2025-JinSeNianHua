@@ -369,7 +369,8 @@ class LogBuffer {
   }
 
   char buffer_[LOG_BUFFER_SIZE + 1];
-  int offset_;  // 写入log的offset
+  int offset_;       // 写入log的offset
+  int block_id_{0};  // sqb 为了减少恢复时io读入 具体含义是以BUFFER_SIZE为块，当前缓冲区内容是日志的第几块
 };
 
 /* 日志管理器，负责把日志写入日志缓冲区，以及把日志缓冲区中的内容写入磁盘中 */

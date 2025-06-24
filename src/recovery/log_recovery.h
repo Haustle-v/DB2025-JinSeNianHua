@@ -48,6 +48,13 @@ class RecoveryManager {
     offset = static_cast<int32_t>(static_cast<uint32_t>(lsn_pos & 0xFFFFFFFF));
   }
 
+  // sqb redo 重构 6.24
+  void redo_insert(const std::string &tab_name, const Rid &rid, const RmRecord &rec, const lsn_t lsn);
+
+  void redo_delete(const std::string &tab_name, const Rid &rid, const lsn_t lsn);
+
+  void redo_update(const std::string &tab_name, const Rid &rid, const RmRecord &new_rec, const lsn_t lsn);
+
   LogBuffer buffer_;                        // 读入日志
   DiskManager *disk_manager_;               // 用来读写文件
   BufferPoolManager *buffer_pool_manager_;  // 对页面进行读写
