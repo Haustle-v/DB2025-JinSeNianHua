@@ -20,12 +20,13 @@ std::shared_ptr<Query> Analyze::do_analyze(
   std::shared_ptr<Query> query = std::make_shared<Query>();
   if (auto x = std::dynamic_pointer_cast<ast::SelectStmt>(parse)) {
     // 测试
-    // for (auto &sv_sel_col : x->cols) {
-    //   if(sv_sel_col->col_name == x->group_by_cols[0]->col_name) {
-    //     assert(false);
+    // if(nullptr == std::dynamic_pointer_cast<ast::AggCol>(x->cols[1])) {
+    //   if(x->group_by_cols.size() == 1) {
+    //   if(x->cols[1]->col_name != x->group_by_cols[0]->col_name) {
+    //     throw RMDBError();
+    //   }
     //   }
     // }
-    // throw RMDBError();
     // 处理表名
     query->tables = std::move(x->tabs);
     /** TODO: 检查表是否存在 */
@@ -129,6 +130,7 @@ std::shared_ptr<Query> Analyze::do_analyze(
     // WHERE 子句中不能用聚集函数作为条件表达式
     for (auto &cond : x->conds) {
       if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(cond->lhs)) {
+        assert(false);
         throw GroupByError(agg_col->col_name);
       }
     }
