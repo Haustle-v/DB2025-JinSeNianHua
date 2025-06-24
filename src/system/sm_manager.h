@@ -108,18 +108,4 @@ class SmManager {
                        const lsn_t lsn = INVALID_LSN) {
     record_update_helper(tab_name, rid, old_rec, lsn);
   }
-
-  // sqb redo 增删改 6.8
-  void redo_insert(const std::string &tab_name, const Rid &rid, const RmRecord &rec, const lsn_t lsn = INVALID_LSN) {
-    record_insert_helper(tab_name, rid, rec, lsn);
-  }
-
-  void redo_delete(const std::string &tab_name, const Rid &rid, const lsn_t lsn = INVALID_LSN) {
-    record_delete_helper(tab_name, rid, lsn);
-  }
-
-  void redo_update(const std::string &tab_name, const Rid &rid, const RmRecord &new_rec,
-                   const lsn_t lsn = INVALID_LSN) {
-    record_update_helper(tab_name, rid, new_rec, lsn);
-  }
 };

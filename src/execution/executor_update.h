@@ -42,9 +42,9 @@ class UpdateExecutor : public AbstractExecutor {
   // 所以在这里更新全部就好 处理数据与索引 5.29
   std::unique_ptr<RmRecord> Next() override {
     // sqb 事务并发控制 6.9
-    // if (context_ != nullptr) {
-    //   context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
-    // }
+    if (context_ != nullptr) {
+      context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+    }
     // 提前做类型兼容 并为set 子句的值分配空间 它的空间通过raii管理
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     for (auto &single_set_clause : set_clauses_) {
