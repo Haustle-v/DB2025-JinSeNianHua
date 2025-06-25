@@ -11,7 +11,7 @@ See the Mulan PSL v2 for more details. */
 #include "lock_manager.h"
 
 // sqb 检查是否已持有足够强的锁 6.9
-bool LockManager::is_stronger_or_equal(LockMode held, LockMode requested) {
+inline bool LockManager::is_stronger_or_equal(LockMode held, LockMode requested) {
   static const bool strength_matrix[5][5] = {/* SHRD */ {true, false, false, false, false},
                                              /* EXCL */ {true, true, false, false, false},
                                              /* IS   */ {false, false, true, false, false},
@@ -21,7 +21,7 @@ bool LockManager::is_stronger_or_equal(LockMode held, LockMode requested) {
 }
 
 // sqb 检查升级是否合法 6.9
-bool LockManager::is_valid_upgrade(LockMode current, LockMode target) {
+inline bool LockManager::is_valid_upgrade(LockMode current, LockMode target) {
   static const bool upgrade_matrix[5][5] = {/* SHRD */ {true, true, false, false, true},
                                             /* EXCL */ {false, true, false, false, false},
                                             /* IS   */ {false, false, true, true, true},
@@ -31,7 +31,7 @@ bool LockManager::is_valid_upgrade(LockMode current, LockMode target) {
 }
 
 // sqb 将请求的锁转换为队列中的锁 6.9
-LockManager::GroupLockMode LockManager::convert2Group(LockMode mode) {
+inline LockManager::GroupLockMode LockManager::convert2Group(LockMode mode) {
   switch (mode) {
     case LockMode::SHARED:
       return GroupLockMode::S;
@@ -49,7 +49,7 @@ LockManager::GroupLockMode LockManager::convert2Group(LockMode mode) {
 }
 
 // sqb 检查兼容性 6.9
-bool LockManager::is_compatible(GroupLockMode held, LockMode requested) {
+inline bool LockManager::is_compatible(GroupLockMode held, LockMode requested) {
   GroupLockMode request_mode = convert2Group(requested);
   static const bool compatiable_matrix[6][6] = {/* NON_LOCK */ {true, true, true, true, true, true},
                                                 /* IS   */ {true, true, true, true, true, false},
@@ -74,8 +74,8 @@ bool LockManager::lock_helper(Transaction *txn, LockDataId &lock_id, LockMode lo
   //   查找现有锁
   std::unique_lock<std::mutex> lock(latch_);
   auto &request_queue = lock_table_[lock_id];  // 有则取，无则创建
-  lock.unlock();
   std::unique_lock<std::mutex> queue_lock(request_queue.latch_);
+  lock.unlock();
   auto iter = request_queue.request_queue_.begin();
   for (; iter != request_queue.request_queue_.end(); ++iter) {
     if (iter->txn_id_ == txn->get_transaction_id()) {
@@ -83,7 +83,7 @@ bool LockManager::lock_helper(Transaction *txn, LockDataId &lock_id, LockMode lo
     }
   }
 
-  // 事务已有该锁请求
+  // 事务已有该锁请求 检查是否升级
   if (iter != request_queue.request_queue_.end()) {
     // 已申请更强的锁就直接返回
     if (is_stronger_or_equal(iter->lock_mode_, lock_mode)) {
@@ -100,8 +100,14 @@ bool LockManager::lock_helper(Transaction *txn, LockDataId &lock_id, LockMode lo
 
       //   为当前锁升级
       request_queue.waiting_txn_ = txn->get_transaction_id();
-      iter->lock_mode_ = lock_mode;
-      if (is_compatible(request_queue.group_lock_mode_, lock_mode)) {
+      //   这里检查兼容性应该检查除了自己以外最高级别的锁
+      GroupLockMode other_max_lock = GroupLockMode::NON_LOCK;
+      for (auto other = request_queue.request_queue_.begin(); other != request_queue.request_queue_.end(); ++other) {
+        if (other->txn_id_ != txn->get_transaction_id()) {
+          other_max_lock = MaxLockMode(other_max_lock, convert2Group(other->lock_mode_));
+        }
+      }
+      if (is_compatible(other_max_lock, lock_mode)) {
         // 兼容直接授予锁
         iter->granted_ = true;
       } else {
@@ -109,6 +115,7 @@ bool LockManager::lock_helper(Transaction *txn, LockDataId &lock_id, LockMode lo
         iter->granted_ = false;
         request_queue.cv_.wait(queue_lock, [&]() { return iter->granted_; });
       }
+      iter->lock_mode_ = lock_mode;
       //   锁升级后更新队列最强锁 直接返回
       request_queue.group_lock_mode_ = MaxLockMode(request_queue.group_lock_mode_, convert2Group(lock_mode));
       if (request_queue.waiting_txn_ == txn->get_transaction_id()) {
@@ -132,6 +139,15 @@ bool LockManager::lock_helper(Transaction *txn, LockDataId &lock_id, LockMode lo
     request_queue.request_queue_.emplace_back(request);
   } else {
     // 非空队列需检查兼容性 兼容直接授予锁 不兼容需等待
+    // 其它事务正在等待获取锁
+    if (request_queue.waiting_txn_ != INVALID_TXN_ID) {
+      txn->set_state(TransactionState::ABORTED);
+      throw TransactionAbortException(txn->get_transaction_id(), AbortReason::UPGRADE_CONFLICT);
+      return false;
+    }
+
+    //   为当前锁升级
+    request_queue.waiting_txn_ = txn->get_transaction_id();
     if (is_compatible(request_queue.group_lock_mode_, lock_mode)) {
       request.granted_ = true;
       request_queue.request_queue_.emplace_back(request);
@@ -139,6 +155,9 @@ bool LockManager::lock_helper(Transaction *txn, LockDataId &lock_id, LockMode lo
       request_queue.request_queue_.emplace_back(request);
       auto it = request_queue.request_queue_.rbegin();
       request_queue.cv_.wait(queue_lock, [&]() { return it->granted_; });
+    }
+    if (request_queue.waiting_txn_ == txn->get_transaction_id()) {
+      request_queue.waiting_txn_ = INVALID_TXN_ID;
     }
   }
   request_queue.group_lock_mode_ = MaxLockMode(request_queue.group_lock_mode_, convert2Group(lock_mode));
@@ -241,8 +260,8 @@ bool LockManager::unlock(Transaction *txn, LockDataId lock_data_id) {
     return false;
   }
   LockRequestQueue &request_queue = iter->second;
-  lock.unlock();
   std::unique_lock<std::mutex> queue_lock(request_queue.latch_);
+  lock.unlock();
 
   // 删除请求队列中该事务的请求
   bool found = false;

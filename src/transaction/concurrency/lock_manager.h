@@ -67,15 +67,15 @@ class LockManager {
   // sqb 6.8 添加几个私有的方法辅助加锁
   bool lock_helper(Transaction *txn, LockDataId &lock_id, LockMode lock_mode);
 
-  bool is_stronger_or_equal(LockMode held, LockMode requested);
+  inline bool is_stronger_or_equal(LockMode held, LockMode requested);
 
-  bool is_valid_upgrade(LockMode current, LockMode target);
+  inline bool is_valid_upgrade(LockMode current, LockMode target);
 
-  GroupLockMode convert2Group(LockMode mode);
+  inline GroupLockMode convert2Group(LockMode mode);
 
-  bool is_compatible(GroupLockMode held, LockMode requested);
+  inline bool is_compatible(GroupLockMode held, LockMode requested);
 
-  GroupLockMode MaxLockMode(GroupLockMode x, GroupLockMode y) {
+  inline GroupLockMode MaxLockMode(GroupLockMode x, GroupLockMode y) {
     return static_cast<GroupLockMode>(std::max(static_cast<std::underlying_type_t<GroupLockMode>>(x),
                                                static_cast<std::underlying_type_t<GroupLockMode>>(y)));
   }
