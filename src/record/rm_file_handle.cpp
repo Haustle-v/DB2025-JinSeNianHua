@@ -27,6 +27,7 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
   //     context->lock_mgr_->lock_shared_on_record(context->txn_, rid, fd_);
   //   }
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
+  std::shared_lock<std::shared_mutex> lock(latch_);
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
   std::unique_ptr<RmRecord> record_ptr =
       std::make_unique<RmRecord>(file_hdr_.record_size, page_hdl.get_slot(rid.slot_no));
@@ -50,7 +51,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
   // 4. 更新page_handle.page_hdr中的数据结构
   // 注意考虑插入一条记录后页面已满的情况，需要更新file_hdr_.first_free_page_no
 
-  // std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = create_page_handle();
 
   // 找空闲位置
@@ -99,8 +100,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context) {
  * @param {char*} buf 要插入记录的数据
  */
 void RmFileHandle::insert_record(const Rid &rid, char *buf) {
-  // 暂时没有考虑是插入在不存在的page上
-  // std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
 
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   memcpy(page_hdl.get_slot(rid.slot_no), buf, file_hdr_.record_size);
@@ -129,7 +129,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
   // 注意考虑删除一条记录后页面未满的情况，需要调用release_page_handle()
 
   //   还是只考虑rid存在的情况
-  // std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
 
   // sqb添加事务控制语句 日志 6.5
@@ -176,7 +176,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
   // 2. 更新记录
 
   //   暂时只考虑数据存在的情况
-  // std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
 
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
