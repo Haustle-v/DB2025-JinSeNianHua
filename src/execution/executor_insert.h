@@ -60,6 +60,20 @@ class InsertExecutor : public AbstractExecutor {
       memcpy(rec.data + col.offset, val.raw->data, col.len);
     }
 
+    // 新增：遍历所有元组，判断是否有内容完全相同的元组
+    {
+      RmScan scan(fh_);
+      while (!scan.is_end()) {
+        Rid cur_rid = scan.rid();
+        std::unique_ptr<RmRecord> cur_tuple = fh_->get_reconstructed_tuple(cur_rid, context_, tab_);
+        if (cur_tuple && *cur_tuple == rec) {
+          // 有相同元组，直接abort
+          throw TransactionAbortException(context_->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+        }
+        scan.next();
+      }
+    }
+
     // sqb 添加索引唯一性检查 注意先检查所有索引再插入数据 不能边检查边插入
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     for (auto &index_meta : tab_.indexes) {
