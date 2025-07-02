@@ -25,26 +25,20 @@ class RmManager;
 struct RmPageHandle {
   const RmFileHdr *file_hdr;  // 当前页面所在文件的文件头指针
   Page *page;                 // 页面的实际数据，包括页面存储的数据、元信息等
-  RmPageHdr *
-      page_hdr;  // page->data的第一部分，存储页面元信息，指针指向首地址，长度为sizeof(RmPageHdr)
-  char *
-      bitmap;  // page->data的第二部分，存储页面的bitmap，指针指向首地址，长度为file_hdr->bitmap_size
-  char *
-      slots;  // page->data的第三部分，存储表的记录，指针指向首地址，每个slot的长度为file_hdr->record_size
+  RmPageHdr *page_hdr;        // page->data的第一部分，存储页面元信息，指针指向首地址，长度为sizeof(RmPageHdr)
+  char *bitmap;               // page->data的第二部分，存储页面的bitmap，指针指向首地址，长度为file_hdr->bitmap_size
+  char *slots;  // page->data的第三部分，存储表的记录，指针指向首地址，每个slot的长度为file_hdr->record_size
 
-  RmPageHandle(const RmFileHdr *fhdr_, Page *page_)
-      : file_hdr(fhdr_), page(page_) {
-    page_hdr =
-        reinterpret_cast<RmPageHdr *>(page->get_data() + page->OFFSET_PAGE_HDR);
+  RmPageHandle(const RmFileHdr *fhdr_, Page *page_) : file_hdr(fhdr_), page(page_) {
+    page_hdr = reinterpret_cast<RmPageHdr *>(page->get_data() + page->OFFSET_PAGE_HDR);
     bitmap = page->get_data() + sizeof(RmPageHdr) + page->OFFSET_PAGE_HDR;
     slots = bitmap + file_hdr->bitmap_size;
   }
 
   // 返回指定slot_no的slot存储收地址
   char *get_slot(int slot_no) const {
-    return slots +
-           slot_no * file_hdr->record_size;  // slots的首地址 + slot个数 *
-                                             // 每个slot的大小(每个record的大小)
+    return slots + slot_no * file_hdr->record_size;  // slots的首地址 + slot个数 *
+                                                     // 每个slot的大小(每个record的大小)
   }
 };
 
@@ -64,16 +58,12 @@ class RmFileHandle {
   //   std::mutex latch_;
 
  public:
-  RmFileHandle(DiskManager *disk_manager,
-               BufferPoolManager *buffer_pool_manager, int fd)
-      : disk_manager_(disk_manager),
-        buffer_pool_manager_(buffer_pool_manager),
-        fd_(fd) {
+  RmFileHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
+      : disk_manager_(disk_manager), buffer_pool_manager_(buffer_pool_manager), fd_(fd) {
     // 注意：这里从磁盘中读出文件描述符为fd的文件的file_hdr，读到内存中
     // 这里实际就是初始化file_hdr，只不过是从磁盘中读出进行初始化
     // init file_hdr_
-    disk_manager_->read_page(fd, RM_FILE_HDR_PAGE, (char *)&file_hdr_,
-                             sizeof(file_hdr_));
+    disk_manager_->read_page(fd, RM_FILE_HDR_PAGE, (char *)&file_hdr_, sizeof(file_hdr_));
     // disk_manager管理的fd对应的文件中，设置从file_hdr_.num_pages开始分配page_no
     disk_manager_->set_fd2pageno(fd, file_hdr_.num_pages);
   }
@@ -94,13 +84,20 @@ class RmFileHandle {
 
   void insert_record(const Rid &rid, char *buf);
 
-  void delete_record(const Rid &rid, Context *context);
+  // sqb 6.4更改 delete update 接口 便于封装事务与日志
+  void delete_record(const Rid &rid, Context *context, RmRecord *old_rec = nullptr);
 
-  void update_record(const Rid &rid, char *buf, Context *context);
+  void update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec = nullptr);
 
   RmPageHandle create_new_page_handle();
 
   RmPageHandle fetch_page_handle(int page_no) const;
+
+  // sqb 故障恢复指定插入用
+  void allocate_pages(const Rid &rid);
+
+  // sqb 6.16
+  int get_page_num() { return file_hdr_.num_pages; }
 
  private:
   RmPageHandle create_page_handle();

@@ -16,9 +16,9 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 #include <vector>
 
+#include "common/common.h"
 #include "parser/parser.h"
 #include "system/sm.h"
-#include "common/common.h"
 
 class Query{
     public:
@@ -42,19 +42,21 @@ class Query{
     // 是否全选，即*，用于EXPLAIN里打印*的情况（而不是把所有列都打印出来）
     bool select_all {false};
 
-    Query(){}
+  // sqb explain 标识
+  bool need_explain{false};
 
+  Query() {}
 };
 
-class Analyze
-{
-private:
-    SmManager *sm_manager_;
-public:
-    Analyze(SmManager *sm_manager) : sm_manager_(sm_manager){}
-    ~Analyze(){}
+class Analyze {
+ private:
+  SmManager *sm_manager_;
 
-    std::shared_ptr<Query> do_analyze(std::shared_ptr<ast::TreeNode> root);
+ public:
+  Analyze(SmManager *sm_manager) : sm_manager_(sm_manager) {}
+  ~Analyze() {}
+  std::shared_ptr<Query> do_analyze(std::shared_ptr<ast::TreeNode> root);
+
 
 private:
     TabCol check_column(const std::vector<ColMeta> &all_cols, TabCol target);
@@ -66,5 +68,6 @@ private:
     void check_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds);
     Value convert_sv_value(const std::shared_ptr<ast::Value> &sv_val);
     CompOp convert_sv_comp_op(ast::SvCompOp op);
-};
 
+
+};

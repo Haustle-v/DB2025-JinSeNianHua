@@ -15,7 +15,7 @@ See the Mulan PSL v2 for more details. */
  * @return {bool} true: 可替换帧查找成功 , false: 可替换帧查找失败
  * @param {frame_id_t*} frame_id 帧页id指针,返回成功找到的可替换帧id
  */
-bool BufferPoolManager::find_victim_page(frame_id_t* frame_id) {
+bool BufferPoolManager::find_victim_page(frame_id_t *frame_id) {
   // Todo:
   // 1 使用BufferPoolManager::free_list_判断缓冲池是否已满需要淘汰页面
   // 1.1 未满获得frame
@@ -50,8 +50,7 @@ bool BufferPoolManager::find_victim_page(frame_id_t* frame_id) {
  * @param {PageId} new_page_id 新的page_id
  * @param {frame_id_t} new_frame_id 新的帧frame_id
  */
-void BufferPoolManager::update_page(Page* page, PageId new_page_id,
-                                    frame_id_t new_frame_id) {
+void BufferPoolManager::update_page(Page *page, PageId new_page_id, frame_id_t new_frame_id) {
   // Todo:
   // 1 如果是脏页，写回磁盘，并且把dirty置为false
   // 2 更新page table
@@ -59,8 +58,7 @@ void BufferPoolManager::update_page(Page* page, PageId new_page_id,
 
   //   脏页判断
   if (page->is_dirty()) {
-    disk_manager_->write_page(page->id_.fd, page->id_.page_no, page->get_data(),
-                              PAGE_SIZE);
+    disk_manager_->write_page(page->id_.fd, page->id_.page_no, page->get_data(), PAGE_SIZE);
     page->is_dirty_ = false;
   }
 
@@ -86,7 +84,7 @@ void BufferPoolManager::update_page(Page* page, PageId new_page_id,
  * @return {Page*} 若获得了需要的页则将其返回，否则返回nullptr
  * @param {PageId} page_id 需要获取的页的PageId
  */
-Page* BufferPoolManager::fetch_page(PageId page_id) {
+Page *BufferPoolManager::fetch_page(PageId page_id) {
   // Todo:
   //  1.     从page_table_中搜寻目标页
   //  1.1 若目标页有被page_table_记录，则将其所在frame固定(pin)，并返回目标页。
@@ -102,7 +100,7 @@ Page* BufferPoolManager::fetch_page(PageId page_id) {
   frame_id_t useable_frame_id = INVALID_FRAME_ID;
   if (iter != page_table_.end()) {
     // 缓存命中
-    Page& target_page = pages_[iter->second];
+    Page &target_page = pages_[iter->second];
     target_page.pin_count_++;
     replacer_->pin(iter->second);  // unpin会在外面被调用 这里必须加
     // std::cerr << "[DEBUG] bpm fetch_page cached hit! page "
@@ -120,8 +118,7 @@ Page* BufferPoolManager::fetch_page(PageId page_id) {
   update_page(&pages_[useable_frame_id], page_id, useable_frame_id);
 
   // 将目标页读入到给定页框
-  disk_manager_->read_page(page_id.fd, page_id.page_no,
-                           pages_[useable_frame_id].get_data(), PAGE_SIZE);
+  disk_manager_->read_page(page_id.fd, page_id.page_no, pages_[useable_frame_id].get_data(), PAGE_SIZE);
 
   //    加载到内存时把它定住
   pages_[useable_frame_id].pin_count_ = 1;
@@ -158,7 +155,7 @@ bool BufferPoolManager::unpin_page(PageId page_id, bool is_dirty) {
     return false;
   }
 
-  Page& target_page = pages_[iter->second];
+  Page &target_page = pages_[iter->second];
   if (target_page.pin_count_ == 0) {
     return false;
   }
@@ -197,9 +194,8 @@ bool BufferPoolManager::flush_page(PageId page_id) {
     return false;
   }
 
-  Page& target_page = pages_[iter->second];
-  disk_manager_->write_page(target_page.id_.fd, target_page.id_.page_no,
-                            target_page.get_data(), PAGE_SIZE);
+  Page &target_page = pages_[iter->second];
+  disk_manager_->write_page(target_page.id_.fd, target_page.id_.page_no, target_page.get_data(), PAGE_SIZE);
   target_page.is_dirty_ = false;
   return true;
 }
@@ -210,7 +206,7 @@ bool BufferPoolManager::flush_page(PageId page_id) {
  * @return {Page*} 返回新创建的page，若创建失败则返回nullptr
  * @param {PageId*} page_id 当成功创建一个新的page时存储其page_id
  */
-Page* BufferPoolManager::new_page(PageId* page_id) {
+Page *BufferPoolManager::new_page(PageId *page_id) {
   // 1.   获得一个可用的frame，若无法获得则返回nullptr
   // 2.   在fd对应的文件分配一个新的page_id
   // 3.   将frame的数据写回磁盘
@@ -225,7 +221,7 @@ Page* BufferPoolManager::new_page(PageId* page_id) {
     return nullptr;
   }
 
-  Page& target_page = pages_[usable_frame_id];
+  Page &target_page = pages_[usable_frame_id];
   page_id_t new_page_no = disk_manager_->allocate_page(page_id->fd);
   PageId new_page_id{page_id->fd, new_page_no};
   page_id->page_no = new_page_no;
@@ -261,11 +257,10 @@ bool BufferPoolManager::delete_page(PageId page_id) {
   // std::cerr << "[DEBUG] bpm will delete page " << page_id.toString()
   //           << " frame " << iter->second << std::endl;
 
-  Page& target_page = pages_[iter->second];
+  Page &target_page = pages_[iter->second];
   if (target_page.pin_count_ == 0) {
     // pc为0才能删
-    disk_manager_->write_page(target_page.id_.fd, target_page.id_.page_no,
-                              target_page.get_data(), PAGE_SIZE);
+    disk_manager_->write_page(target_page.id_.fd, target_page.id_.page_no, target_page.get_data(), PAGE_SIZE);
     // 有问题！free加入了当前页框后面就会被替换 但是同时加入lru
     // 和free可能会被使用两次！
     // replacer_->pin(iter->second);
@@ -293,10 +288,9 @@ void BufferPoolManager::flush_all_pages(int fd) {
   // 简单调整一下 max_page_no可能比缓冲池大很多
   if (max_page_no > pool_size_) {
     for (page_id_t frame_no = 0; frame_no < pool_size_; ++frame_no) {
-      const PageId& page_id = pages_[frame_no].get_page_id();
+      const PageId &page_id = pages_[frame_no].get_page_id();
       if (page_id.fd == fd && page_id.page_no != INVALID_PAGE_ID) {
-        disk_manager_->write_page(fd, page_id.page_no,
-                                  pages_[frame_no].get_data(), PAGE_SIZE);
+        disk_manager_->write_page(fd, page_id.page_no, pages_[frame_no].get_data(), PAGE_SIZE);
         pages_[frame_no].is_dirty_ = false;
       }
     }
@@ -305,11 +299,10 @@ void BufferPoolManager::flush_all_pages(int fd) {
       cur_page_id.page_no = page_no;
       auto iter = page_table_.find(cur_page_id);
       if (iter != page_table_.end()) {
-        Page& target_page = pages_[iter->second];
+        Page &target_page = pages_[iter->second];
         // 外部可以直接写page的data 所以dirty目前框架是有问题的 全部刷新！
         // if (target_page.is_dirty()) {
-        disk_manager_->write_page(fd, page_no, target_page.get_data(),
-                                  PAGE_SIZE);
+        disk_manager_->write_page(fd, page_no, target_page.get_data(), PAGE_SIZE);
         target_page.is_dirty_ = false;
         // }
       }

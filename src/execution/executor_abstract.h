@@ -44,12 +44,10 @@ class AbstractExecutor {
 
   virtual ColMeta get_col_offset(const TabCol &target) { return ColMeta(); };
 
-  std::vector<ColMeta>::const_iterator get_col(
-      const std::vector<ColMeta> &rec_cols, const TabCol &target) {
-    auto pos =
-        std::find_if(rec_cols.begin(), rec_cols.end(), [&](const ColMeta &col) {
-          return col.tab_name == target.tab_name && col.name == target.col_name;
-        });
+  std::vector<ColMeta>::const_iterator get_col(const std::vector<ColMeta> &rec_cols, const TabCol &target) {
+    auto pos = std::find_if(rec_cols.begin(), rec_cols.end(), [&](const ColMeta &col) {
+      return col.tab_name == target.tab_name && col.name == target.col_name;
+    });
     if (pos == rec_cols.end()) {
       throw ColumnNotFoundError(target.tab_name + '.' + target.col_name);
     }
@@ -57,9 +55,7 @@ class AbstractExecutor {
   }
 
   //  sqb: 检查记录是否符合所有条件  5.24
-  bool check_conds(std::vector<ColMeta> &rec_cols,
-                   const std::vector<Condition> &conds,
-                   const RmRecord *rec_ptr) {
+  bool check_conds(std::vector<ColMeta> &rec_cols, const std::vector<Condition> &conds, const RmRecord *rec_ptr) {
     for (auto &single_cond : conds) {
       // 不满足单个条件 直接false
       if (!check_single_cond(rec_cols, single_cond, rec_ptr)) {
@@ -70,8 +66,7 @@ class AbstractExecutor {
   }
 
   //  sqb: 检查记录是否符合单个条件 5.24
-  bool check_single_cond(const std::vector<ColMeta> &rec_cols,
-                         const Condition single_cond, const RmRecord *rec_ptr) {
+  bool check_single_cond(const std::vector<ColMeta> &rec_cols, const Condition single_cond, const RmRecord *rec_ptr) {
     auto lhs_col = get_col(rec_cols, single_cond.lhs_col);
     char *lhs = rec_ptr->data + lhs_col->offset;
     char *rhs = nullptr;

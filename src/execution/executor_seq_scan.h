@@ -31,8 +31,7 @@ class SeqScanExecutor : public AbstractExecutor {
   SmManager *sm_manager_;
 
  public:
-  SeqScanExecutor(SmManager *sm_manager, std::string tab_name,
-                  std::vector<Condition> conds, Context *context) {
+  SeqScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds, Context *context) {
     sm_manager_ = sm_manager;
     tab_name_ = std::move(tab_name);
     conds_ = std::move(conds);
@@ -60,8 +59,7 @@ class SeqScanExecutor : public AbstractExecutor {
 
     // 需要顺序扫描 满足条件的记录 注意当前框架的记录就是元组
     for (; !scan_->is_end(); scan_->next()) {
-      std::unique_ptr<RmRecord> rec_ptr =
-          fh_->get_record(scan_->rid(), context_);
+      std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(scan_->rid(), context_);
       if (check_conds(cols_, conds_, rec_ptr.get())) {
         break;
       }
@@ -94,8 +92,7 @@ class SeqScanExecutor : public AbstractExecutor {
   // sqb 5.23
   ColMeta get_col_offset(const TabCol &target) override {
     for (auto &col_meta : cols_) {
-      if (col_meta.tab_name == target.tab_name &&
-          col_meta.name == target.col_name) {
+      if (col_meta.tab_name == target.tab_name && col_meta.name == target.col_name) {
         return col_meta;
       }
     }

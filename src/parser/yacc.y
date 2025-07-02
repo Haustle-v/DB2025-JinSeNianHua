@@ -37,6 +37,9 @@ INNER LEFT RIGHT FULL SEMI ON EXPLAIN
 %token <sv_float> VALUE_FLOAT
 %token <sv_bool> VALUE_BOOL
 
+// added keywords
+%token EXPLAIN
+
 // specify types for non-terminal symbol
 %type <sv_node> stmt dbStmt ddl dml txnStmt setStmt
 %type <sv_field> field
@@ -117,14 +120,18 @@ dbStmt:
     {
         $$ = std::make_shared<ShowTables>();
     }
-    |   EXPLAIN dml
+    |  SHOW INDEX FROM tbName
     {
-        if (auto select = std::dynamic_pointer_cast<SelectStmt>($2)){
+        $$ = std::make_shared<ShowIndex>($4);
+    }
+    |  EXPLAIN dml
+    {
+        if(auto select = std::dynamic_pointer_cast<SelectStmt>($2)){
             select->need_explain = true;
             $$ = select;
         }
     }
-    ;
+    
 
 setStmt:
         SET set_knob_type '=' VALUE_BOOL
