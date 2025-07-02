@@ -8,10 +8,33 @@ EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
+#pragma once // 建议加上头文件保护符
+
 #include "lock_manager.h"
+
+// =========================================================================================
+// 修复说明：
+// 1.  策略选择：采用Wait-Die（等待-死亡）策略进行死锁预防。
+//     选择原因：此策略仅需中止当前请求锁的事务，无需修改函数签名去获取其它事务的指针，
+//     与现有代码结构兼容性最好，实现最直接。
+// 2.  关键修改点：在 lock_helper 函数中，原先会使线程无条件进入 std::condition_variable::wait
+//     的两个地方，加入了Wait-Die策略的判断逻辑。
+// 3.  具体逻辑：当一个事务（记为 T_req）的加锁请求与已持有的锁不兼容时：
+//     a. 遍历所有持有锁的事务（记为 T_holder）。
+//     b. 如果 T_req 的事务ID大于任何一个 T_holder 的ID（即T_req更"年轻"），
+//        则T_req必须"死亡"，立即中止并抛出异常，而不是等待。
+//     c. 如果 T_req 比所有 T_holder 都"年老"，它才可以进入等待队列。
+// 4.  健壮性提升：修改了 condition_variable::wait 的等待条件，
+//     增加了对事务自身状态的检查 (txn->get_state() == TransactionState::ABORTED)。
+//     这可以防止事务在被外部（如另一个事务根据Wound-Wait策略）中止后，仍然永久等待。
+// 5.  新增AbourtReason：请确保在 TransactionAbortException.h 中定义了
+//     DEADLOCK_PREVENTION 这个新的中断原因，用于记录日志和调试。
+// =========================================================================================
+
 
 // sqb 检查是否已持有足够强的锁 6.9
 inline bool LockManager::is_stronger_or_equal(LockMode held, LockMode requested) {
+  // ... (此函数无需修改)
   static const bool strength_matrix[5][5] = {/* SHRD */ {true, false, false, false, false},
                                              /* EXCL */ {true, true, false, false, false},
                                              /* IS   */ {false, false, true, false, false},
@@ -22,6 +45,7 @@ inline bool LockManager::is_stronger_or_equal(LockMode held, LockMode requested)
 
 // sqb 检查升级是否合法 6.9
 inline bool LockManager::is_valid_upgrade(LockMode current, LockMode target) {
+  // ... (此函数无需修改)
   static const bool upgrade_matrix[5][5] = {/* SHRD */ {true, true, false, false, true},
                                             /* EXCL */ {false, true, false, false, false},
                                             /* IS   */ {false, false, true, true, true},
@@ -32,6 +56,7 @@ inline bool LockManager::is_valid_upgrade(LockMode current, LockMode target) {
 
 // sqb 将请求的锁转换为队列中的锁 6.9
 inline LockManager::GroupLockMode LockManager::convert2Group(LockMode mode) {
+  // ... (此函数无需修改)
   switch (mode) {
     case LockMode::SHARED:
       return GroupLockMode::S;
@@ -50,6 +75,7 @@ inline LockManager::GroupLockMode LockManager::convert2Group(LockMode mode) {
 
 // sqb 检查兼容性 6.9
 inline bool LockManager::is_compatible(GroupLockMode held, LockMode requested) {
+  // ... (此函数无需修改)
   GroupLockMode request_mode = convert2Group(requested);
   static const bool compatiable_matrix[6][6] = {/* NON_LOCK */ {true, true, true, true, true, true},
                                                 /* IS   */ {true, true, true, true, true, false},
@@ -62,107 +88,118 @@ inline bool LockManager::is_compatible(GroupLockMode held, LockMode requested) {
 
 // sqb 统一抽象，用于加锁 6.9
 bool LockManager::lock_helper(Transaction *txn, LockDataId &lock_id, LockMode lock_mode) {
-  // 检查事务状态
-  if (txn->get_state() == TransactionState::ABORTED) {
-    return false;
-  } else if (txn->get_state() == TransactionState::SHRINKING) {
-    txn->set_state(TransactionState::ABORTED);
-    throw TransactionAbortException(txn->get_transaction_id(), AbortReason::LOCK_ON_SHIRINKING);
-  }
-  txn->set_state(TransactionState::GROWING);
-
-  //   查找现有锁
-  std::unique_lock<std::mutex> lock(latch_);
-  auto &request_queue = lock_table_[lock_id];  // 有则取，无则创建
-  std::unique_lock<std::mutex> queue_lock(request_queue.latch_);
-  lock.unlock();
-  auto iter = request_queue.request_queue_.begin();
-  for (; iter != request_queue.request_queue_.end(); ++iter) {
-    if (iter->txn_id_ == txn->get_transaction_id()) {
-      break;
+    if (txn->get_state() == TransactionState::ABORTED) {
+        return false;
     }
-  }
-
-  // 事务已有该锁请求 检查是否升级
-  if (iter != request_queue.request_queue_.end()) {
-    // 已申请更强的锁就直接返回
-    if (is_stronger_or_equal(iter->lock_mode_, lock_mode)) {
-      return true;
+    if (txn->get_state() == TransactionState::SHRINKING) {
+        txn->set_state(TransactionState::ABORTED);
+        throw TransactionAbortException(txn->get_transaction_id(), AbortReason::LOCK_ON_SHIRINKING);
     }
-    // 检查现有锁能否升级到对应锁
-    if (is_valid_upgrade(iter->lock_mode_, lock_mode)) {
-      // 其它事务正在等待获取锁
-      if (request_queue.waiting_txn_ != INVALID_TXN_ID) {
+    txn->set_state(TransactionState::GROWING);
+
+    std::unique_lock<std::mutex> lock(latch_);
+    auto &request_queue = lock_table_[lock_id];
+    std::unique_lock<std::mutex> queue_lock(request_queue.latch_);
+    lock.unlock();
+
+    // 检查是否已有锁请求（处理锁升级）
+    for (auto iter = request_queue.request_queue_.begin(); iter != request_queue.request_queue_.end(); ++iter) {
+        if (iter->txn_id_ == txn->get_transaction_id()) {
+            // 已有更强的锁
+            if (is_stronger_or_equal(iter->lock_mode_, lock_mode)) {
+                return true;
+            }
+            // 非法升级
+            if (!is_valid_upgrade(iter->lock_mode_, lock_mode)) {
+                txn->set_state(TransactionState::ABORTED);
+                throw TransactionAbortException(txn->get_transaction_id(), AbortReason::UPGRADE_CONFLICT);
+            }
+
+            // --- 锁升级逻辑 ---
+            if (request_queue.upgrading_ != INVALID_TXN_ID && request_queue.upgrading_ != txn->get_transaction_id()) {
+                txn->set_state(TransactionState::ABORTED);
+                throw TransactionAbortException(txn->get_transaction_id(), AbortReason::UPGRADE_CONFLICT);
+            }
+
+            GroupLockMode other_max_lock = GroupLockMode::NON_LOCK;
+            for (const auto &other : request_queue.request_queue_) {
+                if (other.txn_id_ != txn->get_transaction_id() && other.granted_) {
+                    other_max_lock = MaxLockMode(other_max_lock, convert2Group(other.lock_mode_));
+                }
+            }
+
+            // 升级与现有锁兼容
+            if (is_compatible(other_max_lock, lock_mode)) {
+                iter->lock_mode_ = lock_mode;
+                request_queue.group_lock_mode_ = MaxLockMode(request_queue.group_lock_mode_, convert2Group(lock_mode));
+            } else { // 不兼容，需要等待
+                request_queue.upgrading_ = txn->get_transaction_id();
+                txn_id_t upgrader_id = txn->get_transaction_id();
+                for (const auto &holder_req : request_queue.request_queue_) {
+                    if (holder_req.granted_ && holder_req.txn_id_ != upgrader_id) {
+                        if (upgrader_id > holder_req.txn_id_) { // Wait-Die
+                            txn->set_state(TransactionState::ABORTED);
+                            request_queue.upgrading_ = INVALID_TXN_ID;
+                            throw TransactionAbortException(upgrader_id, AbortReason::DEADLOCK_PREVENTION);
+                        }
+                    }
+                }
+                iter->granted_ = false; // 等待时，暂时标记为未授予
+                request_queue.cv_.wait(queue_lock, [&] { return iter->granted_ || txn->get_state() == TransactionState::ABORTED; });
+
+                if (txn->get_state() == TransactionState::ABORTED) {
+                    request_queue.upgrading_ = INVALID_TXN_ID;
+                    // 无需移除请求，交由事务回滚时的unlock逻辑处理
+                    return false;
+                }
+                // 被唤醒且成功授权
+                iter->lock_mode_ = lock_mode;
+                request_queue.group_lock_mode_ = MaxLockMode(request_queue.group_lock_mode_, convert2Group(lock_mode));
+            }
+            request_queue.upgrading_ = INVALID_TXN_ID;
+            return true;
+        }
+    }
+
+    // --- 新锁请求逻辑 ---
+    LockRequest request(txn->get_transaction_id(), lock_mode);
+    if (request_queue.upgrading_ != INVALID_TXN_ID) {
         txn->set_state(TransactionState::ABORTED);
         throw TransactionAbortException(txn->get_transaction_id(), AbortReason::UPGRADE_CONFLICT);
-        return false;
-      }
-
-      //   为当前锁升级
-      request_queue.waiting_txn_ = txn->get_transaction_id();
-      //   这里检查兼容性应该检查除了自己以外最高级别的锁
-      GroupLockMode other_max_lock = GroupLockMode::NON_LOCK;
-      for (auto other = request_queue.request_queue_.begin(); other != request_queue.request_queue_.end(); ++other) {
-        if (other->txn_id_ != txn->get_transaction_id()) {
-          other_max_lock = MaxLockMode(other_max_lock, convert2Group(other->lock_mode_));
-        }
-      }
-      if (is_compatible(other_max_lock, lock_mode)) {
-        // 兼容直接授予锁
-        iter->granted_ = true;
-      } else {
-        // 不兼容需等待锁
-        iter->granted_ = false;
-        request_queue.cv_.wait(queue_lock, [&]() { return iter->granted_; });
-      }
-      iter->lock_mode_ = lock_mode;
-      //   锁升级后更新队列最强锁 直接返回
-      request_queue.group_lock_mode_ = MaxLockMode(request_queue.group_lock_mode_, convert2Group(lock_mode));
-      if (request_queue.waiting_txn_ == txn->get_transaction_id()) {
-        request_queue.waiting_txn_ = INVALID_TXN_ID;
-      }
-      return true;
-
-    } else {
-      //   非法升级  不确定 先回滚吧
-      txn->set_state(TransactionState::ABORTED);
-      throw TransactionAbortException(txn->get_transaction_id(), AbortReason::UPGRADE_CONFLICT);
-      //   return false;
     }
-  }
-
-  //   事务没有锁 应创建锁请求
-  LockRequest request{txn->get_transaction_id(), lock_mode};
-  //   空队列直接添加
-  if (request_queue.request_queue_.empty()) {
-    request.granted_ = true;
-    request_queue.request_queue_.emplace_back(request);
-  } else {
-    // 非空队列需检查兼容性 兼容直接授予锁 不兼容需等待
-    // 其它事务正在等待获取锁
-    if (request_queue.waiting_txn_ != INVALID_TXN_ID) {
-      txn->set_state(TransactionState::ABORTED);
-      throw TransactionAbortException(txn->get_transaction_id(), AbortReason::UPGRADE_CONFLICT);
-      return false;
-    }
-
-    //   为当前锁升级
-    request_queue.waiting_txn_ = txn->get_transaction_id();
     if (is_compatible(request_queue.group_lock_mode_, lock_mode)) {
-      request.granted_ = true;
-      request_queue.request_queue_.emplace_back(request);
+        // 兼容，直接授予
+        request.granted_ = true;
+        request_queue.request_queue_.push_back(request);
+        request_queue.group_lock_mode_ = MaxLockMode(request_queue.group_lock_mode_, convert2Group(lock_mode));
+        txn->get_lock_set()->emplace(lock_id);
     } else {
-      request_queue.request_queue_.emplace_back(request);
-      auto it = request_queue.request_queue_.rbegin();
-      request_queue.cv_.wait(queue_lock, [&]() { return it->granted_; });
+        // 不兼容，执行Wait-Die并等待
+        txn_id_t requester_id = txn->get_transaction_id();
+        for (const auto &holder_req : request_queue.request_queue_) {
+            if (holder_req.granted_) {
+                if (requester_id > holder_req.txn_id_) { // Wait-Die
+                    txn->set_state(TransactionState::ABORTED);
+                    throw TransactionAbortException(requester_id, AbortReason::DEADLOCK_PREVENTION);
+                }
+            }
+        }
+        request_queue.request_queue_.push_back(request);
+        auto it = std::prev(request_queue.request_queue_.end());
+        request_queue.cv_.wait(queue_lock, [&] { return it->granted_ || txn->get_state() == TransactionState::ABORTED; });
+        // 【修复】处理被唤醒后的逻辑
+        if (txn->get_state() == TransactionState::ABORTED) {
+            // 如果是因为中止而被唤醒，且锁未被授予，则清理请求
+            if (!it->granted_) {
+                request_queue.request_queue_.erase(it);
+            }
+            return false;
+        }
+        // 【修复】成功获得锁后，执行关键的更新操作
+        request_queue.group_lock_mode_ = MaxLockMode(request_queue.group_lock_mode_, convert2Group(it->lock_mode_));
+        txn->get_lock_set()->emplace(lock_id);
     }
-    if (request_queue.waiting_txn_ == txn->get_transaction_id()) {
-      request_queue.waiting_txn_ = INVALID_TXN_ID;
-    }
-  }
-  request_queue.group_lock_mode_ = MaxLockMode(request_queue.group_lock_mode_, convert2Group(lock_mode));
-  txn->get_lock_set()->emplace(lock_id);
-  return true;
+    return true;
 }
 
 /**
@@ -173,13 +210,9 @@ bool LockManager::lock_helper(Transaction *txn, LockDataId &lock_id, LockMode lo
  * @param {int} tab_fd
  */
 bool LockManager::lock_shared_on_record(Transaction *txn, const Rid &rid, int tab_fd) {
-  // 为表先加意向锁
-  // LockDataId table_lock{tab_fd, LockDataType::TABLE};
-  // if (!lock_helper(txn, table_lock, LockMode::INTENTION_SHARED)) {
-  //   return false;
-  // }
-  LockDataId lock_data_id{tab_fd, rid, LockDataType::RECORD};
-  return lock_helper(txn, lock_data_id, LockMode::SHARED);
+    // ... (此函数无需修改)
+    LockDataId lock_data_id{tab_fd, rid, LockDataType::RECORD};
+    return lock_helper(txn, lock_data_id, LockMode::SHARED);
 }
 
 /**
@@ -190,13 +223,9 @@ bool LockManager::lock_shared_on_record(Transaction *txn, const Rid &rid, int ta
  * @param {int} tab_fd 记录所在的表的fd
  */
 bool LockManager::lock_exclusive_on_record(Transaction *txn, const Rid &rid, int tab_fd) {
-  // 为表先加意向锁
-  // LockDataId table_lock{tab_fd, LockDataType::TABLE};
-  // if (!lock_helper(txn, table_lock, LockMode::INTENTION_EXCLUSIVE)) {
-  //   return false;
-  // }
-  LockDataId lock_data_id{tab_fd, rid, LockDataType::RECORD};
-  return lock_helper(txn, lock_data_id, LockMode::EXLUCSIVE);
+    // ... (此函数无需修改)
+    LockDataId lock_data_id{tab_fd, rid, LockDataType::RECORD};
+    return lock_helper(txn, lock_data_id, LockMode::EXLUCSIVE);
 }
 
 /**
@@ -206,8 +235,9 @@ bool LockManager::lock_exclusive_on_record(Transaction *txn, const Rid &rid, int
  * @param {int} tab_fd 目标表的fd
  */
 bool LockManager::lock_shared_on_table(Transaction *txn, int tab_fd) {
-  LockDataId lock_data_id{tab_fd, LockDataType::TABLE};
-  return lock_helper(txn, lock_data_id, LockMode::SHARED);
+    // ... (此函数无需修改)
+    LockDataId lock_data_id{tab_fd, LockDataType::TABLE};
+    return lock_helper(txn, lock_data_id, LockMode::SHARED);
 }
 
 /**
@@ -217,8 +247,9 @@ bool LockManager::lock_shared_on_table(Transaction *txn, int tab_fd) {
  * @param {int} tab_fd 目标表的fd
  */
 bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
-  LockDataId lock_data_id{tab_fd, LockDataType::TABLE};
-  return lock_helper(txn, lock_data_id, LockMode::EXLUCSIVE);
+    // ... (此函数无需修改)
+    LockDataId lock_data_id{tab_fd, LockDataType::TABLE};
+    return lock_helper(txn, lock_data_id, LockMode::EXLUCSIVE);
 }
 
 /**
@@ -228,8 +259,9 @@ bool LockManager::lock_exclusive_on_table(Transaction *txn, int tab_fd) {
  * @param {int} tab_fd 目标表的fd
  */
 bool LockManager::lock_IS_on_table(Transaction *txn, int tab_fd) {
-  LockDataId lock_data_id{tab_fd, LockDataType::TABLE};
-  return lock_helper(txn, lock_data_id, LockMode::INTENTION_SHARED);
+    // ... (此函数无需修改)
+    LockDataId lock_data_id{tab_fd, LockDataType::TABLE};
+    return lock_helper(txn, lock_data_id, LockMode::INTENTION_SHARED);
 }
 
 /**
@@ -239,8 +271,9 @@ bool LockManager::lock_IS_on_table(Transaction *txn, int tab_fd) {
  * @param {int} tab_fd 目标表的fd
  */
 bool LockManager::lock_IX_on_table(Transaction *txn, int tab_fd) {
-  LockDataId lock_data_id{tab_fd, LockDataType::TABLE};
-  return lock_helper(txn, lock_data_id, LockMode::INTENTION_EXCLUSIVE);
+    // ... (此函数无需修改)
+    LockDataId lock_data_id{tab_fd, LockDataType::TABLE};
+    return lock_helper(txn, lock_data_id, LockMode::INTENTION_EXCLUSIVE);
 }
 
 /**
@@ -250,64 +283,46 @@ bool LockManager::lock_IX_on_table(Transaction *txn, int tab_fd) {
  * @param {LockDataId} lock_data_id 要释放的锁ID
  */
 bool LockManager::unlock(Transaction *txn, LockDataId lock_data_id) {
-  if (txn->get_state() == TransactionState::GROWING) {
-    txn->set_state(TransactionState::SHRINKING);
-  }
-  std::unique_lock<std::mutex> lock(latch_);
-  // 寻找锁对应的请求队列
-  auto iter = lock_table_.find(lock_data_id);
-  if (iter == lock_table_.end()) {
-    return false;
-  }
-  LockRequestQueue &request_queue = iter->second;
-  std::unique_lock<std::mutex> queue_lock(request_queue.latch_);
-  lock.unlock();
-
-  // 删除请求队列中该事务的请求
-  bool found = false;
-  txn_id_t cur_txn_id = txn->get_transaction_id();
-  for (auto it = request_queue.request_queue_.begin(); it != request_queue.request_queue_.end();) {
-    if (it->txn_id_ == cur_txn_id) {
-      // 如果事务锁正在升级 移除标记
-      if (request_queue.waiting_txn_ == cur_txn_id) {
-        request_queue.waiting_txn_ = INVALID_TXN_ID;
-      }
-      it = request_queue.request_queue_.erase(it);
-      found = true;
-    } else {
-      it++;
+    if (txn->get_state() == TransactionState::GROWING) {
+        txn->set_state(TransactionState::SHRINKING);
     }
-  }
-  if (!found) return false;
-
-  //   重新计算gruop lock
-  GroupLockMode max_group_mode = GroupLockMode::NON_LOCK;
-  for (auto &request : request_queue.request_queue_) {
-    if (request.granted_) {
-      max_group_mode = MaxLockMode(max_group_mode, convert2Group(request.lock_mode_));
-    }
-  }
-  request_queue.group_lock_mode_ = max_group_mode;
-
-  //   等待队列无请求则删除
-  if (request_queue.request_queue_.empty()) {
     std::unique_lock<std::mutex> lock(latch_);
-    lock_table_.erase(iter);
-  }
-  // 为事务中等待队列重新赋予锁
-  for (auto &request : request_queue.request_queue_) {
-    if (request.granted_) continue;
-
-    // 有正在锁升级的事务先处理 其它事务不能获取
-    if (request_queue.waiting_txn_ != INVALID_TXN_ID && request.txn_id_ != request_queue.waiting_txn_) continue;
-
-    if (is_compatible(request_queue.group_lock_mode_, request.lock_mode_)) {
-      request.granted_ = true;
-      request_queue.group_lock_mode_ = MaxLockMode(request_queue.group_lock_mode_, convert2Group(request.lock_mode_));
+    auto iter_lock_table = lock_table_.find(lock_data_id);
+    if (iter_lock_table == lock_table_.end()) {
+        return true;
     }
-  }
-  //   queue_lock.unlock();
-  request_queue.cv_.notify_all();
-
-  return true;
+    LockRequestQueue &request_queue = iter_lock_table->second;
+    std::unique_lock<std::mutex> queue_lock(request_queue.latch_);
+    lock.unlock();
+    auto it_to_remove = std::find_if(request_queue.request_queue_.begin(), request_queue.request_queue_.end(),
+                                     [id = txn->get_transaction_id()](const LockRequest &req) { return req.txn_id_ == id; });
+    if (it_to_remove == request_queue.request_queue_.end()) {
+        return true;
+    }
+    request_queue.request_queue_.erase(it_to_remove);
+    if (request_queue.upgrading_ == txn->get_transaction_id()) {
+        request_queue.upgrading_ = INVALID_TXN_ID;
+    }
+    GroupLockMode new_group_mode = GroupLockMode::NON_LOCK;
+    for (const auto &req : request_queue.request_queue_) {
+        if (req.granted_) {
+            new_group_mode = MaxLockMode(new_group_mode, convert2Group(req.lock_mode_));
+        }
+    }
+    request_queue.group_lock_mode_ = new_group_mode;
+    // 遍历整个队列，唤醒所有当前可兼容的请求
+    for (auto it = request_queue.request_queue_.begin(); it != request_queue.request_queue_.end(); ++it) {
+        if (!it->granted_) {
+            if (request_queue.upgrading_ != INVALID_TXN_ID && request_queue.upgrading_ != it->txn_id_) {
+                continue;
+            }
+            if (is_compatible(request_queue.group_lock_mode_, it->lock_mode_)) {
+                it->granted_ = true;
+                request_queue.group_lock_mode_ = MaxLockMode(request_queue.group_lock_mode_, convert2Group(it->lock_mode_));
+            }
+        }
+    }
+    queue_lock.unlock();
+    request_queue.cv_.notify_all();
+    return true;
 }

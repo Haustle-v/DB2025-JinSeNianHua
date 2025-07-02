@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <condition_variable>
 #include <mutex>
+#include <algorithm>
 #include "transaction/transaction.h"
 
 static const std::string GroupLockModeStr[10] = {"NON_LOCK", "IS", "IX", "S", "X", "SIX"};
@@ -42,6 +43,7 @@ class LockManager {
     GroupLockMode group_lock_mode_ = GroupLockMode::NON_LOCK;  // 加锁队列的锁模式
     std::mutex latch_;                                         // sqb 条件变量使用应该是结合锁的
     txn_id_t waiting_txn_{INVALID_TXN_ID};                     // 等待锁升级的事务
+    txn_id_t upgrading_{INVALID_TXN_ID};                       // 正在升级锁的事务
   };
 
  public:
