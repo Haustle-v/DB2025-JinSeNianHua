@@ -26,7 +26,8 @@ class IxManager {
   IxManager(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager)
       : disk_manager_(disk_manager), buffer_pool_manager_(buffer_pool_manager) {}
 
-  std::string get_index_name(const std::string &filename, const std::vector<std::string> &index_cols) {
+  // 7.2 yfs 只是加了个static修饰符-R
+  static std::string get_index_name(const std::string &filename, const std::vector<std::string> &index_cols) {
     std::string index_name = filename;
     for (size_t i = 0; i < index_cols.size(); ++i) index_name += "_" + index_cols[i];
     index_name += ".idx";
@@ -34,7 +35,8 @@ class IxManager {
     return index_name;
   }
 
-  std::string get_index_name(const std::string &filename, const std::vector<ColMeta> &index_cols) {
+  // 7.2 yfs 只是加了个static修饰符-R
+  static std::string get_index_name(const std::string &filename, const std::vector<ColMeta> &index_cols) {
     std::string index_name = filename;
     for (size_t i = 0; i < index_cols.size(); ++i) index_name += "_" + index_cols[i].name;
     index_name += ".idx";

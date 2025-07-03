@@ -42,9 +42,6 @@ class Query{
     // 是否全选，即*，用于EXPLAIN里打印*的情况（而不是把所有列都打印出来）
     bool select_all {false};
 
-  // sqb explain 标识
-  bool need_explain{false};
-
   Query() {}
 };
 

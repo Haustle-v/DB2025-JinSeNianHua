@@ -27,12 +27,13 @@ using namespace ast;
 // keywords
 %token SHOW TABLES CREATE TABLE DROP DESC INSERT INTO VALUES DELETE FROM ASC ORDER BY
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
-INNER LEFT RIGHT FULL SEMI ON EXPLAIN
+INNER LEFT RIGHT FULL SEMI ON EXPLAIN LOAD
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
+%token OUTPUT_FILE ON OFF
 
 // type-specific tokens
-%token <sv_str> IDENTIFIER VALUE_STRING
+%token <sv_str> IDENTIFIER VALUE_STRING VALUE_PATH
 %token <sv_int> VALUE_INT
 %token <sv_float> VALUE_FLOAT
 %token <sv_bool> VALUE_BOOL
@@ -41,7 +42,7 @@ INNER LEFT RIGHT FULL SEMI ON EXPLAIN
 %token EXPLAIN
 
 // specify types for non-terminal symbol
-%type <sv_node> stmt dbStmt ddl dml txnStmt setStmt
+%type <sv_node> stmt dbStmt ddl dml txnStmt setStmt io_stmt
 %type <sv_field> field
 %type <sv_fields> fieldList
 %type <sv_type_len> type
@@ -49,7 +50,7 @@ INNER LEFT RIGHT FULL SEMI ON EXPLAIN
 %type <sv_expr> expr
 %type <sv_val> value
 %type <sv_vals> valueList
-%type <sv_str> tbName colName tbNameWithAlias alias
+%type <sv_str> tbName colName tbNameWithAlias alias fileName
 %type <sv_strs> tableList colNameList
 %type <sv_col> col
 %type <sv_cols> colList selector
@@ -86,6 +87,11 @@ start:
         parse_tree = nullptr;
         YYACCEPT;
     }
+    |  io_stmt
+    {
+        parse_tree = $1;
+        YYACCEPT;
+    }
     ;
 
 stmt:
@@ -120,6 +126,10 @@ dbStmt:
     {
         $$ = std::make_shared<ShowTables>();
     }
+    |   LOAD fileName INTO tbName
+    {
+         $$ = std::make_shared<LoadStmt>($2, $4);
+    }
     |  SHOW INDEX FROM tbName
     {
         $$ = std::make_shared<ShowIndex>($4);
@@ -137,6 +147,17 @@ setStmt:
         SET set_knob_type '=' VALUE_BOOL
     {
         $$ = std::make_shared<SetStmt>($2, $4);
+    }
+    ;
+
+io_stmt:
+        SET OUTPUT_FILE ON
+    {
+        $$ = std::make_shared<IoEnable>(true);
+    }
+    |   SET OUTPUT_FILE OFF
+    {
+        $$ = std::make_shared<IoEnable>(false);
     }
     ;
 
@@ -477,4 +498,6 @@ tbName: IDENTIFIER;
 colName: IDENTIFIER;
 
 alias: IDENTIFIER;
+
+fileName: VALUE_PATH;
 %%

@@ -52,12 +52,12 @@ class RmFileHandle {
   DiskManager *disk_manager_;
   BufferPoolManager *buffer_pool_manager_;
   int fd_;              // 打开文件后产生的文件句柄
-  RmFileHdr file_hdr_;  // 文件头，维护当前表文件的元数据
 
   // 加把锁试试
   //   std::mutex latch_;
 
  public:
+  RmFileHdr file_hdr_;  // 文件头，维护当前表文件的元数据   // !!! yfs 7.2 参考RDB，设为public，在SmManager::load_csv_data中用
   RmFileHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
       : disk_manager_(disk_manager), buffer_pool_manager_(buffer_pool_manager), fd_(fd) {
     // 注意：这里从磁盘中读出文件描述符为fd的文件的file_hdr，读到内存中

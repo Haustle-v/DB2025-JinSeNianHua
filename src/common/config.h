@@ -17,6 +17,8 @@ See the Mulan PSL v2 for more details. */
 
 #define BUFFER_LENGTH 8192
 
+static constexpr int MAX_TABLE_NUMBER = 50;     // yfs 7.2
+
 /** Cycle detection is performed every CYCLE_DETECTION_INTERVAL milliseconds. */
 extern std::chrono::milliseconds cycle_detection_interval;
 

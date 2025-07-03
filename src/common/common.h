@@ -86,3 +86,50 @@ struct SetClause {
     TabCol lhs;
     Value rhs;
 };
+
+// yfs 7.2 -R的value.finals.h，用于void SmManager::load_csv_data中
+inline int parse_int(const std::string &str)
+{
+    int result = 0;
+    const char *cstr = str.c_str();
+    bool negative = (*cstr == '-');
+    if (negative)
+        ++cstr;
+    while (*cstr)
+    {
+        result = (result << 3) + (result << 1) + (*cstr - '0'); 
+        ++cstr;
+    }
+    return negative ? -result : result;
+}
+
+inline float parse_float(const std::string &str)
+{
+    float result = 0.0f;
+    float factor = 1.0f;
+    const char *cstr = str.c_str();
+    bool negative = (*cstr == '-');
+    if (negative)
+        ++cstr;
+    bool decimal_found = false;
+    while (*cstr)
+    {
+        if (*cstr == '.')
+        {
+            decimal_found = true;
+            ++cstr;
+            continue;
+        }
+        if (decimal_found)
+        {
+            factor *= 0.1f;
+            result += (*cstr - '0') * factor;
+        }
+        else
+        {
+            result = result * 10.0f + (*cstr - '0');
+        }
+        ++cstr;
+    }
+    return negative ? -result : result;
+}

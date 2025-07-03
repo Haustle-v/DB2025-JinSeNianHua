@@ -113,6 +113,13 @@ struct DropIndex : public TreeNode {
             tab_name(std::move(tab_name_)), col_names(std::move(col_names_)) {}
 };
 
+// sqb 5.30 显示索引
+struct ShowIndex : public TreeNode {
+  std::string tab_name;
+
+  ShowIndex(std::string tab_name_) : tab_name(std::move(tab_name_)) {}
+};
+
 struct Expr : public TreeNode {
 };
 
@@ -252,6 +259,22 @@ struct SetStmt : public TreeNode {
 
     SetStmt(SetKnobType &type, bool bool_value) : 
         set_knob_type_(type), bool_val_(bool_value) { }
+};
+
+// yfs 0702
+struct LoadStmt : public TreeNode
+{
+    std::string file_name;
+    std::string tab_name;
+
+    LoadStmt(std::string file_name_, std::string table_name_) : file_name(std::move(file_name_)), tab_name(std::move(table_name_)) {}
+};
+
+// yfs 0702
+struct IoEnable : public TreeNode
+{
+    bool set_io_enable;
+    explicit IoEnable(bool set_io_enable_) : set_io_enable(set_io_enable_) {}
 };
 
 // Semantic value

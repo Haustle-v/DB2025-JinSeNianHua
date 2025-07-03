@@ -116,6 +116,16 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
         txn_mgr_->abort(context->txn_, context->log_mgr_);
         break;
       }
+      case T_LoadData:
+      {
+          sm_manager_->load_csv_data(x->file_name_, x->tab_name_);
+          break;
+      }
+      case T_IoEnable:
+      {
+          sm_manager_->io_enabled_ = x->io_enable_;
+          break;
+      }
       default:
         throw InternalError("Unexpected field type");
         break;
@@ -155,12 +165,14 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
   rec_printer.print_separator(context);
   // print header into file
   std::fstream outfile;
+  if (sm_manager_->io_enabled_){   // yfs 7.3
   outfile.open("output.txt", std::ios::out | std::ios::app);
   outfile << "|";
   for (int i = 0; i < captions.size(); ++i) {
     outfile << " " << captions[i] << " |";
   }
   outfile << "\n";
+  }
 
   // Print records
   size_t num_rec = 0;
@@ -184,6 +196,7 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
     // print record into buffer
     rec_printer.print_record(columns, context);
     // print record into file
+  if (sm_manager_->io_enabled_){   // yfs 7.3
     outfile << "|";
     for (int i = 0; i < columns.size(); ++i) {
       outfile << " " << columns[i] << " |";
@@ -192,6 +205,7 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
     num_rec++;
   }
   outfile.close();
+  }
   // Print footer into buffer
   rec_printer.print_separator(context);
   // Print record count into buffer
