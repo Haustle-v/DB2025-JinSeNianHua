@@ -204,6 +204,8 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
     outfile << "\n";
     num_rec++;
   }
+  }
+  if (sm_manager_->io_enabled_){
   outfile.close();
   }
   // Print footer into buffer
