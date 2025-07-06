@@ -18,6 +18,14 @@ See the Mulan PSL v2 for more details. */
 std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse) {
   std::shared_ptr<Query> query = std::make_shared<Query>();
   if (auto x = std::dynamic_pointer_cast<ast::SelectStmt>(parse)) {
+    // 测试
+    // if(nullptr == std::dynamic_pointer_cast<ast::AggCol>(x->cols[1])) {
+    //   if(x->group_by_cols.size() == 1) {
+    //   if(x->cols[1]->col_name != x->group_by_cols[0]->col_name) {
+    //     throw RMDBError();
+    //   }
+    //   }
+    // }
     // 处理表名
     query->tables = std::move(x->tabs);
     /** TODO: 检查表是否存在 */
@@ -33,18 +41,23 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
       // 如果 col 为 AggCol 类型
       if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(sv_sel_col)) {
         TabCol tab_agg_col = {.tab_name = agg_col->tab_name,
-                                .col_name = agg_col->col_name,
-                                .alias = agg_col->alias,
-                                .aggFuncType = static_cast<ast::AggFuncType>(agg_col->agg_type)};
+                              .col_name = agg_col->col_name,
+                              .alias = agg_col->alias,
+                              .aggFuncType = static_cast<ast::AggFuncType>(agg_col->agg_type)};
         query->cols.push_back(tab_agg_col);
         x->has_agg = true;
       } else {
         TabCol sel_col = {.tab_name = sv_sel_col->tab_name,
-                        .col_name = sv_sel_col->col_name,
-                        .alias = "",
-                        .aggFuncType = ast::AGG_INVALID};
-      query->cols.push_back(sel_col);
+                          .col_name = sv_sel_col->col_name,
+                          .alias = "",
+                          .aggFuncType = ast::AGG_INVALID};
+        query->cols.push_back(sel_col);
       }
+    }
+
+    // 如果有GROUP BY子句，也要设置has_agg为true，因为GROUP BY本身就表示这是一个聚合查询
+    if (!x->group_by_cols.empty()) {
+      x->has_agg = true;
     }
 
     std::vector<ColMeta> all_cols;
@@ -52,7 +65,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
     if (query->cols.empty()) {
       // select all columns
       for (auto &col : all_cols) {
-        TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name};
+        TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name, .alias = "", .aggFuncType = ast::AGG_INVALID};
         query->cols.push_back(sel_col);
       }
     } else {
@@ -81,13 +94,13 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         if (sel_col.aggFuncType == ast::AGG_INVALID) {
           bool found = false;
           for (auto &group_col : query->group_by_cols) {
-            if (sel_col.tab_name == group_col.tab_name &&
-              sel_col.col_name == group_col.col_name) {
+            if (sel_col.tab_name == group_col.tab_name && sel_col.col_name == group_col.col_name) {
               found = true;
               break;
             }
           }
           if (!found) {
+            // debug test
             throw GroupByError(sel_col.col_name);
           }
         }
@@ -102,9 +115,9 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
     if (x->has_sort) {
       for (auto &order_by : x->order_by) {
         TabCol order_col = {.tab_name = order_by->col->tab_name,
-                          .col_name = order_by->col->col_name,
-                          .alias = "",
-                          .aggFuncType = ast::AGG_INVALID};
+                            .col_name = order_by->col->col_name,
+                            .alias = "",
+                            .aggFuncType = ast::AGG_INVALID};
         order_col = check_column(all_cols, order_col);
         query->order_bys.cols.push_back(order_col);
         query->order_bys.is_asc.push_back(order_by->orderby_dir == ast::OrderBy_ASC);
@@ -115,6 +128,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
     // WHERE 子句中不能用聚集函数作为条件表达式
     for (auto &cond : x->conds) {
       if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(cond->lhs)) {
+        assert(false);
         throw GroupByError(agg_col->col_name);
       }
     }
@@ -197,9 +211,8 @@ void Analyze::get_all_cols(const std::vector<std::string> &tab_names, std::vecto
   }
 }
 
-void Analyze::get_having_clause(
-    const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
-    std::vector<Condition> &conds) {
+void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
+                                std::vector<Condition> &conds) {
   conds.clear();
   for (auto &expr : sv_conds) {
     Condition cond;
@@ -209,32 +222,21 @@ void Analyze::get_having_clause(
                       .alias = agg_col->alias,
                       .aggFuncType = agg_col->agg_type};
     } else {
-      cond.lhs_col = {.tab_name = expr->lhs->tab_name,
-                    .col_name = expr->lhs->col_name};
+      cond.lhs_col = {.tab_name = expr->lhs->tab_name, .col_name = expr->lhs->col_name};
     }
-    
+
     cond.op = convert_sv_comp_op(expr->op);
     if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
       cond.is_rhs_val = true;
       cond.rhs_val = convert_sv_value(rhs_val);
-    } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
-      if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(rhs_col)) {
-        cond.rhs_col = {.tab_name = agg_col->tab_name,
-                        .col_name = agg_col->col_name,
-                        .alias = agg_col->alias,
-                        .aggFuncType = agg_col->agg_type};
-      } else {
-        cond.rhs_col = {.tab_name = rhs_col->tab_name,
-                        .col_name = rhs_col->col_name};
-      }
+    } else {
+      throw RMDBError("Unexpected sv value type");
     }
     conds.push_back(cond);
   }
 }
 
-void Analyze::get_clause(
-    const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
-    std::vector<Condition> &conds) {
+void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds, std::vector<Condition> &conds) {
   conds.clear();
   for (auto &expr : sv_conds) {
     Condition cond;
@@ -251,9 +253,8 @@ void Analyze::get_clause(
   }
 }
 
-void Analyze::check_having_clause(const std::vector<std::string> &tab_names,
-                           std::vector<Condition> &conds,
-                           const std::vector<TabCol> &group_by_cols) {
+void Analyze::check_having_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds,
+                                  const std::vector<TabCol> &group_by_cols) {
   // auto all_cols = get_all_cols(tab_names);
   std::vector<ColMeta> all_cols;
   get_all_cols(tab_names, all_cols);
@@ -281,7 +282,7 @@ void Analyze::check_having_clause(const std::vector<std::string> &tab_names,
       lhs_type = lhs_col->type;
       lhs_col_len = lhs_col->len;
     } else {
-      if(cond.lhs_col.aggFuncType == ast::AGG_COUNT) {
+      if (cond.lhs_col.aggFuncType == ast::AGG_COUNT) {
         lhs_type = TYPE_INT;
         lhs_col_len = 4;
       } else {
@@ -289,11 +290,11 @@ void Analyze::check_having_clause(const std::vector<std::string> &tab_names,
         throw AmbiguousColumnError(cond.lhs_col.col_name);
       }
     }
-    
+
     if (!cond.is_rhs_val && cond.rhs_col.col_name != "*") {
       cond.rhs_col = check_column(all_cols, cond.rhs_col);
     }
-    
+
     ColType rhs_type;
     if (cond.is_rhs_val) {
       cond.rhs_val.init_raw(lhs_col_len);
@@ -311,15 +312,13 @@ void Analyze::check_having_clause(const std::vector<std::string> &tab_names,
         cond.rhs_val.float_val = (float)cond.rhs_val.int_val;
         *(float *)(cond.rhs_val.raw->data) = cond.rhs_val.float_val;
       } else {
-        throw IncompatibleTypeError(coltype2str(lhs_type),
-                                    coltype2str(rhs_type));
+        throw IncompatibleTypeError(coltype2str(lhs_type), coltype2str(rhs_type));
       }
     }
   }
 }
 
-void Analyze::check_clause(const std::vector<std::string> &tab_names,
-                           std::vector<Condition> &conds) {
+void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds) {
   // auto all_cols = get_all_cols(tab_names);
   std::vector<ColMeta> all_cols;
   get_all_cols(tab_names, all_cols);
