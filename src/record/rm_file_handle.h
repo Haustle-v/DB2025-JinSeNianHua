@@ -15,6 +15,8 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
+#include <tuple>
+#include <optional>
 
 #include "bitmap.h"
 #include "common/context.h"
