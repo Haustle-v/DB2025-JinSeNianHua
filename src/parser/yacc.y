@@ -41,7 +41,7 @@ LOAD OFF OUTPUT_FILE
 
 
 // specify types for non-terminal symbol
-%type <sv_node> stmt dbStmt ddl dml txnStmt setStmt
+%type <sv_node> stmt dbStmt ddl dml txnStmt setStmt io_stmt
 %type <sv_field> field
 %type <sv_fields> fieldList
 %type <sv_type_len> type
@@ -49,7 +49,7 @@ LOAD OFF OUTPUT_FILE
 %type <sv_expr> expr
 %type <sv_val> value
 %type <sv_vals> valueList
-%type <sv_str> tbName colName tbNameWithAlias alias
+%type <sv_str> tbName colName tbNameWithAlias alias fileName
 %type <sv_strs> tableList colNameList
 %type <sv_col> col aggCol
 %type <sv_cols> colList selector optGroupByClause
@@ -88,6 +88,12 @@ start:
         parse_tree = nullptr;
         YYACCEPT;
     }
+    |  io_stmt
+    {
+        parse_tree = $1;
+        YYACCEPT;
+    }
+
     ;
 
 stmt:
@@ -133,6 +139,10 @@ dbStmt:
             $$ = select;
         }
     }
+    |   LOAD fileName INTO tbName
+    {
+         $$ = std::make_shared<LoadStmt>($2, $4);
+    }
     ;
 
 setStmt:
@@ -141,7 +151,16 @@ setStmt:
         $$ = std::make_shared<SetStmt>($2, $4);
     }
     ;
-
+io_stmt:
+        SET OUTPUT_FILE ON
+    {
+        $$ = std::make_shared<IoEnable>(true);
+    }
+    |   SET OUTPUT_FILE OFF
+    {
+        $$ = std::make_shared<IoEnable>(false);
+    }
+    ;
 ddl:
         CREATE TABLE tbName '(' fieldList ')'
     {

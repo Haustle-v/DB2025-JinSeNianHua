@@ -74,11 +74,11 @@ class RmFileHandle {
   DiskManager *disk_manager_;
   BufferPoolManager *buffer_pool_manager_;
   int fd_;              // 打开文件后产生的文件句柄
-  RmFileHdr file_hdr_;  // 文件头，维护当前表文件的元数据
 
   mutable std::shared_mutex latch_;  // sqb 加锁保证线程安全 6.17
 
  public:
+  RmFileHdr file_hdr_;  // 文件头，维护当前表文件的元数据
   RmFileHandle(DiskManager *disk_manager,
                BufferPoolManager *buffer_pool_manager, int fd)
       : disk_manager_(disk_manager),

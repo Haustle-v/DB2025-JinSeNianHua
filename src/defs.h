@@ -13,6 +13,8 @@ See the Mulan PSL v2 for more details. */
 #include <iostream>
 #include <map>
 
+#define new_char(size) (std::make_unique<char[]>(size))
+
 // 此处重载了<<操作符，在ColMeta中进行了调用
 template <typename T, typename = typename std::enable_if<std::is_enum<T>::value, T>::type>
 std::ostream &operator<<(std::ostream &os, const T &enum_val) {

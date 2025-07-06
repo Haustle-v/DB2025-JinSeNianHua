@@ -46,7 +46,9 @@ typedef enum PlanTag {
   T_Projection,
   T_Agg,
   T_Having,
-  T_Explain  // yfs 6.9
+  T_Explain,  // yfs 6.9
+  T_LoadData,     // yfs 7.2
+  T_IoEnable      // yfs 7.2
 } PlanTag;
 
 // 查询执行计划
@@ -205,8 +207,23 @@ class OtherPlan : public Plan {
     Plan::tag = tag;
     tab_name_ = std::move(tab_name);
   }
+    OtherPlan(PlanTag tag, bool io_enabled_)
+  {
+      Plan::tag = tag;
+      io_enable_ = std::move(io_enabled_);
+  }
+  OtherPlan(PlanTag tag, std::string tab_name, std::string file_name)
+  {
+      Plan::tag = tag;
+      tab_name_ = std::move(tab_name);
+      file_name_ = std::move(file_name);
+  }
+
   ~OtherPlan() {}
   std::string tab_name_;
+  std::string file_name_;
+  bool io_enable_;
+
 };
 
 // Set Knob Plan
