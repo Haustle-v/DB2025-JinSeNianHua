@@ -93,20 +93,29 @@ extern int yydebug;
     FULL = 294,                    /* FULL  */
     SEMI = 295,                    /* SEMI  */
     ON = 296,                      /* ON  */
-    EXPLAIN = 297,                 /* EXPLAIN  */
-    LOAD = 298,                    /* LOAD  */
-    LEQ = 299,                     /* LEQ  */
-    NEQ = 300,                     /* NEQ  */
-    GEQ = 301,                     /* GEQ  */
-    T_EOF = 302,                   /* T_EOF  */
-    OUTPUT_FILE = 303,             /* OUTPUT_FILE  */
-    OFF = 304,                     /* OFF  */
-    IDENTIFIER = 305,              /* IDENTIFIER  */
-    VALUE_STRING = 306,            /* VALUE_STRING  */
-    VALUE_PATH = 307,              /* VALUE_PATH  */
-    VALUE_INT = 308,               /* VALUE_INT  */
-    VALUE_FLOAT = 309,             /* VALUE_FLOAT  */
-    VALUE_BOOL = 310               /* VALUE_BOOL  */
+    MAX = 297,                     /* MAX  */
+    MIN = 298,                     /* MIN  */
+    SUM = 299,                     /* SUM  */
+    AVG = 300,                     /* AVG  */
+    COUNT = 301,                   /* COUNT  */
+    AS = 302,                      /* AS  */
+    GROUP = 303,                   /* GROUP  */
+    HAVING = 304,                  /* HAVING  */
+    LIMIT = 305,                   /* LIMIT  */
+    EXPLAIN = 306,                 /* EXPLAIN  */
+    LOAD = 307,                    /* LOAD  */
+    OFF = 308,                     /* OFF  */
+    OUTPUT_FILE = 309,             /* OUTPUT_FILE  */
+    LEQ = 310,                     /* LEQ  */
+    NEQ = 311,                     /* NEQ  */
+    GEQ = 312,                     /* GEQ  */
+    T_EOF = 313,                   /* T_EOF  */
+    IDENTIFIER = 314,              /* IDENTIFIER  */
+    VALUE_STRING = 315,            /* VALUE_STRING  */
+    VALUE_PATH = 316,              /* VALUE_PATH  */
+    VALUE_INT = 317,               /* VALUE_INT  */
+    VALUE_FLOAT = 318,             /* VALUE_FLOAT  */
+    VALUE_BOOL = 319               /* VALUE_BOOL  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif

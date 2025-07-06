@@ -89,12 +89,20 @@ value_path [\.|\/][^ \t]+\.csv
 "SET" { return SET; }   /*yfs0702*/
 "OUTPUT_FILE" {return OUTPUT_FILE;} /*yfs0702*/
 "OFF" {return OFF;} /*yfs0702*/
+"MAX" { return MAX; }
+"MIN" { return MIN; }
+"SUM" { return SUM; }
+"AVG" { return AVG; }
+"COUNT" { return COUNT; }
+"AS" { return AS; }
+"GROUP" { return GROUP; }
+"HAVING" { return HAVING; }
+"LIMIT" { return LIMIT; }
 "EXIT" { return EXIT; }
 "HELP" { return HELP; }
 "ORDER" { return ORDER; }
 "BY" {  return BY;  }
 "ASC" { return ASC; }
-"MAX" { return MAX; }
 "ENABLE_NESTLOOP" { return ENABLE_NESTLOOP; }
 "ENABLE_SORTMERGE" { return ENABLE_SORTMERGE; }
 "EXPLAIN" { return EXPLAIN; }

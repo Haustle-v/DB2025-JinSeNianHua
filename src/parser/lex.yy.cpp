@@ -395,24 +395,24 @@ static const flex_int16_t yy_accept[241] =
        64,   64,   64,   64,   64,   64,   64,   64,   64,   64,
        64,   64,   64,   64,   64,   64,   64,   64,   69,    3,
         4,    6,    7,    0,   67,   65,    5,    0,    1,   66,
-       61,   62,   60,   64,   64,   64,   51,   64,   64,   44,
+       61,   62,   60,   64,   64,   64,   46,   64,   64,   53,
        64,   64,   64,   64,   64,   64,   64,   64,   64,   64,
        64,   64,   64,   64,   64,   64,   64,   64,   64,   64,
        34,   64,   64,   64,   64,   64,   64,   64,   64,   64,
-       64,   64,    2,    5,    0,   66,   64,   31,   45,   49,
+       64,   64,    2,    5,    0,   66,   64,   31,   54,   44,
 
        64,   64,   64,   64,   64,   64,   64,   64,   64,   64,
        64,   64,   64,   64,   64,   64,   64,   64,   64,   27,
-       64,   64,   64,   46,   47,   40,   64,   64,   64,   64,
-       64,   25,   64,   48,   64,   64,   64,   64,   64,    0,
+       64,   64,   64,   41,   42,   40,   64,   64,   64,   64,
+       64,   25,   64,   43,   64,   64,   64,   64,   64,    0,
        64,   64,   28,   64,   64,   64,   64,   17,   16,   64,
-       41,   64,   64,   64,   22,   64,   64,   42,   64,   64,
+       50,   64,   64,   64,   22,   64,   64,   51,   64,   64,
        19,   32,   64,   36,   64,   64,   64,   64,   33,    8,
-       64,   58,   64,   64,   64,    0,   11,    9,   64,   50,
-       64,   64,   64,   64,   59,   29,   52,   64,   30,   64,
-       54,   43,   64,   64,   64,   15,   64,   64,   23,   68,
+       64,   58,   64,   64,   64,    0,   11,    9,   64,   45,
+       64,   64,   64,   64,   59,   29,   47,   64,   30,   64,
+       49,   52,   64,   64,   64,   15,   64,   64,   23,   68,
 
-       10,   14,   21,   64,   64,   53,   18,   64,   64,   26,
+       10,   14,   21,   64,   64,   48,   18,   64,   64,   26,
        13,   24,   20,   64,   35,   64,   64,   64,   64,   64,
        12,   64,   64,   64,   64,   64,   64,   64,   64,   39,
        64,   64,   64,   64,   64,   64,   55,   64,   56,    0
@@ -1195,72 +1195,72 @@ YY_RULE_SETUP
 case 41:
 YY_RULE_SETUP
 #line 93 "lex.l"
-{ return EXIT; }
+{ return MAX; }
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
 #line 94 "lex.l"
-{ return HELP; }
+{ return MIN; }
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
 #line 95 "lex.l"
-{ return ORDER; }
+{ return SUM; }
 	YY_BREAK
 case 44:
 YY_RULE_SETUP
 #line 96 "lex.l"
-{  return BY;  }
+{ return AVG; }
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
 #line 97 "lex.l"
-{ return ASC; }
+{ return COUNT; }
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
 #line 98 "lex.l"
-{ return MAX; }
+{ return AS; }
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
 #line 99 "lex.l"
-{ return MIN; }
+{ return GROUP; }
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
 #line 100 "lex.l"
-{ return SUM; }
+{ return HAVING; }
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
 #line 101 "lex.l"
-{ return AVG; }
+{ return LIMIT; }
 	YY_BREAK
 case 50:
 YY_RULE_SETUP
 #line 102 "lex.l"
-{ return COUNT; }
+{ return EXIT; }
 	YY_BREAK
 case 51:
 YY_RULE_SETUP
 #line 103 "lex.l"
-{ return AS; }
+{ return HELP; }
 	YY_BREAK
 case 52:
 YY_RULE_SETUP
 #line 104 "lex.l"
-{ return GROUP; }
+{ return ORDER; }
 	YY_BREAK
 case 53:
 YY_RULE_SETUP
 #line 105 "lex.l"
-{ return HAVING; }
+{  return BY;  }
 	YY_BREAK
 case 54:
 YY_RULE_SETUP
 #line 106 "lex.l"
-{ return LIMIT; }
+{ return ASC; }
 	YY_BREAK
 case 55:
 YY_RULE_SETUP
