@@ -298,7 +298,7 @@ int main(int argc, char **argv) {
     // recovery database
     recovery->analyze();
     recovery->redo();
-    // recovery->undo();
+    recovery->undo();
 
     // sqb 恢复后重新设置lsn 6.11
     log_manager->set_global_lsn(recovery->get_max_lsn() + 1);

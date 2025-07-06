@@ -211,72 +211,75 @@ void RecoveryManager::undo() {
     lsn_t last_lsn = att_lsns_.top();
     att_lsns_.pop();
 
-    while (last_lsn != INVALID_LSN) {
-      int cur_block_id, cur_offset;
-      decode_lsn_pos(lsn_to_pos_[last_lsn], cur_block_id, cur_offset);
-      //   日志读入缓冲区
-      if (cur_block_id != buffer_.block_id_) {
-        if (cur_block_id == block_num - 1) {
-          disk_manager_->read_log(buffer_.buffer_, log_file_size_ % LOG_BUFFER_SIZE, cur_block_id * LOG_BUFFER_SIZE);
-          boundary = log_file_size_ % LOG_BUFFER_SIZE;
-        } else {
-          disk_manager_->read_log(buffer_.buffer_, LOG_BUFFER_SIZE, cur_block_id * LOG_BUFFER_SIZE);
-          boundary = LOG_BUFFER_SIZE;
-        }
-      }
-      buffer_.block_id_ = cur_block_id;
-
-      //   日志头
-      LogRecord log_record;
-      if (cur_offset + LOG_HEADER_SIZE > boundary) {
-        disk_manager_->read_log(log_header, LOG_HEADER_SIZE, cur_block_id * LOG_BUFFER_SIZE + cur_offset);
-        log_record.deserialize(log_header);
+    // while (last_lsn != INVALID_LSN) {
+    int cur_block_id, cur_offset;
+    decode_lsn_pos(lsn_to_pos_[last_lsn], cur_block_id, cur_offset);
+    //   日志读入缓冲区
+    if (cur_block_id != buffer_.block_id_) {
+      if (cur_block_id == block_num - 1) {
+        disk_manager_->read_log(buffer_.buffer_, log_file_size_ % LOG_BUFFER_SIZE, cur_block_id * LOG_BUFFER_SIZE);
+        boundary = log_file_size_ % LOG_BUFFER_SIZE;
       } else {
-        log_record.deserialize(buffer_.buffer_ + cur_offset);
+        disk_manager_->read_log(buffer_.buffer_, LOG_BUFFER_SIZE, cur_block_id * LOG_BUFFER_SIZE);
+        boundary = LOG_BUFFER_SIZE;
       }
-      //   根据类型undo
-      switch (log_record.log_type_) {
-        case LogType::INSERT: {
-          InsertLogRecord insert_record;
-          //   读取完整日志
-          if (cur_offset + log_record.log_tot_len_ > boundary) {
-            disk_manager_->read_log(log_body, log_record.log_tot_len_, cur_block_id * LOG_BUFFER_SIZE + cur_offset);
-            insert_record.deserialize(log_body);
-          } else {
-            insert_record.deserialize(buffer_.buffer_ + cur_offset);
-          }
-          std::string tab_name(insert_record.table_name_, insert_record.table_name_size_);
-          redo_delete(tab_name, insert_record.rid_, insert_record.lsn_);
-        } break;
-        case LogType::DELETE: {
-          DeleteLogRecord delete_record;
-          //   读取完整日志
-          if (cur_offset + log_record.log_tot_len_ > boundary) {
-            disk_manager_->read_log(log_body, log_record.log_tot_len_, cur_block_id * LOG_BUFFER_SIZE + cur_offset);
-            delete_record.deserialize(log_body);
-          } else {
-            delete_record.deserialize(buffer_.buffer_ + cur_offset);
-          }
-          std::string tab_name(delete_record.table_name_, delete_record.table_name_size_);
-          redo_insert(tab_name, delete_record.rid_, delete_record.delete_value_, delete_record.lsn_);
-        } break;
-        case LogType::UPDATE: {
-          UpdateLogRecord update_record;
-          //   读取完整日志
-          if (cur_offset + log_record.log_tot_len_ > boundary) {
-            disk_manager_->read_log(log_body, log_record.log_tot_len_, cur_block_id * LOG_BUFFER_SIZE + cur_offset);
-            update_record.deserialize(log_body);
-          } else {
-            update_record.deserialize(buffer_.buffer_ + cur_offset);
-          }
-          std::string tab_name(update_record.table_name_, update_record.table_name_size_);
-          redo_update(tab_name, update_record.rid_, update_record.old_value_, update_record.lsn_);
-        } break;
-        default:
-          break;
-      }
-      last_lsn = log_record.prev_lsn_;
     }
+    buffer_.block_id_ = cur_block_id;
+
+    //   日志头
+    LogRecord log_record;
+    if (cur_offset + LOG_HEADER_SIZE > boundary) {
+      disk_manager_->read_log(log_header, LOG_HEADER_SIZE, cur_block_id * LOG_BUFFER_SIZE + cur_offset);
+      log_record.deserialize(log_header);
+    } else {
+      log_record.deserialize(buffer_.buffer_ + cur_offset);
+    }
+    //   根据类型undo
+    switch (log_record.log_type_) {
+      case LogType::INSERT: {
+        InsertLogRecord insert_record;
+        //   读取完整日志
+        if (cur_offset + log_record.log_tot_len_ > boundary) {
+          disk_manager_->read_log(log_body, log_record.log_tot_len_, cur_block_id * LOG_BUFFER_SIZE + cur_offset);
+          insert_record.deserialize(log_body);
+        } else {
+          insert_record.deserialize(buffer_.buffer_ + cur_offset);
+        }
+        std::string tab_name(insert_record.table_name_, insert_record.table_name_size_);
+        redo_delete(tab_name, insert_record.rid_, insert_record.lsn_);
+      } break;
+      case LogType::DELETE: {
+        DeleteLogRecord delete_record;
+        //   读取完整日志
+        if (cur_offset + log_record.log_tot_len_ > boundary) {
+          disk_manager_->read_log(log_body, log_record.log_tot_len_, cur_block_id * LOG_BUFFER_SIZE + cur_offset);
+          delete_record.deserialize(log_body);
+        } else {
+          delete_record.deserialize(buffer_.buffer_ + cur_offset);
+        }
+        std::string tab_name(delete_record.table_name_, delete_record.table_name_size_);
+        redo_insert(tab_name, delete_record.rid_, delete_record.delete_value_, delete_record.lsn_);
+      } break;
+      case LogType::UPDATE: {
+        UpdateLogRecord update_record;
+        //   读取完整日志
+        if (cur_offset + log_record.log_tot_len_ > boundary) {
+          disk_manager_->read_log(log_body, log_record.log_tot_len_, cur_block_id * LOG_BUFFER_SIZE + cur_offset);
+          update_record.deserialize(log_body);
+        } else {
+          update_record.deserialize(buffer_.buffer_ + cur_offset);
+        }
+        std::string tab_name(update_record.table_name_, update_record.table_name_size_);
+        redo_update(tab_name, update_record.rid_, update_record.old_value_, update_record.lsn_);
+      } break;
+      default:
+        break;
+    }
+    //   last_lsn = log_record.prev_lsn_;
+    if (log_record.prev_lsn_ != INVALID_LSN) {
+      att_lsns_.emplace((log_record.prev_lsn_));
+    }
+    // }
   }
 
   // 重建索引
