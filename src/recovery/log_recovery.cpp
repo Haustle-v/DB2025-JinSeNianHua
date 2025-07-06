@@ -201,7 +201,7 @@ void RecoveryManager::undo() {
     att_lsns_.emplace(entry.second);
   }
 
-  if (att_lsns_.empty()) {
+  if (!att_lsns_.empty()) {
     assert(0);
   }
 
