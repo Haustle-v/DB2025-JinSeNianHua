@@ -201,6 +201,10 @@ void RecoveryManager::undo() {
     att_lsns_.emplace(entry.second);
   }
 
+  if (att_lsns_.empty()) {
+    assert(0);
+  }
+
   //  逐个 undo活动事务
   int boundary = -1;
   while (!att_lsns_.empty()) {
