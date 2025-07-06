@@ -523,9 +523,9 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
     // Windows换行是\r\n，std::getline(file, line)默认以\n作为分隔符读取，因此\n被剥除了，剩下的\r留在了字符串末尾
     // 把末尾\r给pop出来
     std::getline(file, line); // 读取表头
-    if (!line.empty() && line.back() == '\r') {
-      line.pop_back();
-    }
+    // if (!line.empty() && line.back() == '\r') {
+    //   line.pop_back();
+    // }
     std::vector<std::string> headers;
     std::stringstream header_stream(line);
     std::string header;
@@ -542,8 +542,8 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
     while (std::getline(file, line)) {
         if (line.empty()) 
             continue;
-        if (!line.empty() && line.back() == '\r')   // 把末尾\r给pop出来
-            line.pop_back();
+        // if (!line.empty() && line.back() == '\r')   // 把末尾\r给pop出来
+        //     line.pop_back();
 
         std::vector<std::string> cells;
         std::stringstream line_stream(line);
