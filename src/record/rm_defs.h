@@ -16,7 +16,7 @@ See the Mulan PSL v2 for more details. */
 constexpr int RM_NO_PAGE = -1;
 constexpr int RM_FILE_HDR_PAGE = 0;
 constexpr int RM_FIRST_RECORD_PAGE = 1;
-constexpr int RM_MAX_RECORD_SIZE = 512;
+constexpr int RM_MAX_RECORD_SIZE = 1024;
 
 struct TupleMeta {
   timestamp_t ts_;
