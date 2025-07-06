@@ -504,7 +504,11 @@ extern int yylex \
 #undef yyTABLES_NAME
 #endif
 
+<<<<<<< HEAD
 #line 136 "lex.l"
+=======
+#line 128 "lex.l"
+>>>>>>> origin/p4
 
 
 #line 511 "lex.yy.hpp"

@@ -35,8 +35,13 @@
    especially those whose name start with YY_ or yy_.  They are
    private implementation details that can be changed or removed.  */
 
+<<<<<<< HEAD
 #ifndef YY_YY_MNT_D_PHD1_DATABASE_COMPETITION_DB2024_RMDB_SRC_PARSER_YACC_TAB_H_INCLUDED
 #define YY_YY_MNT_D_PHD1_DATABASE_COMPETITION_DB2024_RMDB_SRC_PARSER_YACC_TAB_H_INCLUDED
+=======
+#ifndef YY_YY_HOME_HAUSTLE_DB2025_JINSENIANHUA_SRC_PARSER_YACC_TAB_H_INCLUDED
+# define YY_YY_HOME_HAUSTLE_DB2025_JINSENIANHUA_SRC_PARSER_YACC_TAB_H_INCLUDED
+>>>>>>> origin/p4
 /* Debug traces.  */
 #ifndef YYDEBUG
 #define YYDEBUG 0
@@ -87,6 +92,7 @@ extern int yydebug;
     ORDER_BY = 288,                /* ORDER_BY  */
     ENABLE_NESTLOOP = 289,         /* ENABLE_NESTLOOP  */
     ENABLE_SORTMERGE = 290,        /* ENABLE_SORTMERGE  */
+<<<<<<< HEAD
     LEQ = 291,                     /* LEQ  */
     NEQ = 292,                     /* NEQ  */
     GEQ = 293,                     /* GEQ  */
@@ -106,6 +112,24 @@ extern int yydebug;
     VALUE_FLOAT = 307,             /* VALUE_FLOAT  */
     VALUE_BOOL = 308,           /* VALUE_BOOL  */
     EXPLAIN = 309           // sqb explain
+=======
+    INNER = 291,                   /* INNER  */
+    LEFT = 292,                    /* LEFT  */
+    RIGHT = 293,                   /* RIGHT  */
+    FULL = 294,                    /* FULL  */
+    SEMI = 295,                    /* SEMI  */
+    ON = 296,                      /* ON  */
+    EXPLAIN = 297,                 /* EXPLAIN  */
+    LEQ = 298,                     /* LEQ  */
+    NEQ = 299,                     /* NEQ  */
+    GEQ = 300,                     /* GEQ  */
+    T_EOF = 301,                   /* T_EOF  */
+    IDENTIFIER = 302,              /* IDENTIFIER  */
+    VALUE_STRING = 303,            /* VALUE_STRING  */
+    VALUE_INT = 304,               /* VALUE_INT  */
+    VALUE_FLOAT = 305,             /* VALUE_FLOAT  */
+    VALUE_BOOL = 306               /* VALUE_BOOL  */
+>>>>>>> origin/p4
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -127,4 +151,13 @@ struct YYLTYPE {
 
 int yyparse(void);
 
+<<<<<<< HEAD
 #endif /* !YY_YY_HOME_UBUNTU_DB2025_JINSENIANHUA_SRC_PARSER_YACC_TAB_H_INCLUDED  */
+=======
+
+
+int yyparse (void);
+
+
+#endif /* !YY_YY_HOME_HAUSTLE_DB2025_JINSENIANHUA_SRC_PARSER_YACC_TAB_H_INCLUDED  */
+>>>>>>> origin/p4

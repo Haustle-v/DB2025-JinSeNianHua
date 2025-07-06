@@ -45,7 +45,8 @@ typedef enum PlanTag {
   T_Sort,
   T_Projection,
   T_Agg,
-  T_Having
+  T_Having,
+  T_Explain  // yfs 6.9
 } PlanTag;
 
 // 查询执行计划
@@ -55,64 +56,66 @@ class Plan {
   virtual ~Plan() = default;
 };
 
-class AggPlan : public Plan
-{
-public:
-    std::vector<TabCol> sel_cols_;
-    std::shared_ptr<Plan> subplan_;
-    std::vector<TabCol> group_by_cols;
+class AggPlan : public Plan {
+ public:
+  std::vector<TabCol> sel_cols_;
+  std::shared_ptr<Plan> subplan_;
+  std::vector<TabCol> group_by_cols;
 
-    AggPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> group_by_cols, std::vector<TabCol> sel_cols_) : sel_cols_(std::move(sel_cols_)), subplan_(std::move(subplan)), group_by_cols(std::move(group_by_cols)) { Plan::tag = tag; }
+  AggPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> group_by_cols, std::vector<TabCol> sel_cols_)
+      : sel_cols_(std::move(sel_cols_)), subplan_(std::move(subplan)), group_by_cols(std::move(group_by_cols)) {
+    Plan::tag = tag;
+  }
 
-    ~AggPlan() override = default;
+  ~AggPlan() override = default;
 };
 
-class HavingPlan : public Plan
-{
-public:
-    std::shared_ptr<Plan> subplan_;
-    std::vector<Condition> having_conds_;
+class HavingPlan : public Plan {
+ public:
+  std::shared_ptr<Plan> subplan_;
+  std::vector<Condition> having_conds_;
 
-    HavingPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<Condition> having_conds) : subplan_(std::move(subplan)), having_conds_(std::move(having_conds)) { Plan::tag = tag; }
+  HavingPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<Condition> having_conds)
+      : subplan_(std::move(subplan)), having_conds_(std::move(having_conds)) {
+    Plan::tag = tag;
+  }
 
-    ~HavingPlan() override = default;
+  ~HavingPlan() override = default;
 };
 
-class ScanPlan : public Plan
-{
-    public:
-        ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds, std::vector<std::string> index_col_names)
-        {
-            Plan::tag = tag;
-            tab_name_ = std::move(tab_name);
-            conds_ = std::move(conds);
-            TabMeta &tab = sm_manager->db_.get_table(tab_name_);
-            cols_ = tab.cols;
-            len_ = cols_.back().offset + cols_.back().len;
-            fed_conds_ = conds_;
-            index_col_names_ = index_col_names;
-        
-        }
-        ~ScanPlan(){}
-        // 以下变量同ScanExecutor中的变量
-        std::string tab_name_;                     
-        std::vector<ColMeta> cols_;                
-        std::vector<Condition> conds_;             
-        size_t len_;                               
-        std::vector<Condition> fed_conds_;
-        std::vector<std::string> index_col_names_;
-    
+class ScanPlan : public Plan {
+ public:
+  ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
+           std::vector<std::string> index_col_names) {
+    Plan::tag = tag;
+    tab_name_ = std::move(tab_name);
+    conds_ = std::move(conds);
+    TabMeta &tab = sm_manager->db_.get_table(tab_name_);
+    cols_ = tab.cols;
+    len_ = cols_.back().offset + cols_.back().len;
+    fed_conds_ = conds_;
+    index_col_names_ = index_col_names;
+  }
+  ~ScanPlan() {}
+  // 以下变量同ScanExecutor中的变量
+  std::string tab_name_;
+  std::vector<ColMeta> cols_;
+  std::vector<Condition> conds_;
+  size_t len_;
+  std::vector<Condition> fed_conds_;
+  std::vector<std::string> index_col_names_;
 };
 
 class JoinPlan : public Plan {
  public:
-  JoinPlan(PlanTag tag, std::shared_ptr<Plan> left, std::shared_ptr<Plan> right,
-           std::vector<Condition> conds) {
+  JoinPlan(PlanTag tag, std::shared_ptr<Plan> left, std::shared_ptr<Plan> right, std::vector<Condition> conds,
+           bool reverse = false, JoinType type = JoinType::INNER_JOIN) {
     Plan::tag = tag;
     left_ = std::move(left);
     right_ = std::move(right);
     conds_ = std::move(conds);
-    type = INNER_JOIN;
+    reversed_ = reverse;
+    type_ = type;
   }
   ~JoinPlan() {}
   // 左节点
@@ -122,47 +125,48 @@ class JoinPlan : public Plan {
   // 连接条件
   std::vector<Condition> conds_;
   // future TODO: 后续可以支持的连接类型
-  JoinType type;
+  JoinType type_;
+  // 标记这个join的条件和左右两侧是否被翻转过
+  // 主要是为了EXPLAIN，因为join条件要使用原始的顺序
+  bool reversed_;
 };
 
 class ProjectionPlan : public Plan {
  public:
-  ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan,
-                 std::vector<TabCol> sel_cols) {
+  ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, bool select_all = false) {
     Plan::tag = tag;
     subplan_ = std::move(subplan);
     sel_cols_ = std::move(sel_cols);
+    select_all_ = select_all;
   }
   ~ProjectionPlan() {}
   std::shared_ptr<Plan> subplan_;
   std::vector<TabCol> sel_cols_;
+  bool select_all_;  // yfs 6.10
 };
 
-class SortPlan : public Plan
-{
-    public:
-        SortPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, std::vector<bool> is_asc, int limit)
-        {
-            Plan::tag = tag;
-            subplan_ = std::move(subplan);
-            sel_cols_ = std::move(sel_cols);
-            is_asc_ = std::move(is_asc);
-            limit_ = limit;
-        }
-        ~SortPlan(){}
-        std::shared_ptr<Plan> subplan_;
-        std::vector<TabCol> sel_cols_;
-        std::vector<bool> is_asc_;
-        int limit_;
-        
+class SortPlan : public Plan {
+ public:
+  SortPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, std::vector<bool> is_asc,
+           int limit) {
+    Plan::tag = tag;
+    subplan_ = std::move(subplan);
+    sel_cols_ = std::move(sel_cols);
+    is_asc_ = std::move(is_asc);
+    limit_ = limit;
+  }
+  ~SortPlan() {}
+  std::shared_ptr<Plan> subplan_;
+  std::vector<TabCol> sel_cols_;
+  std::vector<bool> is_asc_;
+  int limit_;
 };
 
 // dml语句，包括insert; delete; update; select语句　
 class DMLPlan : public Plan {
  public:
-  DMLPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::string tab_name,
-          std::vector<Value> values, std::vector<Condition> conds,
-          std::vector<SetClause> set_clauses) {
+  DMLPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::string tab_name, std::vector<Value> values,
+          std::vector<Condition> conds, std::vector<SetClause> set_clauses) {
     Plan::tag = tag;
     subplan_ = std::move(subplan);
     tab_name_ = std::move(tab_name);
@@ -181,8 +185,7 @@ class DMLPlan : public Plan {
 // ddl语句, 包括create/drop table; create/drop index;
 class DDLPlan : public Plan {
  public:
-  DDLPlan(PlanTag tag, std::string tab_name, std::vector<std::string> col_names,
-          std::vector<ColDef> cols) {
+  DDLPlan(PlanTag tag, std::string tab_name, std::vector<std::string> col_names, std::vector<ColDef> cols) {
     Plan::tag = tag;
     tab_name_ = std::move(tab_name);
     cols_ = std::move(cols);
@@ -226,6 +229,5 @@ class plannerInfo {
   std::shared_ptr<Plan> plan;
   std::vector<std::shared_ptr<Plan>> table_scan_executors;
   std::vector<SetClause> set_clauses;
-  plannerInfo(std::shared_ptr<ast::SelectStmt> parse_)
-      : parse(std::move(parse_)) {}
+  plannerInfo(std::shared_ptr<ast::SelectStmt> parse_) : parse(std::move(parse_)) {}
 };

@@ -4,6 +4,10 @@
 #include <iostream>
 #include <memory>
 #include <limits.h>
+#include <set>
+#include <unordered_map>
+std::unordered_map<std::string, std::string> alias_map;
+std::unordered_map<std::string, std::string> pam_saila;
 
 int yylex(YYSTYPE *yylval, YYLTYPE *yylloc);
 
@@ -24,6 +28,7 @@ using namespace ast;
 // keywords
 %token SHOW TABLES CREATE TABLE DROP DESC INSERT INTO VALUES DELETE FROM ASC ORDER BY
 WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_COMMIT TXN_ABORT TXN_ROLLBACK ORDER_BY ENABLE_NESTLOOP ENABLE_SORTMERGE
+INNER LEFT RIGHT FULL SEMI ON
 // non-keywords
 %token LEQ NEQ GEQ T_EOF
 %token MAX MIN SUM AVG COUNT AS GROUP HAVING LIMIT
@@ -46,7 +51,7 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %type <sv_expr> expr
 %type <sv_val> value
 %type <sv_vals> valueList
-%type <sv_str> tbName colName alias
+%type <sv_str> tbName colName tbNameWithAlias alias
 %type <sv_strs> tableList colNameList
 %type <sv_col> col aggCol
 %type <sv_cols> colList selector optGroupByClause
@@ -57,6 +62,9 @@ WHERE UPDATE SET SELECT INT CHAR FLOAT INDEX AND JOIN EXIT HELP TXN_BEGIN TXN_CO
 %type <sv_orderby>  order_clause
 %type <sv_orderbys> opt_order_clause order_clauses
 %type <sv_orderby_dir> opt_asc_desc
+%type <join_type_dir> join_type    /*yfs0527, 参考sv_orderby_dir*/
+%type <sv_join_expr> join_expr
+%type <sv_join_exprs> join_exprs, join_exprss
 %type <sv_setKnobType> set_knob_type
 %type <sv_int> limit_clause
 
@@ -176,6 +184,21 @@ dml:
     {
         $$ = std::make_shared<SelectStmt>($2, $4, $5, $6, $7, $8, $9);
     }
+    |   SELECT selector FROM join_exprss optWhereClause optGroupByClause optHavingClause opt_order_clause limit_clause
+    {
+        /*$$ = std::make_shared<SelectStmt>($2, $4, $5, $6);*/
+        /*必须要把所有表名赋值给SelectStmt的tabs，后面需要用*/
+        auto sel_stmt = std::make_shared<SelectStmt>($2, $4, $5, $6, $7, $8, $9);
+        std::set<std::string> tab_set;
+        for (const auto &join_expr : $4) {
+            if (join_expr) {
+                tab_set.insert(join_expr->left);
+                tab_set.insert(join_expr->right);
+            }
+        }
+        sel_stmt->tabs.assign(tab_set.begin(), tab_set.end());
+        $$ = sel_stmt;
+    }
     ;
 
 limit_clause:
@@ -206,7 +229,8 @@ optHavingClause:
     {
         $$ = $2;
     }
-    ;
+    ;   
+    
 
 fieldList:
         field
@@ -379,7 +403,7 @@ setClauses:
     }
     |   setClauses ',' setClause
     {
-        $$.push_back($3);
+        $$.push_back($3);       /*我怎么感觉这里写错了？难道不应该把setClauses先赋值给$$吗？而且setClause也不应该是vector而应该是ptr*/
     }
     ;
 
@@ -458,19 +482,67 @@ aggCol:
     ;
 
 tableList:
-        tbName
+        tbNameWithAlias
     {
         $$ = std::vector<std::string>{$1};
     }
-    |   tableList ',' tbName
+    |   tableList ',' tbNameWithAlias
     {
         $$.push_back($3);
     }
-    |   tableList JOIN tbName
-    {
-        $$.push_back($3);
-    }
+    /*|   tableList JOIN tbName */
+    /*{                         */
+    /*    $$.push_back($3);     */
+    /*}   yfs0604:  这里会和自己定义的join冲突，所以注释掉好了  */
     ;
+
+tbNameWithAlias:        /*这里多做的一个步骤只是把别名存在映射里*/
+        tbName
+    {
+        $$ = $1;
+    }
+    |   tbName alias
+    {
+        alias_map[$2] = $1;
+        pam_saila[$1] = $2;
+        $$ = $1;
+    }
+
+join_exprss:
+    tbNameWithAlias join_exprs
+    {
+        $$ = $2;
+        for (auto& join_expr : $$) {
+            join_expr->left = $1;
+        }
+    }
+
+
+join_exprs:
+        join_expr
+    {
+        $$ = std::vector<std::shared_ptr<JoinExpr>>{$1};
+    }
+    |   join_exprs join_expr
+    {
+        $$.push_back($2);
+    }
+
+join_expr:
+        join_type tbNameWithAlias ON whereClause
+    {
+        $$ = std::make_shared<JoinExpr>("", $2, $4, $1);
+    }
+
+join_type:      /*yfs0527*/
+        JOIN   { $$ = INNER_JOIN; }
+    |   INNER JOIN   { $$ = INNER_JOIN; }
+    |   LEFT JOIN   { $$ = LEFT_JOIN; }
+    |   RIGHT JOIN   { $$ = RIGHT_JOIN; }
+    |   FULL JOIN   { $$ = FULL_JOIN; }
+    |   SEMI JOIN   { $$ = SEMI_JOIN; }
+    ;
+
 
 opt_order_clause:
     ORDER BY order_clauses

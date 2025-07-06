@@ -13,7 +13,7 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 #include <vector>
 
-enum JoinType { INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN };
+enum JoinType { INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN, SEMI_JOIN };
 namespace ast {
 
 enum SvType { SV_TYPE_INT, SV_TYPE_FLOAT, SV_TYPE_STRING, SV_TYPE_BOOL };
@@ -136,21 +136,14 @@ struct Col : public Expr {
   Col(std::string tab_name_, std::string col_name_) : tab_name(std::move(tab_name_)), col_name(std::move(col_name_)) {}
 };
 
-enum AggFuncType {
-    AGG_INVALID,
-    AGG_COUNT,
-    AGG_MAX,
-    AGG_MIN,
-    AGG_SUM,
-    AGG_AVG
-};
+enum AggFuncType { AGG_INVALID, AGG_COUNT, AGG_MAX, AGG_MIN, AGG_SUM, AGG_AVG };
 
 struct AggCol : public Col {
-    AggFuncType agg_type;
-    std::string alias;
+  AggFuncType agg_type;
+  std::string alias;
 
-    AggCol(std::string tab_name_, std::string col_name_, AggFuncType agg_type_, std::string alias_) :
-            Col(std::move(tab_name_), std::move(col_name_)), agg_type(agg_type_), alias(std::move(alias_)) {}
+  AggCol(std::string tab_name_, std::string col_name_, AggFuncType agg_type_, std::string alias_)
+      : Col(std::move(tab_name_), std::move(col_name_)), agg_type(agg_type_), alias(std::move(alias_)) {}
 };
 
 struct SetClause : public TreeNode {
@@ -171,12 +164,11 @@ struct BinaryExpr : public TreeNode {
       : lhs(std::move(lhs_)), op(op_), rhs(std::move(rhs_)) {}
 };
 
-struct OrderBy : public TreeNode
-{
-    std::shared_ptr<Col> col;
-    OrderByDir orderby_dir;
-    OrderBy( std::shared_ptr<Col> col_, OrderByDir orderby_dir_) :
-       col(std::move(col_)), orderby_dir(std::move(orderby_dir_)) {}
+struct OrderBy : public TreeNode {
+  std::shared_ptr<Col> col;
+  OrderByDir orderby_dir;
+  OrderBy(std::shared_ptr<Col> col_, OrderByDir orderby_dir_)
+      : col(std::move(col_)), orderby_dir(std::move(orderby_dir_)) {}
 };
 
 struct InsertStmt : public TreeNode {
@@ -222,29 +214,45 @@ struct SelectStmt : public TreeNode {
   std::vector<std::shared_ptr<BinaryExpr>> conds;
   std::vector<std::shared_ptr<JoinExpr>> jointree;
 
-    bool has_agg;
-    std::vector<std::shared_ptr<Col>> group_by_cols;
-    std::vector<std::shared_ptr<BinaryExpr>> having_conds;
+  bool has_agg;
+  std::vector<std::shared_ptr<Col>> group_by_cols;
+  std::vector<std::shared_ptr<BinaryExpr>> having_conds;
 
-    bool has_sort;
-    std::vector<std::shared_ptr<OrderBy>> order_by;
-    int limit;
+  bool has_sort;
+  std::vector<std::shared_ptr<OrderBy>> order_by;
+  int limit;
 
-    bool need_explain{false};
+  bool need_explain{false};
 
-    SelectStmt(std::vector<std::shared_ptr<Col>> cols_,
-               std::vector<std::string> tabs_,
-               std::vector<std::shared_ptr<BinaryExpr>> conds_,
-               std::vector<std::shared_ptr<Col>> group_by_cols_,
-               std::vector<std::shared_ptr<BinaryExpr>> having_conds_,
-               std::vector<std::shared_ptr<OrderBy>> order_by_,
-               int limit_) :
-            cols(std::move(cols_)), tabs(std::move(tabs_)), conds(std::move(conds_)),
-            group_by_cols(std::move(group_by_cols_)), having_conds(std::move(having_conds_)),
-            order_by(std::move(order_by_)), limit(limit_) {
-                has_sort = !order_by.empty();
-                has_agg = false;  // 初始化为false，让Analyze阶段根据实际聚合函数来设置
-            }
+  SelectStmt(std::vector<std::shared_ptr<Col>> cols_, std::vector<std::string> tabs_,
+             std::vector<std::shared_ptr<BinaryExpr>> conds_, std::vector<std::shared_ptr<Col>> group_by_cols_,
+             std::vector<std::shared_ptr<BinaryExpr>> having_conds_, std::vector<std::shared_ptr<OrderBy>> order_by_,
+             int limit_)
+      : cols(std::move(cols_)),
+        tabs(std::move(tabs_)),
+        conds(std::move(conds_)),
+        group_by_cols(std::move(group_by_cols_)),
+        having_conds(std::move(having_conds_)),
+        order_by(std::move(order_by_)),
+        limit(limit_) {
+    has_sort = !order_by.empty();
+    has_agg = false;  // 初始化为false，让Analyze阶段根据实际聚合函数来设置
+  }
+  /*yfs0527: 支持join的构造函数*/
+  SelectStmt(std::vector<std::shared_ptr<Col>> cols_, std::vector<std::shared_ptr<JoinExpr>> jointree_,
+             std::vector<std::shared_ptr<BinaryExpr>> conds_, std::vector<std::shared_ptr<Col>> group_by_cols_,
+             std::vector<std::shared_ptr<BinaryExpr>> having_conds_, std::vector<std::shared_ptr<OrderBy>> order_by_,
+             int limit_)
+      : cols(std::move(cols_)),
+        jointree(std::move(jointree_)),
+        conds(std::move(conds_)),
+        group_by_cols(std::move(group_by_cols_)),
+        having_conds(std::move(having_conds_)),
+        order_by(std::move(order_by_)),
+        limit(limit_) {
+    has_sort = !order_by.empty();
+    has_agg = false;  // 初始化为false，让Analyze阶段根据实际聚合函数来设置
+  }
 };
 
 // set enable_nestloop
@@ -262,6 +270,7 @@ struct SemValue {
   std::string sv_str;
   bool sv_bool;
   OrderByDir sv_orderby_dir;
+  JoinType join_type_dir; /*yfs0527*/
   std::vector<std::string> sv_strs;
 
   std::shared_ptr<TreeNode> sv_node;
@@ -287,8 +296,11 @@ struct SemValue {
   std::shared_ptr<BinaryExpr> sv_cond;
   std::vector<std::shared_ptr<BinaryExpr>> sv_conds;
 
-    std::shared_ptr<OrderBy> sv_orderby;
-    std::vector<std::shared_ptr<OrderBy>> sv_orderbys;
+  std::shared_ptr<JoinExpr> sv_join_expr; /*yfs0527*/
+  std::vector<std::shared_ptr<JoinExpr>> sv_join_exprs;
+
+  std::shared_ptr<OrderBy> sv_orderby;
+  std::vector<std::shared_ptr<OrderBy>> sv_orderbys;
 
   SetKnobType sv_setKnobType;
 };

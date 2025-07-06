@@ -6,3 +6,7 @@ run_client.sh
 .clang-format
 *.exp
 gittest.sh
+bustub/
+perf.data
+perf.svg
+test_perf.sh
