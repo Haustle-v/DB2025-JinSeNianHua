@@ -201,18 +201,14 @@ void RecoveryManager::undo() {
     att_lsns_.emplace(entry.second);
   }
 
-  if (!att_lsns_.empty()) {
-    assert(0);
-  }
-
   //  逐个 undo活动事务
   int boundary = -1;
+  lsn_t last_lsn = INVALID_LSN;
+  int cur_block_id = 0, cur_offset = 0;
   while (!att_lsns_.empty()) {
-    lsn_t last_lsn = att_lsns_.top();
+    last_lsn = att_lsns_.top();
     att_lsns_.pop();
 
-    // while (last_lsn != INVALID_LSN) {
-    int cur_block_id, cur_offset;
     decode_lsn_pos(lsn_to_pos_[last_lsn], cur_block_id, cur_offset);
     //   日志读入缓冲区
     if (cur_block_id != buffer_.block_id_) {
@@ -246,7 +242,7 @@ void RecoveryManager::undo() {
           insert_record.deserialize(buffer_.buffer_ + cur_offset);
         }
         std::string tab_name(insert_record.table_name_, insert_record.table_name_size_);
-        redo_delete(tab_name, insert_record.rid_, insert_record.lsn_);
+        redo_delete(tab_name, insert_record.rid_, INVALID_LSN);
       } break;
       case LogType::DELETE: {
         DeleteLogRecord delete_record;
@@ -258,7 +254,7 @@ void RecoveryManager::undo() {
           delete_record.deserialize(buffer_.buffer_ + cur_offset);
         }
         std::string tab_name(delete_record.table_name_, delete_record.table_name_size_);
-        redo_insert(tab_name, delete_record.rid_, delete_record.delete_value_, delete_record.lsn_);
+        redo_insert(tab_name, delete_record.rid_, delete_record.delete_value_, INVALID_LSN);
       } break;
       case LogType::UPDATE: {
         UpdateLogRecord update_record;
@@ -270,7 +266,7 @@ void RecoveryManager::undo() {
           update_record.deserialize(buffer_.buffer_ + cur_offset);
         }
         std::string tab_name(update_record.table_name_, update_record.table_name_size_);
-        redo_update(tab_name, update_record.rid_, update_record.old_value_, update_record.lsn_);
+        redo_update(tab_name, update_record.rid_, update_record.old_value_, INVALID_LSN);
       } break;
       default:
         break;
@@ -279,7 +275,6 @@ void RecoveryManager::undo() {
     if (log_record.prev_lsn_ != INVALID_LSN) {
       att_lsns_.emplace((log_record.prev_lsn_));
     }
-    // }
   }
 
   // 重建索引
@@ -316,7 +311,7 @@ void RecoveryManager::redo_insert(const std::string &tab_name, const Rid &rid, c
   Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
 
   //   根据lsn决定是否redo
-  if (lsn > page_ptr->get_page_lsn()) {
+  if (lsn == INVALID_LSN || lsn > page_ptr->get_page_lsn()) {
     fhdl_ptr->insert_record(rid, rec.data);
     page_ptr->set_page_lsn(lsn);
     buffer_pool_manager_->unpin_page(page_id, true);
@@ -340,7 +335,7 @@ void RecoveryManager::redo_delete(const std::string &tab_name, const Rid &rid, c
   Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
 
   //   根据lsn决定是否redo
-  if (lsn > page_ptr->get_page_lsn()) {
+  if (lsn == INVALID_LSN || lsn > page_ptr->get_page_lsn()) {
     fhdl_ptr->delete_record(rid, nullptr);
     page_ptr->set_page_lsn(lsn);
     buffer_pool_manager_->unpin_page(page_id, true);
@@ -365,7 +360,7 @@ void RecoveryManager::redo_update(const std::string &tab_name, const Rid &rid, c
   Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
 
   //   根据lsn决定是否redo
-  if (lsn > page_ptr->get_page_lsn()) {
+  if (lsn == INVALID_LSN || lsn > page_ptr->get_page_lsn()) {
     fhdl_ptr->update_record(rid, new_rec.data, nullptr);
     page_ptr->set_page_lsn(lsn);
     buffer_pool_manager_->unpin_page(page_id, true);
