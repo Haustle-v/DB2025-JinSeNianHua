@@ -130,7 +130,7 @@ void *client_handler(void *sock_fd) {
       if (ast::parse_tree != nullptr) {
         try {
           // analyze and rewrite
-          std::shared_ptr<Query> query = analyze->do_analyze(ast::parse_tree); // 将语法树转换为plan树
+          std::shared_ptr<Query> query = analyze->do_analyze(ast::parse_tree);  // 将语法树转换为plan树
           yy_delete_buffer(buf);
           finish_analyze = true;
           pthread_mutex_unlock(buffer_mutex);
@@ -138,7 +138,7 @@ void *client_handler(void *sock_fd) {
           std::shared_ptr<Plan> plan = optimizer->plan_query(query, context);
           // portal
           std::shared_ptr<PortalStmt> portalStmt = portal->start(plan, context);
-          portal->run(portalStmt, ql_manager.get(), &txn_id, context);    //真正执行
+          portal->run(portalStmt, ql_manager.get(), &txn_id, context);  // 真正执行
           portal->drop();
         } catch (TransactionAbortException &e) {
           // 事务需要回滚，需要把abort信息返回给客户端并写入output.txt文件中
@@ -151,11 +151,11 @@ void *client_handler(void *sock_fd) {
           txn_manager->abort(context->txn_, log_manager.get());
           std::cout << e.GetInfo() << std::endl;
 
-          if (sm_manager->io_enabled_){     // yfs 7.3
-          std::fstream outfile;
-          outfile.open("output.txt", std::ios::out | std::ios::app);
-          outfile << str;
-          outfile.close();
+          if (sm_manager->io_enabled_) {  // yfs 7.3
+            std::fstream outfile;
+            outfile.open("output.txt", std::ios::out | std::ios::app);
+            outfile << str;
+            outfile.close();
           }
         } catch (RMDBError &e) {
           // 遇到异常，需要打印failure到output.txt文件中，并发异常信息返回给客户端
@@ -166,18 +166,16 @@ void *client_handler(void *sock_fd) {
           data_send[e.get_msg_len() + 1] = '\0';
           offset = e.get_msg_len() + 1;
 
-          if (sm_manager->io_enabled_){     // yfs 7.3
-          // 将报错信息写入output.txt
-          std::fstream outfile;
-          outfile.open("output.txt", std::ios::out | std::ios::app);
-          outfile << "failure\n";
-          outfile.close();
+          if (sm_manager->io_enabled_) {  // yfs 7.3
+            // 将报错信息写入output.txt
+            std::fstream outfile;
+            outfile.open("output.txt", std::ios::out | std::ios::app);
+            outfile << "failure\n";
+            outfile.close();
           }
         }
       }
-    }
-    else
-    {
+    } else {
       std::string ParseError = "parse error";
       std::memcpy(data_send, ParseError.c_str(), ParseError.length());
       data_send[ParseError.length()] = '\n';
@@ -185,10 +183,12 @@ void *client_handler(void *sock_fd) {
       offset = ParseError.length() + 1;
 
       // 将报错信息写入output.txt
-      std::fstream outfile;
-      outfile.open("output.txt", std::ios::out | std::ios::app);
-      outfile << "failure\n";
-      outfile.close();
+      if (sm_manager->io_enabled_) {
+        std::fstream outfile;
+        outfile.open("output.txt", std::ios::out | std::ios::app);
+        outfile << "failure\n";
+        outfile.close();
+      }
     }
     if (finish_analyze == false) {
       yy_delete_buffer(buf);

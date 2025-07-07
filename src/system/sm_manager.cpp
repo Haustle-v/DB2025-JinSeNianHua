@@ -156,9 +156,9 @@ void SmManager::close_db() {
  */
 void SmManager::show_tables(Context *context) {
   std::fstream outfile;
-  if (io_enabled_){   // yfs 7.2 -R
-  outfile.open("output.txt", std::ios::out | std::ios::app);
-  outfile << "| Tables |\n";
+  if (io_enabled_) {  // yfs 7.2 -R
+    outfile.open("output.txt", std::ios::out | std::ios::app);
+    outfile << "| Tables |\n";
   }
   RecordPrinter printer(1);
   printer.print_separator(context);
@@ -167,14 +167,14 @@ void SmManager::show_tables(Context *context) {
   for (auto &entry : db_.tabs_) {
     auto &tab = entry.second;
     printer.print_record({tab.name}, context);
-    if (io_enabled_){   // yfs 7.2 -R
-    outfile << "| " << tab.name << " |\n";
+    if (io_enabled_) {  // yfs 7.2 -R
+      outfile << "| " << tab.name << " |\n";
     }
   }
   printer.print_separator(context);
-    if (io_enabled_){   // yfs 7.2 -R
+  if (io_enabled_) {  // yfs 7.2 -R
     outfile.close();
-    }
+  }
 }
 
 /**
@@ -369,28 +369,28 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<ColMet
  */
 void SmManager::show_index(const std::string &tab_name, Context *context) {
   std::fstream outfile;
-  if (io_enabled_){   // yfs 7.2 -R
-  outfile.open("output.txt", std::ios::out | std::ios::app);
+  if (io_enabled_) {  // yfs 7.2 -R
+    outfile.open("output.txt", std::ios::out | std::ios::app);
   }
   RecordPrinter printer(1);
 
   TabMeta &tab_meta = db_.get_table(tab_name);
   for (auto &index_meta : tab_meta.indexes) {
     std::string output;  // 用于输出到终端
-      if (io_enabled_){   // yfs 7.2 -R
-    outfile << "| " << tab_name << " | unique | (" << index_meta.cols[0].name;
-    output += tab_name + " | unique | (" + index_meta.cols[0].name;
-    for (size_t i = 1; i < index_meta.col_num; ++i) {
-      outfile << "," << index_meta.cols[i].name;
-      output += "," + index_meta.cols[i].name;
-    }
-    outfile << ") |\n";
-    output += ")";  // 剩下的 | \n 在下个函数里
+    if (io_enabled_) {   // yfs 7.2 -R
+      outfile << "| " << tab_name << " | unique | (" << index_meta.cols[0].name;
+      output += tab_name + " | unique | (" + index_meta.cols[0].name;
+      for (size_t i = 1; i < index_meta.col_num; ++i) {
+        outfile << "," << index_meta.cols[i].name;
+        output += "," + index_meta.cols[i].name;
+      }
+      outfile << ") |\n";
+      output += ")";  // 剩下的 | \n 在下个函数里
     }
     printer.print_index({output}, context);
   }
-  if (io_enabled_){   // yfs 7.2 -R
-  outfile.close();
+  if (io_enabled_) {  // yfs 7.2 -R
+    outfile.close();
   }
 }
 
@@ -514,7 +514,7 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
   auto fh_ = fhs_.at(tab_name).get();
 
   size_t record_size = fh_->file_hdr_.record_size;
-  auto record = new char[record_size];
+  char *record = new char[record_size];
 
   std::string line;
   // Windows换行是\r\n，std::getline(file, line)默认以\n作为分隔符读取，因此\n被剥除了，剩下的\r留在了字符串末尾
@@ -527,7 +527,7 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
   std::stringstream header_stream(line);
   std::string header;
   while (std::getline(header_stream, header, ',')) {
-    headers.push_back(header);
+    headers.emplace_back(header);
   }
 
   // 构建列名到位置的映射
@@ -545,40 +545,38 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
     std::stringstream line_stream(line);
     std::string cell;
     while (std::getline(line_stream, cell, ',')) {
-      cells.push_back(cell);
+      cells.emplace_back(cell);
     }
 
+    int cell_num = cells.size();
     std::memset(record, 0, record_size);
     auto offset = 0;
 
     for (const auto &col : tab_.cols) {
-      if (header_index.find(col.name) == header_index.end()) {
+      auto iter = header_index.find(col.name);
+      if (iter == header_index.end()) {
         throw std::runtime_error("CSV missing column: " + col.name);
       }
 
-      size_t col_idx = header_index[col.name];
-      if (col_idx >= cells.size()) {
+      size_t col_idx = iter->second;
+      if (col_idx >= cell_num) {
         throw std::runtime_error("CSV row missing field for column: " + col.name);
       }
 
       const std::string &value_str = cells[col_idx];
       switch (col.type) {
         case ColType::TYPE_INT: {
-          //   int value = parse_int(value_str);
           int value = std::atoi(value_str.c_str());
           std::memcpy(record + offset, &value, col.len);
           break;
         }
         case ColType::TYPE_FLOAT: {
-          //   float value = parse_float(value_str);
           float value = std::atof(value_str.c_str());
           std::memcpy(record + offset, &value, col.len);
           break;
         }
         case ColType::TYPE_STRING: {
-          memset(record + offset, 0, sizeof(col.len));
-          //   std::memcpy(record + offset, value_str.c_str(), value_str.size());
-          std::memcpy(record + offset, value_str.c_str(), std::min((size_t)col.len, value_str.size()));
+          std::memcpy(record + offset, value_str.c_str(), value_str.size());
           break;
         }
       }
@@ -590,20 +588,21 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
 
     // 插入索引
     for (const auto &index : tab_.indexes) {
-      //   char key_buffer[]
       auto idx_name = IxManager::get_index_name(tab_name, index.cols);
       auto ih = ihs_.at(idx_name).get();
 
-      auto key = new_char(index.col_tot_len);
+      char key[index.col_tot_len];
       int offset_ = 0;
       for (size_t i = 0; i < static_cast<size_t>(index.col_num); ++i) {
-        std::memcpy(key.get() + offset_, record + index.cols[i].offset, index.cols[i].len);
+        std::memcpy(key + offset_, record + index.cols[i].offset, index.cols[i].len);
         offset_ += index.cols[i].len;
       }
 
-      ih->insert_entry(key.get(), rid_, nullptr);
+      ih->insert_entry(key, rid_, nullptr);
     }
   }
+
+  delete record;
 
   file.close();
 }
