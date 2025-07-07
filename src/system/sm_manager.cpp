@@ -532,7 +532,8 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
 
   // 构建列名到位置的映射
   std::unordered_map<std::string, size_t> header_index;
-  for (size_t i = 0; i < headers.size(); ++i) {
+  int header_num = headers.size();
+  for (size_t i = 0; i < header_num; ++i) {
     header_index[headers[i]] = i;
   }
 
