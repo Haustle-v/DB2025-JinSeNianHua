@@ -318,6 +318,7 @@ bool IxIndexHandle::get_value(const char *key, std::vector<Rid> *result, Transac
 
   // sqb 5.26
   //   std::shared_lock<std::shared_mutex> lock(root_latch_);
+  std::scoped_lock<std::mutex> lock(root_latch_);
   auto entry = find_leaf_page(key, Operation::FIND, transaction);
   if (entry.first == nullptr) {
     throw InternalError("try find valud one invalid leaf page");
@@ -474,6 +475,8 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
   // page；若当前叶子节点是最右叶子节点，则需要更新file_hdr_.last_leaf；记得处理并发的上锁
 
   // sqb   5.28
+  std::scoped_lock<std::mutex> lock(root_latch_);
+
   auto entry = find_leaf_page(key, Operation::INSERT, transaction);
 
   IxNodeHandle *leaf_node = entry.first;
@@ -521,6 +524,8 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
   // 如果需要并发，并且需要删除叶子结点，则需要在事务的delete_page_set中添加删除结点的对应页面；记得处理并发的上锁
 
   //   sqb 5.28
+  std::scoped_lock<std::mutex> lock(root_latch_);
+
   auto entry = find_leaf_page(key, Operation::DELETE, transaction);
   if (entry.first == nullptr) {
     throw InternalError("delete at invalid leaf node");
@@ -762,6 +767,7 @@ Rid IxIndexHandle::get_rid(const Iid &iid) const {
  */
 Iid IxIndexHandle::lower_bound(const char *key) {
   // sqb 5.29
+  std::scoped_lock<std::mutex> lock(root_latch_);
   IxNodeHandle *leaf_node = find_leaf_page(key, Operation::FIND, nullptr).first;
   int key_idx = leaf_node->lower_bound(key);
   Iid ret{-1, -1};
@@ -790,6 +796,8 @@ Iid IxIndexHandle::lower_bound(const char *key) {
  */
 Iid IxIndexHandle::upper_bound(const char *key) {
   // sqb 5.29
+  std::scoped_lock<std::mutex> lock(root_latch_);
+
   IxNodeHandle *leaf_node = find_leaf_page(key, Operation::FIND, nullptr).first;
   int key_idx = leaf_node->upper_bound(key);
   Iid ret{-1, -1};
