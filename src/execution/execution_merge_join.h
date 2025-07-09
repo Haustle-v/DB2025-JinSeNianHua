@@ -110,6 +110,7 @@ class MergeJoinExecutor : public AbstractExecutor {
     size_t Lsize = Lbuffer.size();
     size_t Rsize = Rbuffer.size();
     size_t eq_cond_num = equal_conds_.size();
+    size_t non_eq_cond_num = non_equal_conds_.size();
     bool is_find = false;
 
     // 有等值连接就先做排序合并在嵌套，没有等值就默认为嵌套
@@ -131,7 +132,7 @@ class MergeJoinExecutor : public AbstractExecutor {
           cur_rec_ptr_ = std::make_unique<RmRecord>(len_);
           memcpy(cur_rec_ptr_->data, lrec_ptr->data, lrec_ptr->size);
           memcpy(cur_rec_ptr_->data + lrec_ptr->size, rrec_ptr->data, rrec_ptr->size);
-          if (check_conds(cols_, non_equal_conds_, cur_rec_ptr_.get())) {
+          if (non_eq_cond_num == 0 || check_conds(cols_, non_equal_conds_, cur_rec_ptr_.get())) {
             ++Rpos;
             if (Rpos >= Rsize) {
               ++Lpos;
