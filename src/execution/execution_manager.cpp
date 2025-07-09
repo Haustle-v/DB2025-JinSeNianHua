@@ -10,6 +10,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "execution_manager.h"
 
+// #include "execution_merge_join.h"
 #include "executor_delete.h"
 #include "executor_index_scan.h"
 #include "executor_insert.h"
@@ -116,15 +117,13 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
         txn_mgr_->abort(context->txn_, context->log_mgr_);
         break;
       }
-      case T_LoadData:
-      {
-          sm_manager_->load_csv_data(x->file_name_, x->tab_name_);
-          break;
+      case T_LoadData: {
+        sm_manager_->load_csv_data(x->file_name_, x->tab_name_);
+        break;
       }
-      case T_IoEnable:
-      {
-          sm_manager_->io_enabled_ = x->io_enable_;
-          break;
+      case T_IoEnable: {
+        sm_manager_->io_enabled_ = x->io_enable_;
+        break;
       }
 
       default:
@@ -153,15 +152,15 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
 // 执行select语句，select语句的输出除了需要返回客户端外，还需要写入output.txt文件中
 void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, std::vector<TabCol> sel_cols,
                             Context *context) {
-    std::vector<std::string> captions;
-    captions.reserve(sel_cols.size());
-    for (auto &sel_col : sel_cols) {
-        if (sel_col.aggFuncType != ast::AGG_INVALID) {
-            captions.push_back(sel_col.alias);
-        } else {
-            captions.push_back(sel_col.col_name);
-        }
+  std::vector<std::string> captions;
+  captions.reserve(sel_cols.size());
+  for (auto &sel_col : sel_cols) {
+    if (sel_col.aggFuncType != ast::AGG_INVALID) {
+      captions.push_back(sel_col.alias);
+    } else {
+      captions.push_back(sel_col.col_name);
     }
+  }
 
   // Print header into buffer
   RecordPrinter rec_printer(sel_cols.size());
@@ -170,13 +169,13 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
   rec_printer.print_separator(context);
   // print header into file
   std::fstream outfile;
-  if (sm_manager_->io_enabled_){   // yfs 7.3
-  outfile.open("output.txt", std::ios::out | std::ios::app);
-  outfile << "|";
-  for (int i = 0; i < captions.size(); ++i) {
-    outfile << " " << captions[i] << " |";
-  }
-  outfile << "\n";
+  if (sm_manager_->io_enabled_) {  // yfs 7.3
+    outfile.open("output.txt", std::ios::out | std::ios::app);
+    outfile << "|";
+    for (int i = 0; i < captions.size(); ++i) {
+      outfile << " " << captions[i] << " |";
+    }
+    outfile << "\n";
   }
 
   // Print records
@@ -201,18 +200,18 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
     // print record into buffer
     rec_printer.print_record(columns, context);
     // print record into file
-    if (sm_manager_->io_enabled_){   // yfs 7.3
-    outfile << "|";
-    for (int i = 0; i < columns.size(); ++i) {
-      outfile << " " << columns[i] << " |";
-    }
-    outfile << "\n";
+    if (sm_manager_->io_enabled_) {  // yfs 7.3
+      outfile << "|";
+      for (int i = 0; i < columns.size(); ++i) {
+        outfile << " " << columns[i] << " |";
+      }
+      outfile << "\n";
     }
     num_rec++;
   }
-    if (sm_manager_->io_enabled_){
+  if (sm_manager_->io_enabled_) {
     outfile.close();
-      }
+  }
   // Print footer into buffer
   rec_printer.print_separator(context);
   // Print record count into buffer

@@ -15,6 +15,7 @@ See the Mulan PSL v2 for more details. */
 #include <iostream>
 #include <memory>
 #include <string>
+#include "execution/execution_merge_join.h"
 #include "execution/executor_delete.h"
 #include "execution/executor_index_scan.h"
 #include "execution/executor_insert.h"
@@ -312,14 +313,14 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
   bool reversed = false;
   std::shared_ptr<Plan> table_join_executors;
   table_join_executors =
-      std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right),
+      std::make_shared<JoinPlan>(T_SortMerge, std::move(left), std::move(right),
                                  extract_join_conditions(joinconds, tables, 1, reversed), reversed, query->join_type_);
 
   // 其余层连接
   for (int i = 2; i <= tables.size() - 1; i++) {  // i是右表的index
     bool reversed = false;
     table_join_executors = std::make_shared<JoinPlan>(
-        T_NestLoop, std::move(table_join_executors),  // 左深树, 把已连接节点放左边
+        T_SortMerge, std::move(table_join_executors),  // 左深树, 把已连接节点放左边
         std::move(table_scan_executors[i]), extract_join_conditions(joinconds, tables, i, reversed), reversed);
   }
   // 这里后需要处理！reverse的时候给jointree一个标记，因为赛题要求jointree输出的条件表达式左右顺序不变
