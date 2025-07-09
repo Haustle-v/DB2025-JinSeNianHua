@@ -29,14 +29,15 @@ class BufferPoolObject {
     // 为buffer pool分配一块连续的内存空间
     pages_ = new Page[pool_size_];
     // 可以被Replacer改变
-    // if (REPLACER_TYPE.compare("LRU"))
-    //   replacer_ = new LRUReplacer(pool_size_);
-    // else if (REPLACER_TYPE.compare("CLOCK"))
-    //   replacer_ = new LRUReplacer(pool_size_);
-    // else {
-    //   replacer_ = new LRUReplacer(pool_size_);
-    // }
-    replacer_ = new ClockReplacer();
+    if (REPLACER_TYPE.compare("LRU"))
+      replacer_ = new LRUReplacer(pool_size_);
+    else if (REPLACER_TYPE.compare("CLOCK"))
+      //   replacer_ = new LRUReplacer(pool_size_);
+      replacer_ = new ClockReplacer();
+    else {
+      replacer_ = new LRUReplacer(pool_size_);
+    }
+
     // 初始化时，所有的page都在free_list_中
     for (size_t i = 0; i < pool_size_; ++i) {
       free_list_.emplace_back(static_cast<frame_id_t>(i));  // static_cast转换数据类型
