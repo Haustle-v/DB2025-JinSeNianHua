@@ -82,6 +82,10 @@ void *client_handler(void *sock_fd) {
   // 记录客户端当前正在执行的事务ID
   txn_id_t txn_id = INVALID_TXN_ID;
 
+  // 为每个客户端单独分配一个词法解析器 sqb 7.9
+  yyscan_t scanner;
+  yylex_init(&scanner);
+
   std::string output = "establish client connection, sockfd: " + std::to_string(fd) + "\n";
   std::cout << output;
 
@@ -125,13 +129,14 @@ void *client_handler(void *sock_fd) {
     // 用于判断是否已经调用了yy_delete_buffer来删除buf
     bool finish_analyze = false;
     pthread_mutex_lock(buffer_mutex);
-    YY_BUFFER_STATE buf = yy_scan_string(data_recv);
-    if (yyparse() == 0) {
+    // YY_BUFFER_STATE buf = yy_scan_string(data_recv);
+    YY_BUFFER_STATE buf = yy_scan_string(data_recv, scanner);
+    if (yyparse(scanner) == 0) {
       if (ast::parse_tree != nullptr) {
         try {
           // analyze and rewrite
           std::shared_ptr<Query> query = analyze->do_analyze(ast::parse_tree);  // 将语法树转换为plan树
-          yy_delete_buffer(buf);
+          yy_delete_buffer(buf, scanner);
           finish_analyze = true;
           pthread_mutex_unlock(buffer_mutex);
           // 优化器
@@ -191,7 +196,7 @@ void *client_handler(void *sock_fd) {
       }
     }
     if (finish_analyze == false) {
-      yy_delete_buffer(buf);
+      yy_delete_buffer(buf, scanner);
       pthread_mutex_unlock(buffer_mutex);
     }
     // future TODO: 格式化 sql_handler.result, 传给客户端

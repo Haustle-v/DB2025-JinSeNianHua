@@ -9,6 +9,8 @@
     /* enable location */
 %option bison-bridge
 %option bison-locations
+    /* sqb 可重用的词法分析器 */
+%option reentrant 
 
 %{
 #include "ast.h"

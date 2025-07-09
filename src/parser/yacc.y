@@ -9,9 +9,9 @@
 std::unordered_map<std::string, std::string> alias_map;
 std::unordered_map<std::string, std::string> pam_saila;
 
-int yylex(YYSTYPE *yylval, YYLTYPE *yylloc);
+int yylex(YYSTYPE *yylval, YYLTYPE *yylloc,void *yyscanner);
 
-void yyerror(YYLTYPE *locp, const char* s) {
+void yyerror(YYLTYPE *locp, void *yyscanner , const char* s) {
     std::cerr << "Parser Error at line " << locp->first_line << " column " << locp->first_column << ": " << s << std::endl;
 }
 
@@ -24,6 +24,8 @@ using namespace ast;
 %locations
 // enable verbose syntax error message
 %define parse.error verbose
+// 为了支持多线程的lex sqb 7.9
+%param {void *yyscanner}
 
 // keywords
 %token SHOW TABLES CREATE TABLE DROP DESC INSERT INTO VALUES DELETE FROM ASC ORDER BY
@@ -62,7 +64,7 @@ LOAD OFF OUTPUT_FILE
 %type <sv_orderby_dir> opt_asc_desc
 %type <join_type_dir> join_type    /*yfs0527, 参考sv_orderby_dir*/
 %type <sv_join_expr> join_expr
-%type <sv_join_exprs> join_exprs, join_exprss
+%type <sv_join_exprs> join_exprs join_exprss
 %type <sv_setKnobType> set_knob_type
 %type <sv_int> limit_clause
 
