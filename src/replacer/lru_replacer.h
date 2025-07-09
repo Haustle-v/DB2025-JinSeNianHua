@@ -51,9 +51,9 @@ class ClockReplacer : public Replacer {
  public:
   explicit ClockReplacer() {}
 
-  ~ClockReplacer();
+  ~ClockReplacer() = default;
 
-  bool victim(frame_id_t *frame_id) {
+  bool victim(frame_id_t *frame_id) override {
     int steps = 0;
     do {
       clock_hand_ = (clock_hand_ + 1) % BUFFER_POOL_OBJECT_SIZE;
@@ -69,16 +69,16 @@ class ClockReplacer : public Replacer {
     return false;
   }
 
-  void pin(frame_id_t frame_id) {
+  void pin(frame_id_t frame_id) override {
     ++pin_count_[frame_id];
     if (pin_count_[frame_id] == 1) {
       pined_[frame_id] = true;
     }
   }
 
-  void unpin(frame_id_t frame_id) { --pin_count_[frame_id]; }
+  void unpin(frame_id_t frame_id) override { --pin_count_[frame_id]; }
 
-  size_t Size() { return BUFFER_POOL_OBJECT_SIZE; }
+  size_t Size() override { return BUFFER_POOL_OBJECT_SIZE; }
 
  private:
   int pin_count_[BUFFER_POOL_OBJECT_SIZE];
