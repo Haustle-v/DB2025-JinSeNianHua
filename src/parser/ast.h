@@ -322,7 +322,8 @@ struct SemValue {
   SetKnobType sv_setKnobType;
 };
 
-extern std::shared_ptr<ast::TreeNode> parse_tree;
+// extern std::shared_ptr<ast::TreeNode> parse_tree;
+extern thread_local std::shared_ptr<TreeNode> parse_tree;
 
 }  // namespace ast
 
