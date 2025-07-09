@@ -366,6 +366,9 @@ RmPageHandle RmFileHandle::create_new_page_handle() {
   // 在磁盘上获得一个新的page
   PageId new_page_id{fd_, INVALID_PAGE_ID};
   Page *new_page = buffer_pool_manager_->new_page(&new_page_id);
+  if (new_page == nullptr) {
+    throw PageNotExistError(disk_manager_->get_file_name(fd_), new_page_id.page_no);
+  }
 
   //   对空页框进行初始化
   RmPageHandle page_hdl{&file_hdr_, new_page};

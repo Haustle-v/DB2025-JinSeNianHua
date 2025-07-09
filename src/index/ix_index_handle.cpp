@@ -876,6 +876,9 @@ IxNodeHandle *IxIndexHandle::create_node() {
   PageId new_page_id = {.fd = fd_, .page_no = INVALID_PAGE_ID};
   // 从3开始分配page_no，第一次分配之后，new_page_id.page_no=3，file_hdr_.num_pages=4
   Page *page = buffer_pool_manager_->new_page(&new_page_id);
+  if (page == nullptr) {
+    throw PageNotExistError(disk_manager_->get_file_name(fd_), new_page_id.page_no);
+  }
   node = new IxNodeHandle(file_hdr_, page);
   return node;
 }
