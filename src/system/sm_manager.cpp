@@ -334,7 +334,7 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<std::s
   // 缓冲池要删除索引对应页 因为创建时索引写入磁盘绕过了缓冲池 后面创建可能会有虚假缓存命中
   // 0 1 作为file leaf hdr 直接绕过了缓冲区读写 不用管
   for (page_id_t page_no = 2; page_no < index_page_num; ++page_no) {
-    buffer_pool_manager_->delete_page({ix_hdl_ptr->get_fd(), page_no});
+    index_buffer_pool_manager_->delete_page({ix_hdl_ptr->get_fd(), page_no});
   }
 
   //   删除索引文件
