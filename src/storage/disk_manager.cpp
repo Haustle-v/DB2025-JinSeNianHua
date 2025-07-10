@@ -17,10 +17,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "defs.h"
 
-DiskManager::DiskManager() {
-  memset(fd2pageno_, 0,
-         MAX_FD * (sizeof(std::atomic<page_id_t>) / sizeof(char)));
-}
+DiskManager::DiskManager() { memset(fd2pageno_, 0, MAX_FD * (sizeof(std::atomic<page_id_t>) / sizeof(char))); }
 
 /**
  * @description: 将数据写入文件的指定磁盘页面中
@@ -29,21 +26,26 @@ DiskManager::DiskManager() {
  * @param {char} *offset 要写入磁盘的数据
  * @param {int} num_bytes 要写入磁盘的数据大小
  */
-void DiskManager::write_page(int fd, page_id_t page_no, const char *offset,
-                             int num_bytes) {
+void DiskManager::write_page(int fd, page_id_t page_no, const char *offset, int num_bytes) {
   // Todo:
   // 1.lseek()定位到文件头，通过(fd,page_no)可以定位指定页面及其在磁盘文件中的偏移量
   // 2.调用write()函数
   // 注意write返回值与num_bytes不等时 throw
   // InternalError("DiskManager::write_page Error");
-  std::scoped_lock<std::mutex> lock(latch_);
-  // std::cerr << "[DBUG] disk write fd " << fd << " page no " << page_no
-  //           << std::endl;
+  auto iter = fd_locks_.begin();
+  {
+    std::scoped_lock<std::mutex> lock(latch_);
+    iter = fd_locks_.find(fd);
+    if (iter == fd_locks_.end()) {
+      throw FileNotOpenError(fd);
+    }
+  }
+  std::scoped_lock<std::mutex> file_lock(*iter->second);
+
   lseek(fd, page_no * PAGE_SIZE, SEEK_SET);
   ssize_t write_bytes = write(fd, offset, num_bytes);
   if (write_bytes != num_bytes) {
-    throw InternalError("DiskManager::write_page Error" +
-                        std::string(strerror(errno)));
+    throw InternalError("DiskManager::write_page Error" + std::string(strerror(errno)));
   }
 }
 
@@ -54,19 +56,25 @@ void DiskManager::write_page(int fd, page_id_t page_no, const char *offset,
  * @param {char} *offset 读取的内容写入到offset中
  * @param {int} num_bytes 读取的数据量大小
  */
-void DiskManager::read_page(int fd, page_id_t page_no, char *offset,
-                            int num_bytes) {
+void DiskManager::read_page(int fd, page_id_t page_no, char *offset, int num_bytes) {
   // Todo:
   // 1.lseek()定位到文件头，通过(fd,page_no)可以定位指定页面及其在磁盘文件中的偏移量
   // 2.调用read()函数
   // 注意read返回值与num_bytes不等时，throw
   // InternalError("DiskManager::read_page Error");
-  std::scoped_lock<std::mutex> lock(latch_);
+  auto iter = fd_locks_.begin();
+  {
+    std::scoped_lock<std::mutex> lock(latch_);
+    iter = fd_locks_.find(fd);
+    if (iter == fd_locks_.end()) {
+      throw FileNotOpenError(fd);
+    }
+  }
+  std::scoped_lock<std::mutex> file_lock(*iter->second);
   lseek(fd, page_no * PAGE_SIZE, SEEK_SET);
   ssize_t read_bytes = read(fd, offset, num_bytes);
   if (read_bytes != num_bytes) {
-    throw InternalError("DiskManager::read_page Error" +
-                        std::string(strerror(errno)));
+    throw InternalError("DiskManager::read_page Error" + std::string(strerror(errno)));
   }
 }
 
@@ -155,8 +163,7 @@ void DiskManager::destroy_file(const std::string &path) {
   int result = unlink(path.c_str());
   if (result == -1) {
     // 删除失败的情况
-    throw InternalError("DiskManager destory file failed" +
-                        std::string(strerror(errno)));
+    throw InternalError("DiskManager destory file failed" + std::string(strerror(errno)));
   }
 }
 
@@ -180,11 +187,14 @@ int DiskManager::open_file(const std::string &path) {
   }
   int fd = open(path.c_str(), O_RDWR);
   if (fd == -1) {
-    throw InternalError("DiskManager open file failed " +
-                        std::string(strerror(errno)));
+    throw InternalError("DiskManager open file failed " + std::string(strerror(errno)));
   }
   path2fd_.emplace(path, fd);
   fd2path_.emplace(fd, path);
+
+  //   为文件注册锁
+  fd_locks_[fd] = std::make_shared<std::mutex>();
+
   return fd;
 }
 
@@ -203,11 +213,13 @@ void DiskManager::close_file(int fd) {
   }
   int result = close(fd);
   if (result == -1) {
-    throw InternalError("DiskManager close file failed" +
-                        std::string(strerror(errno)));
+    throw InternalError("DiskManager close file failed" + std::string(strerror(errno)));
   }
   path2fd_.erase(fd2path_[fd]);
   fd2path_.erase(fd);
+
+  //   移除锁
+  fd_locks_.erase(fd);
 }
 
 /**
