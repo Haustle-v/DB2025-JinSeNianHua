@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include <unistd.h>
 
 #include <atomic>
+#include <future>
 
 #include "analyze/analyze.h"
 #include "errors.h"
@@ -49,6 +50,10 @@ auto portal = std::make_unique<Portal>(sm_manager.get());
 auto analyze = std::make_unique<Analyze>(sm_manager.get());
 // pthread_mutex_t *buffer_mutex;
 pthread_mutex_t *sockfd_mutex;
+
+// 多线程形式load data
+std::deque<std::future<void> > futures;
+std::mutex pool_mutex;
 
 static jmp_buf jmpbuf;
 void sigint_handler(int signo) {
@@ -142,12 +147,30 @@ void *client_handler(void *sock_fd) {
       std::string csv_file = load_stmt.substr(5, csv_file_end - 5);
       std::string tab_name = load_stmt.substr(tab_name_start, tab_name_end - tab_name_start);
 
-      sm_manager->load_csv_data(csv_file, tab_name);
+      futures.emplace_back(
+          std::async(std::launch::async, [csv_file, tab_name] { sm_manager->load_csv_data(csv_file, tab_name); }));
+      //   sm_manager->load_csv_data(csv_file, tab_name);
       if (write(fd, data_send, offset + 1) == -1) {
         break;
       }
       continue;
     }
+
+    // 使用锁保证数据全部加载
+    pool_mutex.lock();
+    for (auto &future : futures) {
+      future.get();
+    }
+    // if(!futures.empty()){
+    //     for(auto &entry:sm_manager->fhs_){
+    //       buffer_pool_manager->flush_all_pages(entry.second->GetFd());
+    //     }
+    //     for(auto &entry:sm_manager->ihs_){
+    //       index_buffer_pool_manager->flush_all_pages(entry.second->get_fd());
+    //     }
+    // }
+    futures.clear();
+    pool_mutex.unlock();
 
     std::cout << "Read from client " << fd << ": " << data_recv << std::endl;
 

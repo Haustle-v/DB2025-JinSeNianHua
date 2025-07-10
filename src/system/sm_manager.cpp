@@ -507,7 +507,7 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
 void SmManager::load_csv_data(const std::string &csv_file_path, const std::string &tab_name) {
   std::ifstream file(csv_file_path);
   if (!file.is_open()) {
-    throw std::runtime_error("Cannot open CSV file: " + csv_file_path);
+    throw FileNotFoundError(csv_file_path);
   }
 
   auto tab_ = db_.get_table(tab_name);  // 假设是对象（不是指针）
