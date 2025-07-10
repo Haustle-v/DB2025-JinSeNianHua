@@ -116,6 +116,39 @@ void *client_handler(void *sock_fd) {
       exit(1);
     }
 
+    // set output_file off
+    if (strcmp(data_recv, "set output_file off") == 0) {
+      sm_manager->io_enabled_ = false;
+      if (write(fd, data_send, offset + 1) == -1) {
+        break;
+      }
+      continue;
+    }
+
+    if (strcmp(data_recv, "set output_file on") == 0) {
+      sm_manager->io_enabled_ = true;
+      if (write(fd, data_send, offset + 1) == -1) {
+        break;
+      }
+      continue;
+    }
+
+    if (strncmp(data_recv, "load", 4) == 0) {
+      std::string load_stmt(data_recv);
+      int csv_file_end = load_stmt.find(" into ");
+      int tab_name_start = csv_file_end + 6;
+      int tab_name_end = load_stmt.find(";");
+
+      std::string csv_file = load_stmt.substr(5, csv_file_end - 5);
+      std::string tab_name = load_stmt.substr(tab_name_start, tab_name_end - tab_name_start);
+
+      sm_manager->load_csv_data(csv_file, tab_name);
+      if (write(fd, data_send, offset + 1) == -1) {
+        break;
+      }
+      continue;
+    }
+
     std::cout << "Read from client " << fd << ": " << data_recv << std::endl;
 
     memset(data_send, '\0', BUFFER_LENGTH);
