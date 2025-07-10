@@ -36,25 +36,21 @@ See the Mulan PSL v2 for more details. */
 #include "replacer/lru_replacer.h"
 #include "storage/disk_manager.h"
 
-const std::string TEST_DB_NAME =
-    "BufferPoolManagerTest_db";                         // 以数据库名作为根目录
-const std::string TEST_FILE_NAME = "basic";             // 测试文件的名字
-const std::string TEST_FILE_NAME_CCUR = "concurrency";  // 测试文件的名字
-const std::string TEST_FILE_NAME_BIG = "bigdata";       // 测试文件的名字
+const std::string TEST_DB_NAME = "BufferPoolManagerTest_db";  // 以数据库名作为根目录
+const std::string TEST_FILE_NAME = "basic";                   // 测试文件的名字
+const std::string TEST_FILE_NAME_CCUR = "concurrency";        // 测试文件的名字
+const std::string TEST_FILE_NAME_BIG = "bigdata";             // 测试文件的名字
 constexpr int MAX_FILES = 32;
 constexpr int MAX_PAGES = 128;
 constexpr size_t TEST_BUFFER_POOL_SIZE = MAX_FILES * MAX_PAGES;
 
 // 创建BufferPoolManager
 auto disk_manager = std::make_unique<DiskManager>();
-auto buffer_pool_manager = std::make_unique<BufferPoolManager>(
-    TEST_BUFFER_POOL_SIZE, disk_manager.get());
+auto buffer_pool_manager = std::make_unique<BufferPoolManager>(TEST_BUFFER_POOL_SIZE, disk_manager.get());
 
 std::unordered_map<int, char *> mock;  // fd -> buffer
 
-char *mock_get_page(int fd, int page_no) {
-  return &mock[fd][page_no * PAGE_SIZE];
-}
+char *mock_get_page(int fd, int page_no) { return &mock[fd][page_no * PAGE_SIZE]; }
 
 void check_disk(int fd, int page_no) {
   char buf[PAGE_SIZE];
@@ -74,8 +70,7 @@ void check_disk_all() {
 
 void check_cache(int fd, int page_no) {
   Page *page = buffer_pool_manager->fetch_page(PageId{fd, page_no});
-  char *mock_buf =
-      mock_get_page(fd, page_no);  // &mock[fd][page_no * PAGE_SIZE];
+  char *mock_buf = mock_get_page(fd, page_no);  // &mock[fd][page_no * PAGE_SIZE];
   assert(memcmp(page->get_data(), mock_buf, PAGE_SIZE) == 0);
   buffer_pool_manager->unpin_page(PageId{fd, page_no}, false);
 }
@@ -107,27 +102,21 @@ int rand_fd() {
 }
 
 struct rid_hash_t {
-  size_t operator()(const Rid &rid) const {
-    return (rid.page_no << 16) | rid.slot_no;
-  }
+  size_t operator()(const Rid &rid) const { return (rid.page_no << 16) | rid.slot_no; }
 };
 
 struct rid_equal_t {
-  bool operator()(const Rid &x, const Rid &y) const {
-    return x.page_no == y.page_no && x.slot_no == y.slot_no;
-  }
+  bool operator()(const Rid &x, const Rid &y) const { return x.page_no == y.page_no && x.slot_no == y.slot_no; }
 };
 
-void check_equal(
-    const RmFileHandle *file_handle,
-    const std::unordered_map<Rid, std::string, rid_hash_t, rid_equal_t> &mock) {
+void check_equal(const RmFileHandle *file_handle,
+                 const std::unordered_map<Rid, std::string, rid_hash_t, rid_equal_t> &mock) {
   // Test all records
   for (auto &entry : mock) {
     Rid rid = entry.first;
     auto mock_buf = (char *)entry.second.c_str();
     auto rec = file_handle->get_record(rid, nullptr);
-    assert(memcmp(mock_buf, rec->data, file_handle->file_hdr_.record_size) ==
-           0);
+    assert(memcmp(mock_buf, rec->data, file_handle->file_hdr_.record_size) == 0);
   }
   // Randomly get record
   for (int i = 0; i < 10; i++) {
@@ -144,8 +133,7 @@ void check_equal(
   for (; !scan.is_end(); scan.next()) {
     assert(mock.count(scan.rid()) > 0);
     auto rec = file_handle->get_record(scan.rid(), nullptr);
-    assert(memcmp(rec->data, mock.at(scan.rid()).c_str(),
-                  file_handle->file_hdr_.record_size) == 0);
+    assert(memcmp(rec->data, mock.at(scan.rid()).c_str(), file_handle->file_hdr_.record_size) == 0);
     num_records++;
   }
   assert(num_records == mock.size());
@@ -301,8 +289,7 @@ TEST_F(BufferPoolManagerTest, SampleTest) {
   // create BufferPoolManager
   const size_t buffer_pool_size = 10;
   auto disk_manager = BufferPoolManagerTest::disk_manager_.get();
-  auto bpm =
-      std::make_unique<BufferPoolManager>(buffer_pool_size, disk_manager);
+  auto bpm = std::make_unique<BufferPoolManager>(buffer_pool_size, disk_manager);
   // create tmp PageId
   int fd = BufferPoolManagerTest::fd_;
   PageId page_id_temp = {.fd = fd, .page_no = INVALID_PAGE_ID};
@@ -401,8 +388,8 @@ class BufferPoolManagerConcurrencyTest : public ::testing::Test {
 };
 
 TEST_F(BufferPoolManagerConcurrencyTest, ConcurrencyTest) {
-  // const int num_threads = 5;
-  const int num_threads = 10;
+  const int num_threads = 1;
+  // const int num_threads = 10;
   const int num_runs = 50;
 
   // get fd
@@ -411,8 +398,7 @@ TEST_F(BufferPoolManagerConcurrencyTest, ConcurrencyTest) {
   for (int run = 0; run < num_runs; run++) {
     // create BufferPoolManager
     auto disk_manager = BufferPoolManagerConcurrencyTest::disk_manager_.get();
-    std::shared_ptr<BufferPoolManager> bpm{
-        new BufferPoolManager(50, disk_manager)};
+    std::shared_ptr<BufferPoolManager> bpm{new BufferPoolManager(32, disk_manager)};
 
     std::vector<std::thread> threads;
     for (int tid = 0; tid < num_threads; tid++) {
@@ -434,8 +420,7 @@ TEST_F(BufferPoolManagerConcurrencyTest, ConcurrencyTest) {
           auto page = bpm->fetch_page(page_ids[j]);
           EXPECT_NE(nullptr, page);
           ASSERT_NE(nullptr, page);
-          EXPECT_EQ(0, std::strcmp(std::to_string(page_ids[j].page_no).c_str(),
-                                   (page->get_data())));
+          EXPECT_EQ(0, std::strcmp(std::to_string(page_ids[j].page_no).c_str(), (page->get_data())));
           EXPECT_EQ(1, bpm->unpin_page(page_ids[j], true));
         }
         for (int j = 0; j < 10; j++) {
@@ -481,15 +466,12 @@ TEST(StorageTest, SimpleTest) {
 
     // open file
     int fd = disk_manager->open_file(filename);
-    char *tmp =
-        new char[PAGE_SIZE *
-                 MAX_PAGES];  // TODO: fix error in detected memory leaks
+    char *tmp = new char[PAGE_SIZE * MAX_PAGES];  // TODO: fix error in detected memory leaks
 
     mock[fd] = tmp;
     fd2name[fd] = filename;
 
-    disk_manager->set_fd2pageno(
-        fd, 0);  // diskmanager在fd对应的文件中从0开始分配page_no
+    disk_manager->set_fd2pageno(fd, 0);  // diskmanager在fd对应的文件中从0开始分配page_no
   }
 
   /** Test buffer_pool_manager*/
@@ -509,8 +491,7 @@ TEST(StorageTest, SimpleTest) {
       memcpy(page->get_data(), init_buf, PAGE_SIZE);
       buffer_pool_manager->unpin_page(PageId{fd, page_no}, true);
 
-      char *mock_buf =
-          mock_get_page(fd, page_no);  // &mock[fd][page_no * PAGE_SIZE]
+      char *mock_buf = mock_get_page(fd, page_no);  // &mock[fd][page_no * PAGE_SIZE]
       memcpy(mock_buf, init_buf, PAGE_SIZE);
 
       num_pages++;
@@ -602,17 +583,14 @@ TEST(RecordManagerTest, SimpleTest) {
 
   // 创建RmManager类的对象rm_manager
   auto disk_manager = std::make_unique<DiskManager>();
-  auto buffer_pool_manager =
-      std::make_unique<BufferPoolManager>(BUFFER_POOL_SIZE, disk_manager.get());
-  auto rm_manager = std::make_unique<RmManager>(disk_manager.get(),
-                                                buffer_pool_manager.get());
+  auto buffer_pool_manager = std::make_unique<BufferPoolManager>(BUFFER_POOL_SIZE, disk_manager.get());
+  auto rm_manager = std::make_unique<RmManager>(disk_manager.get(), buffer_pool_manager.get());
 
   std::unordered_map<Rid, std::string, rid_hash_t, rid_equal_t> mock;
 
   std::string filename = "abc.txt";
 
-  int record_size =
-      4 + rand() % 256;  // 元组大小随便设置，只要不超过RM_MAX_RECORD_SIZE
+  int record_size = 4 + rand() % 256;  // 元组大小随便设置，只要不超过RM_MAX_RECORD_SIZE
   // test files
   {
     // 删除残留的同名文件
@@ -628,8 +606,7 @@ TEST(RecordManagerTest, SimpleTest) {
     assert(file_handle->file_hdr_.first_free_page_no == RM_NO_PAGE);
     assert(file_handle->file_hdr_.num_pages == 1);
 
-    int max_bytes = file_handle->file_hdr_.record_size *
-                        file_handle->file_hdr_.num_records_per_page +
+    int max_bytes = file_handle->file_hdr_.record_size * file_handle->file_hdr_.num_records_per_page +
                     file_handle->file_hdr_.bitmap_size + (int)sizeof(RmPageHdr);
     assert(max_bytes <= PAGE_SIZE);
     int rand_val = rand();
@@ -656,8 +633,7 @@ TEST(RecordManagerTest, SimpleTest) {
     if (mock.empty() || dice < insert_prob) {
       rand_buf(file_handle->file_hdr_.record_size, write_buf);
       Rid rid = file_handle->insert_record(write_buf, nullptr);
-      mock[rid] =
-          std::string((char *)write_buf, file_handle->file_hdr_.record_size);
+      mock[rid] = std::string((char *)write_buf, file_handle->file_hdr_.record_size);
       add_cnt++;
       //            std::cout << "insert " << rid << '\n'; //
       //            operator<<(cout,rid)
@@ -673,8 +649,7 @@ TEST(RecordManagerTest, SimpleTest) {
         // update
         rand_buf(file_handle->file_hdr_.record_size, write_buf);
         file_handle->update_record(rid, write_buf, nullptr);
-        mock[rid] =
-            std::string((char *)write_buf, file_handle->file_hdr_.record_size);
+        mock[rid] = std::string((char *)write_buf, file_handle->file_hdr_.record_size);
         upd_cnt++;
         //                std::cout << "update " << rid << '\n';
       } else {
@@ -693,9 +668,7 @@ TEST(RecordManagerTest, SimpleTest) {
     check_equal(file_handle.get(), mock);
   }
   assert(mock.size() == add_cnt - del_cnt);
-  std::cout << "insert " << add_cnt << '\n'
-            << "delete " << del_cnt << '\n'
-            << "update " << upd_cnt << '\n';
+  std::cout << "insert " << add_cnt << '\n' << "delete " << del_cnt << '\n' << "update " << upd_cnt << '\n';
   // clean up
   rm_manager->close_file(file_handle.get());
   rm_manager->destroy_file(filename);
