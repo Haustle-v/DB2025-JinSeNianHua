@@ -9,6 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #pragma once
+#include "execution_common.h"  //sqb 6.19 用于支持MVCC
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
@@ -64,6 +65,8 @@ class DeleteExecutor : public AbstractExecutor {
       //   删除记录 实际执行中添加了事务控制与日志 6.5
       fh_->delete_record(rid, context_, rec_ptr.get());
     }
+    // yfs 6.11 减少记录数量
+    sm_manager_->db_.get_table(tab_name_).record_count--;
     return nullptr;
   }
 

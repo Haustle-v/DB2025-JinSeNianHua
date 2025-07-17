@@ -42,6 +42,8 @@ class Planner {
     void set_enable_nestedloop_join(bool set_val) { enable_nestedloop_join = set_val; }
     
     void set_enable_sortmerge_join(bool set_val) { enable_sortmerge_join = set_val; }
+
+    void projection_pushdown(std::shared_ptr<Plan>& plan, std::vector<TabCol>& cols);
     
    private:
     std::shared_ptr<Query> logical_optimization(std::shared_ptr<Query> query, Context *context);
@@ -55,7 +57,8 @@ class Planner {
     std::shared_ptr<Plan> generate_sort_plan(std::shared_ptr<Query> query, std::shared_ptr<Plan> plan);
     
     std::shared_ptr<Plan> generate_select_plan(std::shared_ptr<Query> query, Context *context);
-
+    
+    void do_explain(std::shared_ptr<DMLPlan> plan, Context *context);     // yfs 6.9
 
     // int get_indexNo(std::string tab_name, std::vector<Condition> curr_conds);
     bool get_index_cols(std::string tab_name, std::vector<Condition> curr_conds, std::vector<std::string>& index_col_names);

@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include <unistd.h>
 
 #include <atomic>
+#include <future>
 
 #include "analyze/analyze.h"
 #include "errors.h"
@@ -33,10 +34,11 @@ static bool should_exit = false;
 // 构建全局所需的管理器对象
 auto disk_manager = std::make_unique<DiskManager>();
 auto buffer_pool_manager = std::make_unique<BufferPoolManager>(BUFFER_POOL_SIZE, disk_manager.get());
+auto index_buffer_pool_manager = std::make_unique<BufferPoolManager>(INDEX_BUFFER_POOL_SIZE, disk_manager.get());
 auto rm_manager = std::make_unique<RmManager>(disk_manager.get(), buffer_pool_manager.get());
-auto ix_manager = std::make_unique<IxManager>(disk_manager.get(), buffer_pool_manager.get());
-auto sm_manager =
-    std::make_unique<SmManager>(disk_manager.get(), buffer_pool_manager.get(), rm_manager.get(), ix_manager.get());
+auto ix_manager = std::make_unique<IxManager>(disk_manager.get(), index_buffer_pool_manager.get());
+auto sm_manager = std::make_unique<SmManager>(disk_manager.get(), buffer_pool_manager.get(),
+                                              index_buffer_pool_manager.get(), rm_manager.get(), ix_manager.get());
 auto lock_manager = std::make_unique<LockManager>();
 auto txn_manager = std::make_unique<TransactionManager>(lock_manager.get(), sm_manager.get());
 auto planner = std::make_unique<Planner>(sm_manager.get());
@@ -46,8 +48,12 @@ auto log_manager = std::make_unique<LogManager>(disk_manager.get());
 auto recovery = std::make_unique<RecoveryManager>(disk_manager.get(), buffer_pool_manager.get(), sm_manager.get());
 auto portal = std::make_unique<Portal>(sm_manager.get());
 auto analyze = std::make_unique<Analyze>(sm_manager.get());
-pthread_mutex_t *buffer_mutex;
+// pthread_mutex_t *buffer_mutex;
 pthread_mutex_t *sockfd_mutex;
+
+// 多线程形式load data
+std::deque<std::future<void> > futures;
+std::mutex pool_mutex;
 
 static jmp_buf jmpbuf;
 void sigint_handler(int signo) {
@@ -82,6 +88,10 @@ void *client_handler(void *sock_fd) {
   // 记录客户端当前正在执行的事务ID
   txn_id_t txn_id = INVALID_TXN_ID;
 
+  // 为每个客户端单独分配一个词法解析器 sqb 7.9
+  yyscan_t scanner;
+  yylex_init(&scanner);
+
   std::string output = "establish client connection, sockfd: " + std::to_string(fd) + "\n";
   std::cout << output;
 
@@ -111,33 +121,88 @@ void *client_handler(void *sock_fd) {
       exit(1);
     }
 
+    // set output_file off
+    if (strcmp(data_recv, "set output_file off") == 0) {
+      sm_manager->io_enabled_ = false;
+      if (write(fd, data_send, offset + 1) == -1) {
+        break;
+      }
+      continue;
+    }
+
+    if (strcmp(data_recv, "set output_file on") == 0) {
+      sm_manager->io_enabled_ = true;
+      if (write(fd, data_send, offset + 1) == -1) {
+        break;
+      }
+      continue;
+    }
+
+    if (strncmp(data_recv, "load", 4) == 0) {
+      std::string load_stmt(data_recv);
+      int csv_file_end = load_stmt.find(" into ");
+      int tab_name_start = csv_file_end + 6;
+      int tab_name_end = load_stmt.find(";");
+
+      std::string csv_file = load_stmt.substr(5, csv_file_end - 5);
+      std::string tab_name = load_stmt.substr(tab_name_start, tab_name_end - tab_name_start);
+
+      futures.emplace_back(std::async(std::launch::async, [csv_file, tab_name] {
+        sm_manager->load_csv_data(csv_file, tab_name);
+        buffer_pool_manager->flush_all_pages(sm_manager->fhs_.at(tab_name)->GetFd());
+      }));
+      //   sm_manager->load_csv_data(csv_file, tab_name);
+      if (write(fd, data_send, offset + 1) == -1) {
+        break;
+      }
+      continue;
+    }
+
+    // 使用锁保证数据全部加载
+    pool_mutex.lock();
+    for (auto &future : futures) {
+      future.get();
+    }
+    // if(!futures.empty()){
+    //     for(auto &entry:sm_manager->fhs_){
+    //       buffer_pool_manager->flush_all_pages(entry.second->GetFd());
+    //     }
+    //     for(auto &entry:sm_manager->ihs_){
+    //       index_buffer_pool_manager->flush_all_pages(entry.second->get_fd());
+    //     }
+    // }
+    futures.clear();
+    pool_mutex.unlock();
+
     std::cout << "Read from client " << fd << ": " << data_recv << std::endl;
 
     memset(data_send, '\0', BUFFER_LENGTH);
     offset = 0;
 
     // 开启事务，初始化系统所需的上下文信息（包括事务对象指针、锁管理器指针、日志管理器指针、存放结果的buffer、记录结果长度的变量）
-    Context *context = new Context(lock_manager.get(), log_manager.get(), nullptr, data_send, &offset);
+    Context *context =
+        new Context(lock_manager.get(), log_manager.get(), nullptr, data_send, &offset, txn_manager.get());
     // sqb :启用事务 6.4
     SetTransaction(&txn_id, context);
 
     // 用于判断是否已经调用了yy_delete_buffer来删除buf
     bool finish_analyze = false;
-    pthread_mutex_lock(buffer_mutex);
-    YY_BUFFER_STATE buf = yy_scan_string(data_recv);
-    if (yyparse() == 0) {
+    // pthread_mutex_lock(buffer_mutex);
+    // YY_BUFFER_STATE buf = yy_scan_string(data_recv);
+    YY_BUFFER_STATE buf = yy_scan_string(data_recv, scanner);
+    if (yyparse(scanner) == 0) {
       if (ast::parse_tree != nullptr) {
         try {
           // analyze and rewrite
           std::shared_ptr<Query> query = analyze->do_analyze(ast::parse_tree);  // 将语法树转换为plan树
-          yy_delete_buffer(buf);
+          yy_delete_buffer(buf, scanner);
           finish_analyze = true;
-          pthread_mutex_unlock(buffer_mutex);
+          //   pthread_mutex_unlock(buffer_mutex);
           // 优化器
           std::shared_ptr<Plan> plan = optimizer->plan_query(query, context);
           // portal
           std::shared_ptr<PortalStmt> portalStmt = portal->start(plan, context);
-          portal->run(portalStmt, ql_manager.get(), &txn_id, context);
+          portal->run(portalStmt, ql_manager.get(), &txn_id, context);  // 真正执行
           portal->drop();
         } catch (TransactionAbortException &e) {
           // 事务需要回滚，需要把abort信息返回给客户端并写入output.txt文件中
@@ -150,10 +215,12 @@ void *client_handler(void *sock_fd) {
           txn_manager->abort(context->txn_, log_manager.get());
           std::cout << e.GetInfo() << std::endl;
 
-          std::fstream outfile;
-          outfile.open("output.txt", std::ios::out | std::ios::app);
-          outfile << str;
-          outfile.close();
+          if (sm_manager->io_enabled_) {  // yfs 7.3
+            std::fstream outfile;
+            outfile.open("output.txt", std::ios::out | std::ios::app);
+            outfile << str;
+            outfile.close();
+          }
         } catch (RMDBError &e) {
           // 遇到异常，需要打印failure到output.txt文件中，并发异常信息返回给客户端
           std::cerr << e.what() << std::endl;
@@ -163,17 +230,33 @@ void *client_handler(void *sock_fd) {
           data_send[e.get_msg_len() + 1] = '\0';
           offset = e.get_msg_len() + 1;
 
-          // 将报错信息写入output.txt
-          std::fstream outfile;
-          outfile.open("output.txt", std::ios::out | std::ios::app);
-          outfile << "failure\n";
-          outfile.close();
+          if (sm_manager->io_enabled_) {  // yfs 7.3
+            // 将报错信息写入output.txt
+            std::fstream outfile;
+            outfile.open("output.txt", std::ios::out | std::ios::app);
+            outfile << "failure\n";
+            outfile.close();
+          }
         }
+      }
+    } else {
+      std::string ParseError = "parse error";
+      std::memcpy(data_send, ParseError.c_str(), ParseError.length());
+      data_send[ParseError.length()] = '\n';
+      data_send[ParseError.length() + 1] = '\0';
+      offset = ParseError.length() + 1;
+
+      // 将报错信息写入output.txt
+      if (sm_manager->io_enabled_) {
+        std::fstream outfile;
+        outfile.open("output.txt", std::ios::out | std::ios::app);
+        outfile << "failure\n";
+        outfile.close();
       }
     }
     if (finish_analyze == false) {
-      yy_delete_buffer(buf);
-      pthread_mutex_unlock(buffer_mutex);
+      yy_delete_buffer(buf, scanner);
+      //   pthread_mutex_unlock(buffer_mutex);
     }
     // future TODO: 格式化 sql_handler.result, 传给客户端
     // send result with fixed format, use protobuf in the future
@@ -195,9 +278,9 @@ void *client_handler(void *sock_fd) {
 
 void start_server() {
   // init mutex
-  buffer_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+  //   buffer_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
   sockfd_mutex = (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-  pthread_mutex_init(buffer_mutex, nullptr);
+  //   pthread_mutex_init(buffer_mutex, nullptr);
   pthread_mutex_init(sockfd_mutex, nullptr);
 
   int sockfd_server;

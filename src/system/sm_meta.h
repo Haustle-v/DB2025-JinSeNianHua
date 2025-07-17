@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 #include <vector>
 
+#include "./parser/alias_map.h"
 #include "errors.h"
 #include "sm_defs.h"
 
@@ -70,12 +71,14 @@ struct TabMeta {
   std::string name;                // 表名称
   std::vector<ColMeta> cols;       // 表包含的字段
   std::vector<IndexMeta> indexes;  // 表上建立的索引
+  size_t record_count = 0;         // 默认记录数量为0  (yfs 6.11)
 
   TabMeta() {}
 
   TabMeta(const TabMeta &other) {
     name = other.name;
     for (auto col : other.cols) cols.push_back(col);
+    record_count = other.record_count;  // yfs 6.11 这行别忘了加
   }
 
   /* 判断当前表中是否存在名为col_name的字段 */
@@ -131,6 +134,8 @@ struct TabMeta {
     for (auto &index : tab.indexes) {
       os << index << "\n";
     }
+    // yfs 6.11 写入 record_count
+    os << tab.record_count << "\n";
     return os;
   }
 
@@ -148,6 +153,8 @@ struct TabMeta {
       is >> index;
       tab.indexes.push_back(index);
     }
+    // yfs 6.11 读出 record_count
+    is >> tab.record_count;
     return is;
   }
 };
@@ -186,6 +193,20 @@ class DbMeta {
       os << entry.second << '\n';
     }
     return os;
+  }
+
+  // get_table2只需要在check_clomun()里用，把别名改为表名需要tab_name非const，就不改动原来的get_table了(否则牵涉到的太多)
+  TabMeta &get_table2(std::string &tab_name) {
+    auto pos = tabs_.find(tab_name);
+    if (pos == tabs_.end()) {
+      auto pos = tabs_.find(alias_map[tab_name]);  // yfs 如果没找到，用别名试着找一下
+      if (pos == tabs_.end()) {
+        throw TableNotFoundError(tab_name);
+      }
+      tab_name = alias_map[tab_name];  // yfs 6.11 如果发现用的是表的别名，就在这里把别名改为原名
+      return pos->second;
+    }
+    return pos->second;
   }
 
   friend std::istream &operator>>(std::istream &is, DbMeta &db_meta) {

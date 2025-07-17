@@ -12,10 +12,29 @@ See the Mulan PSL v2 for more details. */
 
 #include "../defs.h"
 
-int yyparse();
+// int yyparse();
 
-typedef struct yy_buffer_state *YY_BUFFER_STATE;
+// typedef struct yy_buffer_state *YY_BUFFER_STATE;
 
-YY_BUFFER_STATE yy_scan_string(const char *str);
+// YY_BUFFER_STATE yy_scan_string(const char *str);
 
-void yy_delete_buffer(YY_BUFFER_STATE buffer);
+// void yy_delete_buffer(YY_BUFFER_STATE buffer);
+
+// 将词法分析改为多线程 sqb 7.9
+typedef struct yy_buffer_state *YY_BUFFER_STATE;  // 词法分析器的缓冲池
+typedef void *yyscan_t;                           // 词法分析器状态句柄
+
+// 重入式解析函数声明 sqb
+int yyparse(void *scanner);  // 需要与Yacc的%parse-param匹配
+
+// 扫描给定字符串，创建一个词法分析器的缓冲区
+YY_BUFFER_STATE yy_scan_string(const char *str, yyscan_t scanner);
+
+// 释放给定词法分析器的缓冲区
+void yy_delete_buffer(YY_BUFFER_STATE buffer, yyscan_t scanner);
+
+// 初始化线程独立的词法分析器
+void yylex_init(yyscan_t *scanner);
+
+// 释放给定词法分析器的实例
+void yylex_destroy(yyscan_t scanner);

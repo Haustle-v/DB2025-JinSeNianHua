@@ -59,8 +59,7 @@ void RmScan::next() {
   for (page_id_t page_no = rid_.page_no; page_no < max_page_num; ++page_no) {
     RmPageHandle page_hdl = file_handle_->fetch_page_handle(page_no);
     tmp_page_id.page_no = page_no;
-    int slot_no =
-        Bitmap::next_bit(1, page_hdl.bitmap, max_record_size, start_slot_no);
+    int slot_no = Bitmap::next_bit(1, page_hdl.bitmap, max_record_size, start_slot_no);
 
     if (slot_no == max_record_size) {
       start_slot_no = -1;

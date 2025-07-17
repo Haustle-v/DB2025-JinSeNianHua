@@ -9,6 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #pragma once
+#include "execution_common.h"  //sqb 6.19 用于支持MVCC
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"

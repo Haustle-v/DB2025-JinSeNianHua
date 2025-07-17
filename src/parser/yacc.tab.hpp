@@ -78,6 +78,7 @@ extern int yydebug;
     ORDER_BY = 288,
     ENABLE_NESTLOOP = 289,
     ENABLE_SORTMERGE = 290,
+<<<<<<< HEAD
     LEQ = 291,
     NEQ = 292,
     GEQ = 293,
@@ -99,6 +100,37 @@ extern int yydebug;
     EXPLAIN = 309,
     STATIC_CHECKPOINT = 310,
     CRASH = 311
+=======
+    INNER = 291,
+    LEFT = 292,
+    RIGHT = 293,
+    FULL = 294,
+    SEMI = 295,
+    ON = 296,
+    MAX = 297,
+    MIN = 298,
+    SUM = 299,
+    AVG = 300,
+    COUNT = 301,
+    AS = 302,
+    GROUP = 303,
+    HAVING = 304,
+    LIMIT = 305,
+    EXPLAIN = 306,
+    LOAD = 307,
+    OFF = 308,
+    OUTPUT_FILE = 309,
+    LEQ = 310,
+    NEQ = 311,
+    GEQ = 312,
+    T_EOF = 313,
+    IDENTIFIER = 314,
+    VALUE_STRING = 315,
+    VALUE_PATH = 316,
+    VALUE_INT = 317,
+    VALUE_FLOAT = 318,
+    VALUE_BOOL = 319
+>>>>>>> mvcc_perf_sqb
   };
 #endif
 
@@ -120,6 +152,10 @@ struct YYLTYPE
 
 
 
+<<<<<<< HEAD
 int yyparse (void);
+=======
+int yyparse (void *yyscanner);
+>>>>>>> mvcc_perf_sqb
 
 #endif /* !YY_YY_YACC_TAB_HPP_INCLUDED  */

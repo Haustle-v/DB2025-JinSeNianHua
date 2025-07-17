@@ -14,6 +14,8 @@ See the Mulan PSL v2 for more details. */
 #include "parser.h"
 
 int main() {
+  yyscan_t scanner;
+  yylex_init(&scanner);
   std::vector<std::string> sqls = {
       "show tables;",
       "desc tb;",
@@ -31,22 +33,21 @@ int main() {
       "select * from tb;",
       "select * from tb where x <> 2 and y >= 3. and z <= '123' and b < tb.a;",
       "select x.a, y.b from x, y where x.a = y.b and c = d;",
-      "select x.a, y.b from x join y where x.a = y.b and c = d;",
-      "explain select x.a, y.b from x join y where x.a = y.b and c = d;",
-      "crash;",
-      "create static_checkpoint;",
-      "update tb set a = a-1;",
+      // "select x.a, y.b from x join y where x.a = y.b and c = d;",
+      // "explain select x.a, y.b from x join y where x.a = y.b and c = d;",
+      "select x.a, y.b from x join y on x.a = y.b join z on x.a = z.c;",
+      "select x.a, y.b from x SEMI JOIN y ON x.a = y.b;",
       "exit;",
       "help;",
       "",
   };
   for (auto &sql : sqls) {
     std::cout << sql << std::endl;
-    YY_BUFFER_STATE buf = yy_scan_string(sql.c_str());
-    assert(yyparse() == 0);
+    YY_BUFFER_STATE buf = yy_scan_string(sql.c_str(), scanner);
+    assert(yyparse(scanner) == 0);
     if (ast::parse_tree != nullptr) {
       ast::TreePrinter::print(ast::parse_tree);
-      yy_delete_buffer(buf);
+      yy_delete_buffer(buf, scanner);
       std::cout << std::endl;
     } else {
       std::cout << "exit/EOF" << std::endl;

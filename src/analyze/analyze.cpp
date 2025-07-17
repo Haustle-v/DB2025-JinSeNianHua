@@ -9,6 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #include "analyze.h"
+#include "./parser/alias_map.h"
 
 /**
  * @description: 分析器，进行语义分析和查询重写，需要检查不符合语义规定的部分
@@ -18,8 +19,23 @@ See the Mulan PSL v2 for more details. */
 std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse) {
   std::shared_ptr<Query> query = std::make_shared<Query>();
   if (auto x = std::dynamic_pointer_cast<ast::SelectStmt>(parse)) {
+    // 测试
+    // if(nullptr == std::dynamic_pointer_cast<ast::AggCol>(x->cols[1])) {
+    //   if(x->group_by_cols.size() == 1) {
+    //   if(x->cols[1]->col_name != x->group_by_cols[0]->col_name) {
+    //     throw RMDBError();
+    //   }
+    //   }
+    // }
     // 处理表名
     query->tables = std::move(x->tabs);
+    // 把ast的jointree传递给query
+    if (!x->jointree.empty()) {
+      query->join_type_ = x->jointree[0]->type;
+    }
+    // 把ast的need_explain传递给query
+    query->need_explain = x->need_explain;
+
     /** TODO: 检查表是否存在 */
     // sqb: down! 5.24
     for (auto &tab_name : query->tables) {
@@ -28,7 +44,6 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
       }
     }
 
-    // 处理target list，再target list中添加上表名，例如 a.id
     for (auto &sv_sel_col : x->cols) {
       // 如果 col 为 AggCol 类型
       if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(sv_sel_col)) {
@@ -47,21 +62,49 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
       }
     }
 
+    // 如果有GROUP BY子句，也要设置has_agg为true，因为GROUP BY本身就表示这是一个聚合查询
+    if (!x->group_by_cols.empty()) {
+      x->has_agg = true;
+    }
+
     std::vector<ColMeta> all_cols;
     get_all_cols(query->tables, all_cols);
-    if (query->cols.empty()) {
-      // select all columns
-      for (auto &col : all_cols) {
-        TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name};
-        query->cols.push_back(sel_col);
+
+    // 处理target list，再target list中添加上表名，例如 a.id
+    if (query->join_type_ == JoinType::SEMI_JOIN) {  // 检查列名的选择是否符合半连接的定义
+      std::vector<ColMeta> all_cols_of_left_tab;
+      get_all_cols_of_left_tab(x->jointree[0]->left, all_cols_of_left_tab);
+
+      if (query->cols.empty()) {  // select * 表示 select all
+        query->select_all = true;
+        // select all columns
+        for (auto &col : all_cols_of_left_tab) {
+          TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name};
+          query->cols.push_back(sel_col);
+        }
+      } else {
+        // infer table name from column name
+        for (auto &sel_col : query->cols) {
+          sel_col = check_column4semi_join(all_cols_of_left_tab, sel_col);  // 列元数据校验
+        }
       }
     } else {
-      // infer table name from column name
-      for (auto &sel_col : query->cols) {
-        if (sel_col.col_name == "*") {
-          continue;
+      if (query->cols.empty()) {
+        query->select_all = true;
+        // select all columns
+        for (auto &col : all_cols) {
+          TabCol sel_col = {
+              .tab_name = col.tab_name, .col_name = col.name, .alias = "", .aggFuncType = ast::AGG_INVALID};
+          query->cols.push_back(sel_col);
         }
-        sel_col = check_column(all_cols, sel_col);  // 列元数据校验
+      } else {
+        // infer table name from column name
+        for (auto &sel_col : query->cols) {
+          if (sel_col.col_name == "*") {
+            continue;
+          }
+          sel_col = check_column(all_cols, sel_col);  // 列元数据校验
+        }
       }
     }
 
@@ -87,6 +130,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
             }
           }
           if (!found) {
+            // debug test
             throw GroupByError(sel_col.col_name);
           }
         }
@@ -114,6 +158,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
     // WHERE 子句中不能用聚集函数作为条件表达式
     for (auto &cond : x->conds) {
       if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(cond->lhs)) {
+        assert(false);
         throw GroupByError(agg_col->col_name);
       }
     }
@@ -122,8 +167,8 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
     get_clause(x->conds, query->conds);
     check_clause(query->tables, query->conds);
 
-    // sqb 增加explain支持
-    query->need_explain = x->need_explain;
+    get_clause2(x->jointree, query->join_conds);
+    check_clause(query->tables, query->join_conds);  // 检查列名是否存在，以及可能需要推断表名
   } else if (auto x = std::dynamic_pointer_cast<ast::UpdateStmt>(parse)) {
     /** TODO: */
     // sqb :初步处理update 语句 5.24
@@ -181,6 +226,36 @@ TabCol Analyze::check_column(const std::vector<ColMeta> &all_cols, TabCol target
   } else {
     /** TODO: Make sure target column exists */
     // sqb: down! 5.24
+    // yfs 6.11 在这里修改了get_table，如果是用别名找到的，则将别名替换成表
+    if (!(sm_manager_->db_.get_table2(target.tab_name).is_col(target.col_name))) {
+      throw ColumnNotFoundError(target.col_name);
+    }
+  }
+  return target;
+}
+
+// 列没有指定表明，搜索所有表的所有列来匹配
+// 如果select的列为多个表所共有，就会报错AmbiguousColumnError
+// 但是semi join应该忽略这种情况，因为列名都是join左边的表
+// 为通过测试点4，如果发现cols是其他表的，则报错
+TabCol Analyze::check_column4semi_join(const std::vector<ColMeta> &all_cols,  // 左表的所有列
+                                       TabCol target) {  // select的某一列（这只是一列，对select的列的遍历在函数外）
+  if (target.tab_name.empty()) {                         // 选择的列没有表名
+    // 检查列是否都是左表的
+    std::string tab_name;
+    for (auto &col : all_cols) {
+      if (col.name == target.col_name) {
+        tab_name = col.tab_name;
+      }
+    }
+    if (tab_name.empty()) {  // 在左表的所有列中没有匹配到select的列
+      throw ChooseColumnOfOtherTableError(target.col_name);
+      // std::cout << "failure" << std::endl;
+    }
+    target.tab_name = tab_name;  // 把表名附带上去了
+  } else {
+    /** TODO: Make sure target column exists */
+    // sqb: down! 5.24
     if (!sm_manager_->db_.get_table(target.tab_name).is_col(target.col_name)) {
       throw ColumnNotFoundError(target.col_name);
     }
@@ -194,6 +269,12 @@ void Analyze::get_all_cols(const std::vector<std::string> &tab_names, std::vecto
     const auto &sel_tab_cols = sm_manager_->db_.get_table(sel_tab_name).cols;
     all_cols.insert(all_cols.end(), sel_tab_cols.begin(), sel_tab_cols.end());
   }
+}
+
+void Analyze::get_all_cols_of_left_tab(const std::string &tab_name, std::vector<ColMeta> &all_cols) {
+  // 这里db_不能写成get_db(), 注意要传指针
+  const auto &sel_tab_cols = sm_manager_->db_.get_table(tab_name).cols;
+  all_cols.insert(all_cols.end(), sel_tab_cols.begin(), sel_tab_cols.end());
 }
 
 void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
@@ -214,15 +295,8 @@ void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::BinaryExp
     if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
       cond.is_rhs_val = true;
       cond.rhs_val = convert_sv_value(rhs_val);
-    } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
-      if (auto agg_col = std::dynamic_pointer_cast<ast::AggCol>(rhs_col)) {
-        cond.rhs_col = {.tab_name = agg_col->tab_name,
-                        .col_name = agg_col->col_name,
-                        .alias = agg_col->alias,
-                        .aggFuncType = agg_col->agg_type};
-      } else {
-        cond.rhs_col = {.tab_name = rhs_col->tab_name, .col_name = rhs_col->col_name};
-      }
+    } else {
+      throw RMDBError("Unexpected sv value type");
     }
     conds.push_back(cond);
   }
@@ -340,9 +414,35 @@ void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vecto
         cond.rhs_val.type = TYPE_FLOAT;
         cond.rhs_val.float_val = (float)cond.rhs_val.int_val;
         *(float *)(cond.rhs_val.raw->data) = cond.rhs_val.float_val;
+        //         *(float *)(cond.rhs_val.raw->data) = (float)cond.rhs_val.int_val;
+        // cond.rhs_val.type = TYPE_INT;   // yfs 6.10
+        // 这里的rhs_val.type我在planner.cpp的value2String需要用到，所以不能变，我这里再改回来了
       } else {
         throw IncompatibleTypeError(coltype2str(lhs_type), coltype2str(rhs_type));
       }
+    }
+  }
+}
+
+void Analyze::get_clause2(const std::vector<std::shared_ptr<ast::JoinExpr>> &sv_join_exprs,
+                          std::vector<Condition> &join_conds) {
+  join_conds.clear();
+  for (auto &sv_conds : sv_join_exprs) {  // 遍历JoinExpr的vector
+    for (
+        auto &expr :
+        sv_conds
+            ->conds) {  // 取出每个JoinExpr的cond，后面操作就和上面get_clause一样了。所以，问题在于，根本不需要使用到join的left和right咯
+      Condition cond;
+      cond.lhs_col = {.tab_name = expr->lhs->tab_name, .col_name = expr->lhs->col_name};
+      cond.op = convert_sv_comp_op(expr->op);
+      if (auto rhs_val = std::dynamic_pointer_cast<ast::Value>(expr->rhs)) {
+        cond.is_rhs_val = true;
+        cond.rhs_val = convert_sv_value(rhs_val);
+      } else if (auto rhs_col = std::dynamic_pointer_cast<ast::Col>(expr->rhs)) {
+        cond.is_rhs_val = false;
+        cond.rhs_col = {.tab_name = rhs_col->tab_name, .col_name = rhs_col->col_name};
+      }
+      join_conds.push_back(cond);
     }
   }
 }

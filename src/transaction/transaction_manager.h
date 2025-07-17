@@ -87,6 +87,16 @@ class TransactionManager {
     return res;
   }
 
+  // sqb 检查日志记录中的归滚用
+  inline bool CheckIsAbort(txn_id_t txn_id) {
+    std::shared_lock<std::shared_mutex> lock(txn_map_mutex_);
+    auto iter = txn_map.find(txn_id);
+    if (iter != txn_map.end()) {
+      return iter->second->get_state() == TransactionState::ABORTED;
+    }
+    return false;
+  }
+
   static std::unordered_map<txn_id_t, Transaction *> txn_map;  // 全局事务表，存放事务ID与事务对象的映射关系
   std::shared_mutex txn_map_mutex_;
   /** ------------------------以下函数仅可能在MVCC当中使用------------------------------------------*/
@@ -120,7 +130,8 @@ class TransactionManager {
   UndoLog GetUndoLog(UndoLink link);
 
   /** @brief 获取系统中的最低读时间戳。 */
-  timestamp_t GetWatermark();
+  // sqb 6.17
+  timestamp_t GetWatermark() { return running_txns_.GetWatermark(); }
 
   /** @brief 垃圾回收。仅在所有事务都未访问时调用。 */
   void GarbageCollection();
@@ -148,4 +159,6 @@ class TransactionManager {
 
   std::atomic<timestamp_t> last_commit_ts_{0};  // 最后提交的时间戳,仅用于MVCC
   Watermark running_txns_{0};                   // 存储所有正在运行事务的读取时间戳，以便于垃圾回收，仅用于MVCC
+
+  std::mutex commit_mutex_;  // 一次仅允许一个事务commit sqb 6.16
 };

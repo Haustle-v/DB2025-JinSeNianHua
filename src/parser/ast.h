@@ -13,7 +13,7 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 #include <vector>
 
-enum JoinType { INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN };
+enum JoinType { INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN, SEMI_JOIN };
 namespace ast {
 
 enum SvType { SV_TYPE_INT, SV_TYPE_FLOAT, SV_TYPE_STRING, SV_TYPE_BOOL };
@@ -236,7 +236,22 @@ struct SelectStmt : public TreeNode {
         order_by(std::move(order_by_)),
         limit(limit_) {
     has_sort = !order_by.empty();
-    has_agg = !group_by_cols.empty();
+    has_agg = false;  // 初始化为false，让Analyze阶段根据实际聚合函数来设置
+  }
+  /*yfs0527: 支持join的构造函数*/
+  SelectStmt(std::vector<std::shared_ptr<Col>> cols_, std::vector<std::shared_ptr<JoinExpr>> jointree_,
+             std::vector<std::shared_ptr<BinaryExpr>> conds_, std::vector<std::shared_ptr<Col>> group_by_cols_,
+             std::vector<std::shared_ptr<BinaryExpr>> having_conds_, std::vector<std::shared_ptr<OrderBy>> order_by_,
+             int limit_)
+      : cols(std::move(cols_)),
+        jointree(std::move(jointree_)),
+        conds(std::move(conds_)),
+        group_by_cols(std::move(group_by_cols_)),
+        having_conds(std::move(having_conds_)),
+        order_by(std::move(order_by_)),
+        limit(limit_) {
+    has_sort = !order_by.empty();
+    has_agg = false;  // 初始化为false，让Analyze阶段根据实际聚合函数来设置
   }
 };
 
@@ -258,6 +273,21 @@ struct SetStmt : public TreeNode {
   SetStmt(SetKnobType &type, bool bool_value) : set_knob_type_(type), bool_val_(bool_value) {}
 };
 
+// yfs 0702
+struct LoadStmt : public TreeNode {
+  std::string file_name;
+  std::string tab_name;
+
+  LoadStmt(std::string file_name_, std::string table_name_)
+      : file_name(std::move(file_name_)), tab_name(std::move(table_name_)) {}
+};
+
+// yfs 0702
+struct IoEnable : public TreeNode {
+  bool set_io_enable;
+  explicit IoEnable(bool set_io_enable_) : set_io_enable(set_io_enable_) {}
+};
+
 // Semantic value
 struct SemValue {
   int sv_int;
@@ -265,6 +295,7 @@ struct SemValue {
   std::string sv_str;
   bool sv_bool;
   OrderByDir sv_orderby_dir;
+  JoinType join_type_dir; /*yfs0527*/
   std::vector<std::string> sv_strs;
 
   std::shared_ptr<TreeNode> sv_node;
@@ -290,13 +321,17 @@ struct SemValue {
   std::shared_ptr<BinaryExpr> sv_cond;
   std::vector<std::shared_ptr<BinaryExpr>> sv_conds;
 
+  std::shared_ptr<JoinExpr> sv_join_expr; /*yfs0527*/
+  std::vector<std::shared_ptr<JoinExpr>> sv_join_exprs;
+
   std::shared_ptr<OrderBy> sv_orderby;
   std::vector<std::shared_ptr<OrderBy>> sv_orderbys;
 
   SetKnobType sv_setKnobType;
 };
 
-extern std::shared_ptr<ast::TreeNode> parse_tree;
+// extern std::shared_ptr<ast::TreeNode> parse_tree;
+extern thread_local std::shared_ptr<TreeNode> parse_tree;
 
 }  // namespace ast
 

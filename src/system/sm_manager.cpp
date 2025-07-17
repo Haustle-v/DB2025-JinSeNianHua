@@ -156,8 +156,10 @@ void SmManager::close_db() {
  */
 void SmManager::show_tables(Context *context) {
   std::fstream outfile;
-  outfile.open("output.txt", std::ios::out | std::ios::app);
-  outfile << "| Tables |\n";
+  if (io_enabled_) {  // yfs 7.2 -R
+    outfile.open("output.txt", std::ios::out | std::ios::app);
+    outfile << "| Tables |\n";
+  }
   RecordPrinter printer(1);
   printer.print_separator(context);
   printer.print_record({"Tables"}, context);
@@ -165,10 +167,14 @@ void SmManager::show_tables(Context *context) {
   for (auto &entry : db_.tabs_) {
     auto &tab = entry.second;
     printer.print_record({tab.name}, context);
-    outfile << "| " << tab.name << " |\n";
+    if (io_enabled_) {  // yfs 7.2 -R
+      outfile << "| " << tab.name << " |\n";
+    }
   }
   printer.print_separator(context);
-  outfile.close();
+  if (io_enabled_) {  // yfs 7.2 -R
+    outfile.close();
+  }
 }
 
 /**
@@ -333,7 +339,7 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<std::s
   // 后面创建可能会有虚假缓存命中 0 1 作为file leaf hdr 直接绕过了缓冲区读写
   // 不用管
   for (page_id_t page_no = 2; page_no < index_page_num; ++page_no) {
-    buffer_pool_manager_->delete_page({ix_hdl_ptr->get_fd(), page_no});
+    index_buffer_pool_manager_->delete_page({ix_hdl_ptr->get_fd(), page_no});
   }
 
   //   删除索引文件
@@ -368,23 +374,29 @@ void SmManager::drop_index(const std::string &tab_name, const std::vector<ColMet
  */
 void SmManager::show_index(const std::string &tab_name, Context *context) {
   std::fstream outfile;
-  outfile.open("output.txt", std::ios::out | std::ios::app);
+  if (io_enabled_) {  // yfs 7.2 -R
+    outfile.open("output.txt", std::ios::out | std::ios::app);
+  }
   RecordPrinter printer(1);
 
   TabMeta &tab_meta = db_.get_table(tab_name);
   for (auto &index_meta : tab_meta.indexes) {
     std::string output;  // 用于输出到终端
-    outfile << "| " << tab_name << " | unique | (" << index_meta.cols[0].name;
-    output += tab_name + " | unique | (" + index_meta.cols[0].name;
-    for (size_t i = 1; i < index_meta.col_num; ++i) {
-      outfile << "," << index_meta.cols[i].name;
-      output += "," + index_meta.cols[i].name;
+    if (io_enabled_) {   // yfs 7.2 -R
+      outfile << "| " << tab_name << " | unique | (" << index_meta.cols[0].name;
+      output += tab_name + " | unique | (" + index_meta.cols[0].name;
+      for (size_t i = 1; i < index_meta.col_num; ++i) {
+        outfile << "," << index_meta.cols[i].name;
+        output += "," + index_meta.cols[i].name;
+      }
+      outfile << ") |\n";
+      output += ")";  // 剩下的 | \n 在下个函数里
     }
-    outfile << ") |\n";
-    output += ")";  // 剩下的 | \n 在下个函数里
     printer.print_index({output}, context);
   }
-  outfile.close();
+  if (io_enabled_) {  // yfs 7.2 -R
+    outfile.close();
+  }
 }
 
 // sqb 定义redo undo的helper 减少重复代码 6.8
@@ -497,4 +509,108 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
     page_ptr->set_page_lsn(lsn);
     buffer_pool_manager_->unpin_page(page_id, true);
   }
+}
+
+void SmManager::load_csv_data(const std::string &csv_file_path, const std::string &tab_name) {
+  std::ifstream file(csv_file_path);
+  if (!file.is_open()) {
+    throw FileNotFoundError(csv_file_path);
+  }
+
+  auto tab_ = db_.get_table(tab_name);  // 假设是对象（不是指针）
+  auto fh_ = fhs_.at(tab_name).get();
+
+  size_t record_size = fh_->file_hdr_.record_size;
+  char *record = new char[record_size];
+
+  std::string line;
+  // Windows换行是\r\n，std::getline(file, line)默认以\n作为分隔符读取，因此\n被剥除了，剩下的\r留在了字符串末尾
+  // 把末尾\r给pop出来
+  std::getline(file, line);  // 读取表头
+  if (!line.empty() && line.back() == '\r') {
+    line.pop_back();
+  }
+  std::vector<std::string> headers;
+  std::stringstream header_stream(line);
+  std::string header;
+  while (std::getline(header_stream, header, ',')) {
+    headers.emplace_back(header);
+  }
+
+  // 构建列名到位置的映射
+  std::unordered_map<std::string, size_t> header_index;
+  int header_num = headers.size();
+  for (size_t i = 0; i < header_num; ++i) {
+    header_index[headers[i]] = i;
+  }
+
+  while (std::getline(file, line)) {
+    if (line.empty()) continue;
+    if (!line.empty() && line.back() == '\r')  // 把末尾\r给pop出来
+      line.pop_back();
+
+    std::vector<std::string> cells;
+    std::stringstream line_stream(line);
+    std::string cell;
+    while (std::getline(line_stream, cell, ',')) {
+      cells.emplace_back(cell);
+    }
+
+    int cell_num = cells.size();
+    std::memset(record, 0, record_size);
+    auto offset = 0;
+
+    for (const auto &col : tab_.cols) {
+      auto iter = header_index.find(col.name);
+      if (iter == header_index.end()) {
+        throw std::runtime_error("CSV missing column: " + col.name);
+      }
+
+      size_t col_idx = iter->second;
+      if (col_idx >= cell_num) {
+        throw std::runtime_error("CSV row missing field for column: " + col.name);
+      }
+
+      const std::string &value_str = cells[col_idx];
+      switch (col.type) {
+        case ColType::TYPE_INT: {
+          int value = std::atoi(value_str.c_str());
+          std::memcpy(record + offset, &value, col.len);
+          break;
+        }
+        case ColType::TYPE_FLOAT: {
+          float value = std::atof(value_str.c_str());
+          std::memcpy(record + offset, &value, col.len);
+          break;
+        }
+        case ColType::TYPE_STRING: {
+          std::memcpy(record + offset, value_str.c_str(), value_str.size());
+          break;
+        }
+      }
+      offset += col.len;
+    }
+
+    // 插入记录
+    auto rid_ = fh_->insert_record(record, nullptr);
+
+    // 插入索引
+    for (const auto &index : tab_.indexes) {
+      auto idx_name = IxManager::get_index_name(tab_name, index.cols);
+      auto ih = ihs_.at(idx_name).get();
+
+      char key[index.col_tot_len];
+      int offset_ = 0;
+      for (size_t i = 0; i < static_cast<size_t>(index.col_num); ++i) {
+        std::memcpy(key + offset_, record + index.cols[i].offset, index.cols[i].len);
+        offset_ += index.cols[i].len;
+      }
+
+      ih->insert_entry(key, rid_, nullptr);
+    }
+  }
+
+  delete record;
+
+  file.close();
 }

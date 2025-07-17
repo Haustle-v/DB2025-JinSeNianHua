@@ -14,13 +14,16 @@ See the Mulan PSL v2 for more details. */
 
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
+#include <tuple>
 
 #include "bitmap.h"
 #include "common/context.h"
 #include "rm_defs.h"
 
 class RmManager;
+struct TabMeta;  // sqb
 
 /* 对表数据文件中的页面进行封装 */
 struct RmPageHandle {
@@ -36,11 +39,21 @@ struct RmPageHandle {
     slots = bitmap + file_hdr->bitmap_size;
   }
 
-  // 返回指定slot_no的slot存储收地址
-  char *get_slot(int slot_no) const {
-    return slots + slot_no * file_hdr->record_size;  // slots的首地址 + slot个数 *
-                                                     // 每个slot的大小(每个record的大小)
+  //   // 返回指定slot_no的slot存储收地址
+  //   char *get_slot(int slot_no) const {
+  //     return slots + slot_no * file_hdr->record_size;  // slots的首地址 +
+  //     slot个数 *
+  //                                                      //
+  //                                                      每个slot的大小(每个record的大小)
+  //   }
+
+  // sqb 重要改动 为所有record头部添加了tuple meta 6.17
+  char *get_slot_record(int slot_no) const {
+    return slots + slot_no * (file_hdr->record_size + sizeof(TupleMeta)) + sizeof(TupleMeta);
   }
+
+  // sqb 重要改动 为所有record头部添加了tuple meta 6.17
+  char *get_slot_meta(int slot_no) const { return slots + slot_no * (file_hdr->record_size + sizeof(TupleMeta)); }
 };
 
 /* 每个RmFileHandle对应一个表的数据文件，里面有多个page，每个page的数据封装在RmPageHandle中
@@ -52,12 +65,16 @@ class RmFileHandle {
  private:
   DiskManager *disk_manager_;
   BufferPoolManager *buffer_pool_manager_;
-  int fd_;              // 打开文件后产生的文件句柄
-  RmFileHdr file_hdr_;  // 文件头，维护当前表文件的元数据
+  int fd_;  // 打开文件后产生的文件句柄
 
-  mutable std::shared_mutex latch_;  // sqb 加锁保证线程安全 6.17
+  //   mutable std::shared_mutex latch_;  // sqb 加锁保证线程安全 6.17
+
+  std::mutex undo_latch_;  // 用于保护undo_log,undo_link的相关操作 sqb 7.7
+
+  std::mutex fhdr_latch_;  // 用于保护file_hdr sqb  7.7
 
  public:
+  RmFileHdr file_hdr_;  // 文件头，维护当前表文件的元数据
   RmFileHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
       : disk_manager_(disk_manager), buffer_pool_manager_(buffer_pool_manager), fd_(fd) {
     // 注意：这里从磁盘中读出文件描述符为fd的文件的file_hdr，读到内存中
@@ -80,14 +97,16 @@ class RmFileHandle {
 
   std::unique_ptr<RmRecord> get_record(const Rid &rid, Context *context) const;
 
-  Rid insert_record(char *buf, Context *context);
+  // sqb 再次修改增删改接口 让undo link同时更新
+  Rid insert_record(char *buf, Context *context, const TabMeta *schema = nullptr);
 
   void insert_record(const Rid &rid, char *buf);
 
   // sqb 6.4更改 delete update 接口 便于封装事务与日志
-  void delete_record(const Rid &rid, Context *context, RmRecord *old_rec = nullptr);
+  void delete_record(const Rid &rid, Context *context, RmRecord *old_rec = nullptr, const TabMeta *schema = nullptr);
 
-  void update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec = nullptr);
+  void update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec = nullptr,
+                     const TabMeta *schema = nullptr);
 
   RmPageHandle create_new_page_handle();
 
@@ -97,6 +116,19 @@ class RmFileHandle {
   void allocate_pages(const Rid &rid);
   // sqb 6.16
   int get_page_num() { return file_hdr_.num_pages; }
+
+  // sqb 6.17 关于tuple meta undolink的操作
+  auto get_tuple_and_undoLink(const Rid &rid, Context *context)
+      -> std::tuple<TupleMeta, RmRecord, std::optional<UndoLink>>;
+
+  // sqb 6.20 获取对应版本的tuple
+  auto get_reconstructed_tuple(const Rid &rid, Context *context, TabMeta &tab) -> std::unique_ptr<RmRecord>;
+
+  // sqb 事务提交更新所有时间戳 事务回滚时用来
+  void set_meta(const Rid &rid, timestamp_t ts, bool is_delete);
+
+  // sqb 用于改动rmscan
+  TupleMeta get_meta(const Rid &rid);
 
  private:
   RmPageHandle create_page_handle();

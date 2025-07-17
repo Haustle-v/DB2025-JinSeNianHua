@@ -32,13 +32,17 @@ void DiskManager::write_page(int fd, page_id_t page_no, const char *offset, int 
   // 2.调用write()函数
   // 注意write返回值与num_bytes不等时 throw
   // InternalError("DiskManager::write_page Error");
-  std::scoped_lock<std::mutex> lock(latch_);
-  // std::cerr << "[DBUG] disk write fd " << fd << " page no " << page_no
-  //           << std::endl;
-  int write_lseek = lseek(fd, page_no * PAGE_SIZE, SEEK_SET);
-  if (write_lseek == -1) {
-    throw InternalError("DiskManager::write_page lseek Error" + std::string(strerror(errno)));
+  auto iter = fd_locks_.begin();
+  {
+    std::scoped_lock<std::mutex> lock(latch_);
+    iter = fd_locks_.find(fd);
+    if (iter == fd_locks_.end()) {
+      throw FileNotOpenError(fd);
+    }
   }
+  std::scoped_lock<std::mutex> file_lock(*iter->second);
+
+  lseek(fd, page_no * PAGE_SIZE, SEEK_SET);
   ssize_t write_bytes = write(fd, offset, num_bytes);
   if (write_bytes != num_bytes) {
     throw InternalError("DiskManager::write_page Error" + std::string(strerror(errno)));
@@ -58,11 +62,16 @@ void DiskManager::read_page(int fd, page_id_t page_no, char *offset, int num_byt
   // 2.调用read()函数
   // 注意read返回值与num_bytes不等时，throw
   // InternalError("DiskManager::read_page Error");
-  std::scoped_lock<std::mutex> lock(latch_);
-  int read_lseek = lseek(fd, page_no * PAGE_SIZE, SEEK_SET);
-  if (read_lseek == -1) {
-    throw InternalError("DiskManager::read_page lseek Error" + std::string(strerror(errno)));
+  auto iter = fd_locks_.begin();
+  {
+    std::scoped_lock<std::mutex> lock(latch_);
+    iter = fd_locks_.find(fd);
+    if (iter == fd_locks_.end()) {
+      throw FileNotOpenError(fd);
+    }
   }
+  std::scoped_lock<std::mutex> file_lock(*iter->second);
+  lseek(fd, page_no * PAGE_SIZE, SEEK_SET);
   ssize_t read_bytes = read(fd, offset, num_bytes);
   if (read_bytes != num_bytes) {
     throw InternalError("DiskManager::read_page Error" + std::string(strerror(errno)));
@@ -182,6 +191,10 @@ int DiskManager::open_file(const std::string &path) {
   }
   path2fd_.emplace(path, fd);
   fd2path_.emplace(fd, path);
+
+  //   为文件注册锁
+  fd_locks_[fd] = std::make_shared<std::mutex>();
+
   return fd;
 }
 
@@ -204,6 +217,9 @@ void DiskManager::close_file(int fd) {
   }
   path2fd_.erase(fd2path_[fd]);
   fd2path_.erase(fd);
+
+  //   移除锁
+  fd_locks_.erase(fd);
 }
 
 /**

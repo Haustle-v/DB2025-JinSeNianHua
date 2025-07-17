@@ -32,9 +32,12 @@ class SmManager {
       fhs_;  // file name -> record file handle, 当前数据库中每张表的数据文件
   std::unordered_map<std::string, std::unique_ptr<IxIndexHandle>>
       ihs_;  // file name -> index file handle, 当前数据库中每个索引的文件
+  bool io_enabled_ = true;
+
  private:
   DiskManager *disk_manager_;
   BufferPoolManager *buffer_pool_manager_;
+  BufferPoolManager *index_buffer_pool_manager_;
   RmManager *rm_manager_;
   IxManager *ix_manager_;
 
@@ -48,16 +51,18 @@ class SmManager {
                             const lsn_t lsn = INVALID_LSN);
 
  public:
-  SmManager(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, RmManager *rm_manager,
-            IxManager *ix_manager)
+  SmManager(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager,
+            BufferPoolManager *index_buffer_pool_manager, RmManager *rm_manager, IxManager *ix_manager)
       : disk_manager_(disk_manager),
         buffer_pool_manager_(buffer_pool_manager),
+        index_buffer_pool_manager_(index_buffer_pool_manager),
         rm_manager_(rm_manager),
         ix_manager_(ix_manager) {}
 
   ~SmManager() {}
 
   BufferPoolManager *get_bpm() { return buffer_pool_manager_; }
+  BufferPoolManager *get_index_bpm() { return index_buffer_pool_manager_; }
 
   RmManager *get_rm_manager() { return rm_manager_; }
 
@@ -108,4 +113,7 @@ class SmManager {
                        const lsn_t lsn = INVALID_LSN) {
     record_update_helper(tab_name, rid, old_rec, lsn);
   }
+
+  // yfs 7.2
+  void load_csv_data(const std::string &csv_file_path, const std::string &tab_name);
 };

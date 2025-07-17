@@ -19,14 +19,10 @@ namespace ast {
 
 class TreePrinter {
  public:
-  static void print(const std::shared_ptr<TreeNode> &node) {
-    print_node(node, 0);
-  }
+  static void print(const std::shared_ptr<TreeNode> &node) { print_node(node, 0); }
 
  private:
-  static std::string offset2string(int offset) {
-    return std::string(offset, ' ');
-  }
+  static std::string offset2string(int offset) { return std::string(offset, ' '); }
 
   template <typename T>
   static void print_val(const T &val, int offset) {
@@ -53,8 +49,7 @@ class TreePrinter {
 
   static std::string op2str(SvCompOp op) {
     static std::map<SvCompOp, std::string> m{
-        {SV_OP_EQ, "=="}, {SV_OP_NE, "!="}, {SV_OP_LT, "<"},
-        {SV_OP_GT, ">"},  {SV_OP_LE, "<="}, {SV_OP_GE, ">="},
+        {SV_OP_EQ, "=="}, {SV_OP_NE, "!="}, {SV_OP_LT, "<"}, {SV_OP_GT, ">"}, {SV_OP_LE, "<="}, {SV_OP_GE, ">="},
     };
     return m.at(op);
   }
@@ -96,16 +91,14 @@ class TreePrinter {
       print_val(x->tab_name, offset);
       // print_val(x->col_name, offset);
       for (auto col_name : x->col_names) print_val(col_name, offset);
+    } else if (auto x = std::dynamic_pointer_cast<ColDef>(node)) {
+      std::cout << "COL_DEF\n";
+      print_val(x->col_name, offset);
+      print_node(x->type_len, offset);
     } else if (auto x = std::dynamic_pointer_cast<ShowIndex>(node)) {
       // sqb 5.30 show index
       std::cout << "SHOW_INDEX\n";
       print_val(x->tab_name, offset);
-    }
-
-    else if (auto x = std::dynamic_pointer_cast<ColDef>(node)) {
-      std::cout << "COL_DEF\n";
-      print_val(x->col_name, offset);
-      print_node(x->type_len, offset);
     } else if (auto x = std::dynamic_pointer_cast<AggCol>(node)) {
       std::cout << "AGG_COL\n";
       print_val(x->tab_name, offset);
@@ -133,6 +126,12 @@ class TreePrinter {
       std::cout << "SET_CLAUSE\n";
       print_val(x->col_name, offset);
       print_node(x->val, offset);
+    } else if (auto x = std::dynamic_pointer_cast<JoinExpr>(node)) {
+      std::cout << "Join_Expr\n";
+      print_val(x->left, offset);
+      print_val(x->right, offset);
+      print_val(x->type, offset);
+      print_node_list(x->conds, offset);
     } else if (auto x = std::dynamic_pointer_cast<BinaryExpr>(node)) {
       std::cout << "BINARY_EXPR\n";
       print_node(x->lhs, offset);
@@ -165,10 +164,7 @@ class TreePrinter {
       print_node_list(x->cols, offset);
       print_val_list(x->tabs, offset);
       print_node_list(x->conds, offset);
-      print_node_list(x->group_by_cols, offset);
-      print_node_list(x->having_conds, offset);
-      print_node_list(x->order_by, offset);
-      print_val(x->limit, offset);
+      print_node_list(x->jointree, offset);
     } else if (auto x = std::dynamic_pointer_cast<TxnBegin>(node)) {
       std::cout << "BEGIN\n";
     } else if (auto x = std::dynamic_pointer_cast<TxnCommit>(node)) {
@@ -188,5 +184,4 @@ class TreePrinter {
     }
   }
 };
-
 }  // namespace ast

@@ -10,6 +10,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include "execution_common.h"  //sqb 6.17 用于支持MVCC
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
@@ -27,6 +28,8 @@ class SeqScanExecutor : public AbstractExecutor {
 
   Rid rid_;
   std::unique_ptr<RecScan> scan_;  // table_iterator
+
+  std::unique_ptr<RmRecord> current_tuple = nullptr;  // sqb MVCC标记有效元组
 
   SmManager *sm_manager_;
 
@@ -63,10 +66,12 @@ class SeqScanExecutor : public AbstractExecutor {
       scan_ = std::make_unique<RmScan>(fh_);
     }
 
+    TabMeta &tab = sm_manager_->db_.get_table(tab_name_);
     // 需要顺序扫描 满足条件的记录 注意当前框架的记录就是元组
     for (; !scan_->is_end(); scan_->next()) {
-      std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(scan_->rid(), context_);
-      if (check_conds(cols_, conds_, rec_ptr.get())) {
+      //   std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(scan_->rid(), context_);
+      current_tuple = fh_->get_reconstructed_tuple(scan_->rid(), context_, tab);
+      if (current_tuple != nullptr && check_conds(cols_, conds_, current_tuple.get())) {
         break;
       }
     }
@@ -82,7 +87,8 @@ class SeqScanExecutor : public AbstractExecutor {
     // 会先调用begin tuple 和 next tuple  实际是取当前有效rid_
     if (rid_.page_no != INVALID_PAGE_ID) {
       // 有效则读 应该有RVO
-      return fh_->get_record(rid_, context_);
+      //   return fh_->get_record(rid_, context_);
+      return std::move(current_tuple);
     }
     return nullptr;
   }

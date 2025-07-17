@@ -17,6 +17,7 @@ See the Mulan PSL v2 for more details. */
 #include <atomic>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -80,9 +81,7 @@ class DiskManager {
    * @param {int} start_page_no
    * 已经分配的页面个数，即文件接下来从start_page_no开始分配页面编号
    */
-  void set_fd2pageno(int fd, int start_page_no) {
-    fd2pageno_[fd] = start_page_no;
-  }
+  void set_fd2pageno(int fd, int start_page_no) { fd2pageno_[fd] = start_page_no; }
 
   /**
    * @description:
@@ -96,15 +95,15 @@ class DiskManager {
 
  private:
   // 文件打开列表，用于记录文件是否被打开
-  std::unordered_map<std::string, int>
-      path2fd_;  //<Page文件磁盘路径,Page fd>哈希表
-  std::unordered_map<int, std::string>
-      fd2path_;  //<Page fd,Page文件磁盘路径>哈希表
+  std::unordered_map<std::string, int> path2fd_;  //<Page文件磁盘路径,Page fd>哈希表
+  std::unordered_map<int, std::string> fd2path_;  //<Page fd,Page文件磁盘路径>哈希表
 
-  int log_fd_ = -1;  // WAL日志文件的文件句柄，默认为-1，代表未打开日志文件
-  std::atomic<page_id_t>
-      fd2pageno_[MAX_FD]{};  // 文件中已经分配的页面个数，初始值为0
+  int log_fd_ = -1;                             // WAL日志文件的文件句柄，默认为-1，代表未打开日志文件
+  std::atomic<page_id_t> fd2pageno_[MAX_FD]{};  // 文件中已经分配的页面个数，初始值为0
 
   // 加把锁
   std::mutex latch_;
+
+  //   为每个文件提供单独的锁
+  std::unordered_map<int, std::shared_ptr<std::mutex>> fd_locks_;
 };

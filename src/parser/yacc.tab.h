@@ -45,64 +45,70 @@ extern int yydebug;
 # define YYTOKENTYPE
   enum yytokentype
   {
-    YYEMPTY = -2,
-    YYEOF = 0,                     /* "end of file"  */
-    YYerror = 256,                 /* error  */
-    YYUNDEF = 257,                 /* "invalid token"  */
-    SHOW = 258,                    /* SHOW  */
-    TABLES = 259,                  /* TABLES  */
-    CREATE = 260,                  /* CREATE  */
-    TABLE = 261,                   /* TABLE  */
-    DROP = 262,                    /* DROP  */
-    DESC = 263,                    /* DESC  */
-    INSERT = 264,                  /* INSERT  */
-    INTO = 265,                    /* INTO  */
-    VALUES = 266,                  /* VALUES  */
-    DELETE = 267,                  /* DELETE  */
-    FROM = 268,                    /* FROM  */
-    ASC = 269,                     /* ASC  */
-    ORDER = 270,                   /* ORDER  */
-    BY = 271,                      /* BY  */
-    WHERE = 272,                   /* WHERE  */
-    UPDATE = 273,                  /* UPDATE  */
-    SET = 274,                     /* SET  */
-    SELECT = 275,                  /* SELECT  */
-    INT = 276,                     /* INT  */
-    CHAR = 277,                    /* CHAR  */
-    FLOAT = 278,                   /* FLOAT  */
-    INDEX = 279,                   /* INDEX  */
-    AND = 280,                     /* AND  */
-    JOIN = 281,                    /* JOIN  */
-    EXIT = 282,                    /* EXIT  */
-    HELP = 283,                    /* HELP  */
-    TXN_BEGIN = 284,               /* TXN_BEGIN  */
-    TXN_COMMIT = 285,              /* TXN_COMMIT  */
-    TXN_ABORT = 286,               /* TXN_ABORT  */
-    TXN_ROLLBACK = 287,            /* TXN_ROLLBACK  */
-    ORDER_BY = 288,                /* ORDER_BY  */
-    ENABLE_NESTLOOP = 289,         /* ENABLE_NESTLOOP  */
-    ENABLE_SORTMERGE = 290,        /* ENABLE_SORTMERGE  */
-    LEQ = 291,                     /* LEQ  */
-    NEQ = 292,                     /* NEQ  */
-    GEQ = 293,                     /* GEQ  */
-    T_EOF = 294,                   /* T_EOF  */
-    MAX = 295,                     /* MAX  */
-    MIN = 296,                     /* MIN  */
-    SUM = 297,                     /* SUM  */
-    AVG = 298,                     /* AVG  */
-    COUNT = 299,                   /* COUNT  */
-    AS = 300,                      /* AS  */
-    GROUP = 301,                   /* GROUP  */
-    HAVING = 302,                  /* HAVING  */
-    LIMIT = 303,                   /* LIMIT  */
-    IDENTIFIER = 304,              /* IDENTIFIER  */
-    VALUE_STRING = 305,            /* VALUE_STRING  */
-    VALUE_INT = 306,               /* VALUE_INT  */
-    VALUE_FLOAT = 307,             /* VALUE_FLOAT  */
-    VALUE_BOOL = 308  ,             /* VALUE_BOOL  */
-        EXPLAIN = 309,
-    STATIC_CHECKPOINT = 310,
-    CRASH = 311
+    SHOW = 258,
+    TABLES = 259,
+    CREATE = 260,
+    TABLE = 261,
+    DROP = 262,
+    DESC = 263,
+    INSERT = 264,
+    INTO = 265,
+    VALUES = 266,
+    DELETE = 267,
+    FROM = 268,
+    ASC = 269,
+    ORDER = 270,
+    BY = 271,
+    WHERE = 272,
+    UPDATE = 273,
+    SET = 274,
+    SELECT = 275,
+    INT = 276,
+    CHAR = 277,
+    FLOAT = 278,
+    INDEX = 279,
+    AND = 280,
+    JOIN = 281,
+    EXIT = 282,
+    HELP = 283,
+    TXN_BEGIN = 284,
+    TXN_COMMIT = 285,
+    TXN_ABORT = 286,
+    TXN_ROLLBACK = 287,
+    ORDER_BY = 288,
+    ENABLE_NESTLOOP = 289,
+    ENABLE_SORTMERGE = 290,
+    INNER = 291,
+    LEFT = 292,
+    RIGHT = 293,
+    FULL = 294,
+    SEMI = 295,
+    ON = 296,
+    MAX = 297,
+    MIN = 298,
+    SUM = 299,
+    AVG = 300,
+    COUNT = 301,
+    AS = 302,
+    GROUP = 303,
+    HAVING = 304,
+    LIMIT = 305,
+    EXPLAIN = 306,
+    LOAD = 307,
+    OFF = 308,
+    OUTPUT_FILE = 309,
+    LEQ = 310,
+    NEQ = 311,
+    GEQ = 312,
+    T_EOF = 313,
+    IDENTIFIER = 314,
+    VALUE_STRING = 315,
+    VALUE_PATH = 316,
+    VALUE_INT = 317,
+    VALUE_FLOAT = 318,
+    VALUE_BOOL = 319,
+        STATIC_CHECKPOINT = 320,
+    CRASH = 321
   };
 #endif
 
@@ -124,6 +130,7 @@ struct YYLTYPE
 
 
 
-int yyparse (void);
+// int yyparse (yyscan_t scanner);
+int yyparse (void *yyscanner);
 
 #endif /* !YY_YY_HOME_SQB_CAREER_GAMEPROJECT_DBS_KERNEL_DB2025_SRC_PARSER_YACC_TAB_H_INCLUDED  */

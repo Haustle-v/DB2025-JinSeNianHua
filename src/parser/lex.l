@@ -9,6 +9,8 @@
     /* enable location */
 %option bison-bridge
 %option bison-locations
+    /* sqb 可重用的词法分析器 */
+%option reentrant 
 
 %{
 #include "ast.h"
@@ -40,6 +42,7 @@ value_int {sign}?{digit}+
 value_float {sign}?{digit}+\.({digit}+)?
 value_string '[^']*'
 single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
+value_path [\.|\/][^ \t]+\.csv
 
 %x STATE_COMMENT
 
@@ -80,11 +83,14 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "INDEX" { return INDEX; }
 "AND" { return AND; }
 "JOIN" {return JOIN;}
-"EXIT" { return EXIT; }
-"HELP" { return HELP; }
-"ORDER" { return ORDER; }
-"BY" {  return BY;  }
-"ASC" { return ASC; }
+"SEMI" { return SEMI; }     /*yfs0527*/
+"ON" { return ON; }     /*yfs0527*/
+"EXPLAIN" {return EXPLAIN;} /*yfs0609*/
+"LOAD" { return LOAD; } /*yfs0702*/
+"INTO" { return INTO; } /*yfs0702*/
+"SET" { return SET; }   /*yfs0702*/
+"OUTPUT_FILE" {return OUTPUT_FILE;} /*yfs0702*/
+"OFF" {return OFF;} /*yfs0702*/
 "MAX" { return MAX; }
 "MIN" { return MIN; }
 "SUM" { return SUM; }
@@ -94,6 +100,11 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "GROUP" { return GROUP; }
 "HAVING" { return HAVING; }
 "LIMIT" { return LIMIT; }
+"EXIT" { return EXIT; }
+"HELP" { return HELP; }
+"ORDER" { return ORDER; }
+"BY" {  return BY;  }
+"ASC" { return ASC; }
 "ENABLE_NESTLOOP" { return ENABLE_NESTLOOP; }
 "ENABLE_SORTMERGE" { return ENABLE_SORTMERGE; }
 "EXPLAIN" { return EXPLAIN; }
@@ -129,6 +140,10 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 {value_string} {
     yylval->sv_str = std::string(yytext + 1, strlen(yytext) - 2);
     return VALUE_STRING;
+}
+{value_path} {
+    yylval->sv_str = yytext;
+    return VALUE_PATH;
 }
     /* EOF */
 <<EOF>> { return T_EOF; }

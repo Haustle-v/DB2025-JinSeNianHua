@@ -63,6 +63,10 @@ class Optimizer {
     } else if (auto x = std::dynamic_pointer_cast<ast::CrashStmt>(query->parse)) {
       // sqb 6.9
       return std::make_shared<OtherPlan>(T_Crash, std::string());
+    } else if (auto x = std::dynamic_pointer_cast<ast::LoadStmt>(query->parse)) {
+      return std::make_shared<OtherPlan>(T_LoadData, x->tab_name, x->file_name);
+    } else if (auto x = std::dynamic_pointer_cast<ast::IoEnable>(query->parse)) {
+      return std::make_shared<OtherPlan>(T_IoEnable, x->set_io_enable);
     } else {
       return planner_->do_planner(query, context);
     }

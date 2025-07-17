@@ -102,7 +102,13 @@ class Transaction {
   inline std::shared_ptr<std::unordered_set<LockDataId>> get_lock_set() { return lock_set_; }
 
   inline timestamp_t get_read_ts() const { return read_ts_; }
+  inline void set_read_ts(timestamp_t new_read_ts) { read_ts_.store(new_read_ts); }
+
   inline timestamp_t get_commit_ts() const { return commit_ts_; }
+  inline void set_commit_ts(timestamp_t new_commit_ts) { commit_ts_.store(new_commit_ts); }
+
+  //   sqb 临时时间戳标记
+  inline timestamp_t get_temp_ts() const { return TXN_START_ID + txn_id_; }
 
   /** 修改现有的撤销日志 */
   inline auto ModifyUndoLog(int log_idx, UndoLog new_log) {
@@ -125,6 +131,14 @@ class Transaction {
   inline auto GetUndoLogNum() -> size_t {
     std::scoped_lock<std::mutex> lck(latch_);
     return undo_logs_.size();
+  }
+
+  // sqb 6.18 commit时更新所有的undo log对应时间戳
+  inline void CommitAllUndoLogs(timestamp_t commit_ts) {
+    std::scoped_lock<std::mutex> lck(latch_);
+    for (auto &log : undo_logs_) {
+      log.ts_ = commit_ts;
+    }
   }
 
  private:

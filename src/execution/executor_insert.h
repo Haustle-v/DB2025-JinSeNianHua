@@ -9,6 +9,7 @@ MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
 #pragma once
+#include "execution_common.h"  //sqb 6.19 用于支持MVCC
 #include "execution_defs.h"
 #include "execution_manager.h"
 #include "executor_abstract.h"
@@ -63,6 +64,20 @@ class InsertExecutor : public AbstractExecutor {
       memcpy(rec.data + col.offset, val.raw->data, col.len);
     }
 
+    //     // 新增：遍历所有元组，判断是否有内容完全相同的元组
+    // {
+    //   RmScan scan(fh_);
+    //   while (!scan.is_end()) {
+    //     Rid cur_rid = scan.rid();
+    //     std::unique_ptr<RmRecord> cur_tuple = fh_->get_reconstructed_tuple(cur_rid, context_, tab_);
+    //     if (cur_tuple && *cur_tuple == rec) {
+    //       // 有相同元组，直接abort
+    //       throw TransactionAbortException(context_->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+    //     }
+    //     scan.next();
+    //   }
+    // }
+
     // sqb 添加索引唯一性检查 注意先检查所有索引再插入数据 不能边检查边插入
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     for (auto &index_meta : tab_.indexes) {
@@ -95,6 +110,8 @@ class InsertExecutor : public AbstractExecutor {
       }
       ih->insert_entry(key, rid_, context_->txn_);
     }
+    // yfs 6.11 增加记录数量
+    sm_manager_->db_.get_table(tab_name_).record_count++;
     return nullptr;
   }
   Rid &rid() override { return rid_; }
