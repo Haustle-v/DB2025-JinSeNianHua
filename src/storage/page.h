@@ -29,10 +29,10 @@ struct PageId {
   std::string toString() { return "{fd: " + std::to_string(fd) + " page_no: " + std::to_string(page_no) + "}"; }
 
   inline int64_t Get() const {
-    // return (static_cast<int64_t>(fd << 16) | page_no);
-    std::size_t h1 = std::hash<int>{}(fd);
-    std::size_t h2 = std::hash<page_id_t>{}(page_no);
-    return (h1 << 1) ^ (h2);
+    return (static_cast<int64_t>(fd << 16) | page_no);
+    // std::size_t h1 = std::hash<int>{}(fd);
+    // std::size_t h2 = std::hash<page_id_t>{}(page_no);
+    // return (h1 << 1) ^ (h2);
   }
 };
 
@@ -44,8 +44,8 @@ struct PageIdHash {
 template <>
 struct std::hash<PageId> {
   size_t operator()(const PageId &obj) const {
-    // return std::hash<int64_t>()(obj.Get());
-    return obj.Get();
+    return std::hash<int64_t>()(obj.Get());
+    // return obj.Get();
   }
 };
 

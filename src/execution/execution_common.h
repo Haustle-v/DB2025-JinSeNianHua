@@ -108,7 +108,7 @@ inline auto CollectUndoLogs(Rid rid, const TupleMeta &base_meta, const RmRecord 
     }
     link = log.prev_version_;
   }
-  std::reverse(ret.begin(), ret.end());
+
   return ret;
 }
 

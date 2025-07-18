@@ -185,8 +185,8 @@ class IndexScanExecutor : public AbstractExecutor {
     // 初始化scan
     if (tmp > 0) {
       // lower > upper
-      scan_ =
-          std::make_unique<IxScan>(ix_hdl_ptr, ix_hdl_ptr->leaf_end(), ix_hdl_ptr->leaf_end(), sm_manager_->get_index_bpm());
+      scan_ = std::make_unique<IxScan>(ix_hdl_ptr, ix_hdl_ptr->leaf_end(), ix_hdl_ptr->leaf_end(),
+                                       sm_manager_->get_index_bpm());
     } else {
       // lower <= upper
       scan_ = std::make_unique<IxScan>(ix_hdl_ptr, ix_hdl_ptr->lower_bound(lower_key),

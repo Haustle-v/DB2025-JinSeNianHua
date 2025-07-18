@@ -28,7 +28,7 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
   // 4. 返回当前事务指针
   // 如果需要支持MVCC请在上述过程中添加代码
 
-  // sqb 未涉及mvcc 6.5
+  // sqb 涉及mvcc 6.5
   if (txn == nullptr) {
     txn = new Transaction(next_txn_id_++);
     txn->set_start_ts(next_timestamp_++);
@@ -36,14 +36,10 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
   }
   //   txn->set_state(TransactionState::GROWING);
 
-  //   事务控制
-  std::scoped_lock<std::mutex> lock(latch_);
-  txn_map.emplace(txn->get_transaction_id(), txn);
-
-  //   日志
-  BeginLogRecord log_record{txn->get_transaction_id()};
-  lsn_t begin_lsn = log_manager->add_log_to_buffer(&log_record);
-  txn->set_prev_lsn(begin_lsn);
+  //   //   日志
+  //   BeginLogRecord log_record{txn->get_transaction_id()};
+  //   lsn_t begin_lsn = log_manager->add_log_to_buffer(&log_record);
+  //   txn->set_prev_lsn(begin_lsn);
 
   // sqb 加水印 6.16
   std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
@@ -67,7 +63,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   // 5. 更新事务状态
   // 如果需要支持MVCC请在上述过程中添加代码
 
-  // sqb 未考虑mvcc 6.5
+  // sqb 考虑mvcc 6.5
   // 直接进行写操作 所以不会存在未提交的写
   //   更新所有写操作的提交时间戳
   std::scoped_lock<std::mutex> lck(commit_mutex_);
@@ -103,13 +99,15 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 
-  //   日志与落盘
-  CommitLogRecord log_record{txn->get_transaction_id()};
-  log_record.prev_lsn_ = txn->get_prev_lsn();
-  lsn_t commit_lsn = log_manager->add_log_to_buffer(&log_record);
-  txn->set_prev_lsn(commit_lsn);
-  log_manager->flush_log_to_disk();  // 待优化
+  //   //   日志与落盘
+  //   CommitLogRecord log_record{txn->get_transaction_id()};
+  //   log_record.prev_lsn_ = txn->get_prev_lsn();
+  //   lsn_t commit_lsn = log_manager->add_log_to_buffer(&log_record);
+  //   txn->set_prev_lsn(commit_lsn);
+  //   log_manager->flush_log_to_disk();  // 待优化
 
+  //   sqb 6.16 加水印
+  std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn->set_state(TransactionState::COMMITTED);
   txn->set_commit_ts(commit_ts);
   last_commit_ts_ = commit_ts;
@@ -139,33 +137,33 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
     auto &write_rec_ptr = *iter;
     // 给回滚操作加锁 加日志 6.12
     std::string &tab_name = write_rec_ptr->GetTableName();
-    lock_manager_->lock_exclusive_on_record(txn, write_rec_ptr->GetRid(), sm_manager_->fhs_.at(tab_name)->GetFd());
+    // lock_manager_->lock_exclusive_on_record(txn, write_rec_ptr->GetRid(), sm_manager_->fhs_.at(tab_name)->GetFd());
     switch (write_rec_ptr->GetWriteType()) {
       case WType::INSERT_TUPLE: {
-        auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
-        DeleteLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRid(), tab_name};
-        log_record.prev_lsn_ = txn->get_prev_lsn();
-        lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
-        txn->set_prev_lsn(undo_lsn);
+        // auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
+        // DeleteLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRid(), tab_name};
+        // log_record.prev_lsn_ = txn->get_prev_lsn();
+        // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
+        // txn->set_prev_lsn(undo_lsn);
         sm_manager_->rollback_insert(tab_name, write_rec_ptr->GetRid());
         break;
       }
       case WType::DELETE_TUPLE: {
-        InsertLogRecord log_record{txn->get_transaction_id(), write_rec_ptr->GetRecord(), write_rec_ptr->GetRid(),
-                                   tab_name};
-        log_record.prev_lsn_ = txn->get_prev_lsn();
-        lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
-        txn->set_prev_lsn(undo_lsn);
+        // InsertLogRecord log_record{txn->get_transaction_id(), write_rec_ptr->GetRecord(), write_rec_ptr->GetRid(),
+        //                            tab_name};
+        // log_record.prev_lsn_ = txn->get_prev_lsn();
+        // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
+        // txn->set_prev_lsn(undo_lsn);
         sm_manager_->rollback_delete(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord());
         break;
       }
       case WType::UPDATE_TUPLE: {
-        auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
-        UpdateLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRecord(),
-                                   write_rec_ptr->GetRid(), tab_name};
-        log_record.prev_lsn_ = txn->get_prev_lsn();
-        lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
-        txn->set_prev_lsn(undo_lsn);
+        // auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
+        // UpdateLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRecord(),
+        //                            write_rec_ptr->GetRid(), tab_name};
+        // log_record.prev_lsn_ = txn->get_prev_lsn();
+        // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
+        // txn->set_prev_lsn(undo_lsn);
         sm_manager_->rollback_update(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord());
         break;
       }
@@ -182,14 +180,17 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 
-  // 日志与落盘
-  AbortLogRecord log_record{txn->get_transaction_id()};
-  log_record.prev_lsn_ = txn->get_prev_lsn();
-  lsn_t abort_lsn = log_manager->add_log_to_buffer(&log_record);
-  txn->set_prev_lsn(abort_lsn);
-  log_manager->flush_log_to_disk();  // 待优化
+  //   // 日志与落盘
+  //   AbortLogRecord log_record{txn->get_transaction_id()};
+  //   log_record.prev_lsn_ = txn->get_prev_lsn();
+  //   lsn_t abort_lsn = log_manager->add_log_to_buffer(&log_record);
+  //   txn->set_prev_lsn(abort_lsn);
+  //   log_manager->flush_log_to_disk();  // 待优化
 
+  //   sqb 6.16 加水印
+  std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn->set_state(TransactionState::ABORTED);
+  running_txns_.RemoveTxn(txn->get_read_ts());
 }
 
 //------------------------关于MVCC部分的实现,参考15445,sqb---------------

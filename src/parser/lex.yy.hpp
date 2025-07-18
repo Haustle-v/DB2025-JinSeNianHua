@@ -519,11 +519,7 @@ extern int yylex \
 #undef yyTABLES_NAME
 #endif
 
-<<<<<<< HEAD
-#line 138 "lex.l"
-=======
-#line 151 "lex.l"
->>>>>>> mvcc_perf_sqb
+#line 153 "lex.l"
 
 
 #line 526 "lex.yy.hpp"
