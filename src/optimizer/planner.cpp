@@ -11,6 +11,7 @@ See the Mulan PSL v2 for more details. */
 #include "planner.h"
 
 #include <memory>
+#include <set>
 
 #include "execution/executor_delete.h"
 #include "execution/executor_index_scan.h"
