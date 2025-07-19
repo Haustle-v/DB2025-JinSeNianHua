@@ -31,6 +31,7 @@ class IndexScanExecutor : public AbstractExecutor {
 
   Rid rid_;
   std::unique_ptr<RecScan> scan_;
+  std::unique_ptr<RmRecord> current_tuple = nullptr;  // sqb MVCC标记有效元组
 
   SmManager *sm_manager_;
 
@@ -196,8 +197,9 @@ class IndexScanExecutor : public AbstractExecutor {
     // 开始扫描！
     for (; !scan_->is_end(); scan_->next()) {
       rid_ = scan_->rid();
-      std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid_, context_);
-      if (check_conds(cols_, conds_, rec_ptr.get())) {
+      //   std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid_, context_);
+      current_tuple = fh_->get_reconstructed_tuple(rid_, context_, tab_);
+      if (current_tuple != nullptr && check_conds(cols_, conds_, current_tuple.get())) {
         break;
       }
     }
@@ -208,8 +210,9 @@ class IndexScanExecutor : public AbstractExecutor {
     scan_->next();
     for (; !scan_->is_end(); scan_->next()) {
       rid_ = scan_->rid();
-      std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid_, context_);
-      if (check_conds(cols_, conds_, rec_ptr.get())) {
+      //   std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid_, context_);
+      current_tuple = fh_->get_reconstructed_tuple(rid_, context_, tab_);
+      if (current_tuple != nullptr && check_conds(cols_, conds_, current_tuple.get())) {
         break;
       }
     }
@@ -217,7 +220,8 @@ class IndexScanExecutor : public AbstractExecutor {
 
   std::unique_ptr<RmRecord> Next() override {
     if (!scan_->is_end()) {
-      return fh_->get_record(rid_, context_);
+      //   return fh_->get_record(rid_, context_);
+      return std::move(current_tuple);
     }
     return nullptr;
   }

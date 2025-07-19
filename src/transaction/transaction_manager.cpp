@@ -169,6 +169,22 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
       }
     }
   }
+
+  //   给所有回滚后的记录重写ts
+  std::unordered_set<Rid> reseted_rids;
+  timestamp_t pre_verison_ts = txn->get_read_ts();
+  for (auto iter = write_set_ptr->begin(); iter != write_set_ptr->end(); ++iter) {
+    Rid rid = (*iter)->GetRid();
+    if (reseted_rids.find(rid) != reseted_rids.end()) {
+      continue;
+    } else {
+      reseted_rids.insert(rid);
+    }
+    std::string &tab_name = (*iter)->GetTableName();
+    auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
+    fhdl_ptr->set_meta(rid, pre_verison_ts, (*iter)->GetTupleMeta().is_deleted_);
+  }
+
   //  释放锁
   auto lock_set_ptr = txn->get_lock_set();
   for (auto &lock_id : *lock_set_ptr) {

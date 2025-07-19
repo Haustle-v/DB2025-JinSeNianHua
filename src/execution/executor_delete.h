@@ -49,18 +49,19 @@ class DeleteExecutor : public AbstractExecutor {
     for (auto &rid : rids_) {
       std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
 
-      //   删除索引
-      for (auto &index_meta : tab_.indexes) {
-        std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
-        auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
-        char key_buffer[index_meta.col_tot_len];
-        int offset = 0;
-        for (auto &col_meta : index_meta.cols) {
-          memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
-          offset += col_meta.len;
-        }
-        ix_hdl_ptr->delete_entry(key_buffer, context_->txn_);
-      }
+      // MVCC支持索引时，删除不会删除键值
+      //   //   删除索引
+      //   for (auto &index_meta : tab_.indexes) {
+      //     std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
+      //     auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
+      //     char key_buffer[index_meta.col_tot_len];
+      //     int offset = 0;
+      //     for (auto &col_meta : index_meta.cols) {
+      //       memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
+      //       offset += col_meta.len;
+      //     }
+      //     ix_hdl_ptr->delete_entry(key_buffer, context_->txn_);
+      //   }
 
       //   //   基于锁的删除
       //   fh_->delete_record(rid, context_, rec_ptr.get());

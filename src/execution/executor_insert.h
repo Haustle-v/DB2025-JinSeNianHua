@@ -39,10 +39,10 @@ class InsertExecutor : public AbstractExecutor {
   };
 
   std::unique_ptr<RmRecord> Next() override {
-    // sqb 事务并发控制 6.9
-    if (context_ != nullptr) {
-      context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
-    }
+    // // sqb 事务并发控制 6.9
+    // if (context_ != nullptr) {
+    //   context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
+    // }
     // Make record buffer
     RmRecord rec(fh_->get_file_hdr().record_size);
     for (size_t i = 0; i < values_.size(); i++) {
@@ -79,6 +79,7 @@ class InsertExecutor : public AbstractExecutor {
     // }
 
     // sqb 添加索引唯一性检查 注意先检查所有索引再插入数据 不能边检查边插入
+    bool reuse_key = false;
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     for (auto &index_meta : tab_.indexes) {
       std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
@@ -91,8 +92,25 @@ class InsertExecutor : public AbstractExecutor {
       }
       std::vector<Rid> tmp;
       if (ix_hdl_ptr->get_value(key_buffer, &tmp, context_->txn_)) {
-        throw InternalError("index unique constration error");
+        // throw InternalError("index unique constration error");
+        // MVCC需对索引键值复用 只有键值不存在 才会先插入记录再插入索引
+        for (auto &rid : tmp) {
+          auto [meta, tuple, _] = fh_->get_tuple_and_undoLink(rid, context_);
+          if (meta.is_deleted_ &&
+              (meta.ts_ <= context_->txn_->get_read_ts() || meta.ts_ == context_->txn_->get_temp_ts())) {
+            fh_->update_record(rid, rec.data, context_, &tuple, &tab_);
+            reuse_key = true;
+          } else {
+            throw TransactionAbortException(context_->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+          }
+        }
       }
+    }
+
+    // 复用现有键值 直接返回
+    if (reuse_key) {
+      sm_manager_->db_.get_table(tab_name_).record_count++;
+      return nullptr;
     }
 
     // // 基于锁的插入

@@ -411,18 +411,18 @@ void SmManager::record_insert_helper(const std::string &tab_name, const Rid &rid
   fhdl_ptr->allocate_pages(rid);
   fhdl_ptr->insert_record(rid, rec.data);
 
-  //   插入索引
-  for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
-    auto ix_hdl_ptr = ihs_[index_name].get();
-    char key_buffer[index_meta.col_tot_len];
-    int offset = 0;
-    for (auto &col_meta : index_meta.cols) {
-      memcpy(key_buffer + offset, rec.data + col_meta.offset, col_meta.len);
-      offset += col_meta.len;
-    }
-    ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
-  }
+  //   //   插入索引
+  //   for (auto &index_meta : tab_meta.indexes) {
+  //     std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
+  //     auto ix_hdl_ptr = ihs_[index_name].get();
+  //     char key_buffer[index_meta.col_tot_len];
+  //     int offset = 0;
+  //     for (auto &col_meta : index_meta.cols) {
+  //       memcpy(key_buffer + offset, rec.data + col_meta.offset, col_meta.len);
+  //       offset += col_meta.len;
+  //     }
+  //     ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
+  //   }
 
   // 给redo与undo加上lsn
   if (lsn != INVALID_LSN) {
@@ -438,20 +438,20 @@ void SmManager::record_delete_helper(const std::string &tab_name, const Rid &rid
   TabMeta &tab_meta = db_.get_table(tab_name);
   auto fhdl_ptr = fhs_.at(tab_name).get();
   fhdl_ptr->allocate_pages(rid);
-  std::unique_ptr<RmRecord> rec_ptr = fhdl_ptr->get_record(rid, nullptr);
+  //   std::unique_ptr<RmRecord> rec_ptr = fhdl_ptr->get_record(rid, nullptr);
 
-  //   删除索引
-  for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
-    auto ix_hdl_ptr = ihs_[index_name].get();
-    char key_buffer[index_meta.col_tot_len];
-    int offset = 0;
-    for (auto &col_meta : index_meta.cols) {
-      memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
-      offset += col_meta.len;
-    }
-    ix_hdl_ptr->delete_entry(key_buffer, nullptr);
-  }
+  //   //   删除索引
+  //   for (auto &index_meta : tab_meta.indexes) {
+  //     std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
+  //     auto ix_hdl_ptr = ihs_[index_name].get();
+  //     char key_buffer[index_meta.col_tot_len];
+  //     int offset = 0;
+  //     for (auto &col_meta : index_meta.cols) {
+  //       memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
+  //       offset += col_meta.len;
+  //     }
+  //     ix_hdl_ptr->delete_entry(key_buffer, nullptr);
+  //   }
 
   //   删除记录
   fhdl_ptr->delete_record(rid, nullptr);
@@ -471,36 +471,36 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
   TabMeta &tab_meta = db_.get_table(tab_name);
   auto fhdl_ptr = fhs_.at(tab_name).get();
   fhdl_ptr->allocate_pages(rid);
-  std::unique_ptr<RmRecord> cur_rec_ptr = fhdl_ptr->get_record(rid, nullptr);
+  //   std::unique_ptr<RmRecord> cur_rec_ptr = fhdl_ptr->get_record(rid, nullptr);
 
-  // 删除旧索引
-  for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
-    auto ix_hdl_ptr = ihs_[index_name].get();
-    char key_buffer[index_meta.col_tot_len];
-    int offset = 0;
-    for (auto &col_meta : index_meta.cols) {
-      memcpy(key_buffer + offset, cur_rec_ptr->data + col_meta.offset, col_meta.len);
-      offset += col_meta.len;
-    }
-    ix_hdl_ptr->delete_entry(key_buffer, nullptr);
-  }
+  //   // 删除旧索引
+  //   for (auto &index_meta : tab_meta.indexes) {
+  //     std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
+  //     auto ix_hdl_ptr = ihs_[index_name].get();
+  //     char key_buffer[index_meta.col_tot_len];
+  //     int offset = 0;
+  //     for (auto &col_meta : index_meta.cols) {
+  //       memcpy(key_buffer + offset, cur_rec_ptr->data + col_meta.offset, col_meta.len);
+  //       offset += col_meta.len;
+  //     }
+  //     ix_hdl_ptr->delete_entry(key_buffer, nullptr);
+  //   }
 
   //   插入记录
   fhdl_ptr->update_record(rid, new_rec.data, nullptr);
 
-  //   插入新索引
-  for (auto &index_meta : tab_meta.indexes) {
-    std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
-    auto ix_hdl_ptr = ihs_[index_name].get();
-    char key_buffer[index_meta.col_tot_len];
-    int offset = 0;
-    for (auto &col_meta : index_meta.cols) {
-      memcpy(key_buffer + offset, new_rec.data + col_meta.offset, col_meta.len);
-      offset += col_meta.len;
-    }
-    ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
-  }
+  //   //   插入新索引
+  //   for (auto &index_meta : tab_meta.indexes) {
+  //     std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
+  //     auto ix_hdl_ptr = ihs_[index_name].get();
+  //     char key_buffer[index_meta.col_tot_len];
+  //     int offset = 0;
+  //     for (auto &col_meta : index_meta.cols) {
+  //       memcpy(key_buffer + offset, new_rec.data + col_meta.offset, col_meta.len);
+  //       offset += col_meta.len;
+  //     }
+  //     ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
+  //   }
 
   // 给redo与undo加上lsn
   if (lsn != INVALID_LSN) {

@@ -94,7 +94,8 @@ class UpdateExecutor : public AbstractExecutor {
         }
       }
 
-      //   处理索引
+      // MVCC下，索引键只增加，不删除
+      //    处理索引
       RmRecord new_rec = *rec_ptr;
       for (auto &index_meta : tab_.indexes) {
         char old_key[index_meta.col_tot_len], new_key[index_meta.col_tot_len];
@@ -114,7 +115,7 @@ class UpdateExecutor : public AbstractExecutor {
             throw InternalError("index unique constration error");
           }
 
-          ix_hdl_ptr->delete_entry(old_key, context_->txn_);
+          //   ix_hdl_ptr->delete_entry(old_key, context_->txn_);
           ix_hdl_ptr->insert_entry(new_key, rid, context_->txn_);
         }
       }

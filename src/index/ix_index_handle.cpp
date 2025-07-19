@@ -490,6 +490,11 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
   char *cur_first_key = leaf_node->get_key(0);
   bool is_repeat = ket_num_before == key_num_after;
 
+  //   处理并发情况下插入重复键值的问题
+  if (is_repeat && transaction != nullptr) {
+    throw TransactionAbortException(transaction->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+  }
+
   if (!is_repeat && key_num_after > file_hdr_->btree_order_) {
     // 如果没重复会直接插入 超过上限才分裂 更新父节点
     IxNodeHandle *new_right_split_node = split(leaf_node);
