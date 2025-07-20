@@ -28,6 +28,8 @@ class MergeJoinExecutor : public AbstractExecutor {
   size_t Lpos{0}, Rpos{0};                 // 标记两个缓冲区扫描的位置
   std::unique_ptr<RmRecord> cur_rec_ptr_;  // 标记当前有效记录
 
+  size_t mark_pos_{0};  // 右表回溯标记
+
   //   目前merge join会先做两表排序，同时支持了非等值排序，需要后期在算子树上进行优化并调整
  public:
   MergeJoinExecutor(std::unique_ptr<AbstractExecutor> left, std::unique_ptr<AbstractExecutor> right,
@@ -116,6 +118,8 @@ class MergeJoinExecutor : public AbstractExecutor {
     // 有等值连接就先做排序合并在嵌套，没有等值就默认为嵌套
     if (!equal_conds_.empty()) {
       while (Lpos < Lsize && Rpos < Rsize) {
+        bool has_backtrace = false;  // 控制回溯标记
+
         // 内部先做等值连接的排序合并，随后为非等值连接做嵌套连接
         auto &lrec_ptr = Lbuffer[Lpos];
         auto &rrec_ptr = Rbuffer[Rpos];
@@ -127,31 +131,60 @@ class MergeJoinExecutor : public AbstractExecutor {
             break;
           }
         }
+
         if (cmp == 0) {
           // 检查其它非等值连接条件
           cur_rec_ptr_ = std::make_unique<RmRecord>(len_);
           memcpy(cur_rec_ptr_->data, lrec_ptr->data, lrec_ptr->size);
           memcpy(cur_rec_ptr_->data + lrec_ptr->size, rrec_ptr->data, rrec_ptr->size);
           if (non_eq_cond_num == 0 || check_conds(cols_, non_equal_conds_, cur_rec_ptr_.get())) {
-            ++Rpos;
-            if (Rpos >= Rsize) {
-              ++Lpos;
-              Rpos = 0;
-            }
-            return;
-          } else {
-            // 不满足等值条件，继续尝试
-            ++Rpos;
-            continue;
+            is_find = true;
           }
-
+          ++Rpos;
+          //   处理相同等值的回溯
+          if (Rpos >= Rsize) {
+            ++Lpos;
+            has_backtrace = true;
+            Rpos = mark_pos_;
+          }
         } else if (cmp > 0) {
           ++Rpos;
-          continue;
         } else {
           ++Lpos;
-          continue;
+          //   视情况回溯
+          if (Lpos < Lsize) {
+            bool all_equal = true;
+            for (size_t i = 0; i < eq_cond_num; ++i) {
+              if (ix_compare(Lbuffer[Lpos]->data + LequalCols[i].offset,
+                             Rbuffer[mark_pos_]->data + RequalCols[i].offset, LequalCols[i].type,
+                             LequalCols[i].len) != 0) {
+                all_equal = false;
+                break;
+              }
+            }
+            if (all_equal) {
+              has_backtrace = true;
+              Rpos = mark_pos_;
+            }
+          }
         }
+
+        // 未回溯时标记右侧表第一个不同值出现的位置
+        if (!has_backtrace) {
+          size_t tmp_pos = cmp >= 0 ? Rpos - 1 : Rpos;
+          if (tmp_pos != mark_pos_) {
+            for (size_t i = 0; i < eq_cond_num; ++i) {
+              if (tmp_pos < Rsize && ix_compare(Rbuffer[tmp_pos]->data + RequalCols[i].offset,
+                                                Rbuffer[mark_pos_]->data + RequalCols[i].offset, RequalCols[i].type,
+                                                RequalCols[i].len) != 0) {
+                mark_pos_ = tmp_pos;
+                break;
+              }
+            }
+          }
+        }
+
+        if (is_find) return;
       }
       //   执行到这里意味着没有匹配到
       cur_rec_ptr_ = nullptr;
