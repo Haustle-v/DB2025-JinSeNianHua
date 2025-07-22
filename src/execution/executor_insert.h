@@ -101,7 +101,8 @@ class InsertExecutor : public AbstractExecutor {
             fh_->update_record(rid, rec.data, context_, &tuple, &tab_);
             reuse_key = true;
           } else {
-            throw TransactionAbortException(context_->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+            // throw TransactionAbortException(context_->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+            throw InternalError("index unique constration error");
           }
         }
       }
