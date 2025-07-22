@@ -69,7 +69,7 @@ class DeleteExecutor : public AbstractExecutor {
       fh_->delete_record(rid, context_, rec_ptr.get(), &tab_);
     }
     // yfs 6.11 减少记录数量
-    sm_manager_->db_.get_table(tab_name_).record_count--;
+    // sm_manager_->db_.get_table(tab_name_).record_count--;
     return nullptr;
   }
 

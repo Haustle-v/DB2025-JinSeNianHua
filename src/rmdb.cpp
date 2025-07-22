@@ -34,11 +34,11 @@ static bool should_exit = false;
 // 构建全局所需的管理器对象
 auto disk_manager = std::make_unique<DiskManager>();
 auto buffer_pool_manager = std::make_unique<BufferPoolManager>(BUFFER_POOL_SIZE, disk_manager.get());
-auto index_buffer_pool_manager = std::make_unique<BufferPoolManager>(INDEX_BUFFER_POOL_SIZE, disk_manager.get());
+// auto index_buffer_pool_manager = std::make_unique<BufferPoolManager>(INDEX_BUFFER_POOL_SIZE, disk_manager.get());
 auto rm_manager = std::make_unique<RmManager>(disk_manager.get(), buffer_pool_manager.get());
-auto ix_manager = std::make_unique<IxManager>(disk_manager.get(), index_buffer_pool_manager.get());
-auto sm_manager = std::make_unique<SmManager>(disk_manager.get(), buffer_pool_manager.get(),
-                                              index_buffer_pool_manager.get(), rm_manager.get(), ix_manager.get());
+auto ix_manager = std::make_unique<IxManager>(disk_manager.get(), buffer_pool_manager.get());
+auto sm_manager = std::make_unique<SmManager>(disk_manager.get(), buffer_pool_manager.get(), buffer_pool_manager.get(),
+                                              rm_manager.get(), ix_manager.get());
 auto lock_manager = std::make_unique<LockManager>();
 auto txn_manager = std::make_unique<TransactionManager>(lock_manager.get(), sm_manager.get());
 auto planner = std::make_unique<Planner>(sm_manager.get());

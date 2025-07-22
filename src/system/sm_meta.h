@@ -71,14 +71,14 @@ struct TabMeta {
   std::string name;                // 表名称
   std::vector<ColMeta> cols;       // 表包含的字段
   std::vector<IndexMeta> indexes;  // 表上建立的索引
-  size_t record_count = 0;         // 默认记录数量为0  (yfs 6.11)
+                                   //   size_t record_count = 0;         // 默认记录数量为0  (yfs 6.11)
 
   TabMeta() {}
 
   TabMeta(const TabMeta &other) {
     name = other.name;
     for (auto col : other.cols) cols.push_back(col);
-    record_count = other.record_count;  // yfs 6.11 这行别忘了加
+    // record_count = other.record_count;  // yfs 6.11 这行别忘了加
   }
 
   /* 判断当前表中是否存在名为col_name的字段 */
@@ -135,7 +135,7 @@ struct TabMeta {
       os << index << "\n";
     }
     // yfs 6.11 写入 record_count
-    os << tab.record_count << "\n";
+    // os << tab.record_count << "\n";
     return os;
   }
 
@@ -154,7 +154,7 @@ struct TabMeta {
       tab.indexes.push_back(index);
     }
     // yfs 6.11 读出 record_count
-    is >> tab.record_count;
+    // is >> tab.record_count;
     return is;
   }
 };

@@ -109,7 +109,7 @@ class InsertExecutor : public AbstractExecutor {
 
     // 复用现有键值 直接返回
     if (reuse_key) {
-      sm_manager_->db_.get_table(tab_name_).record_count++;
+      //   sm_manager_->db_.get_table(tab_name_).record_count++;
       return nullptr;
     }
 
@@ -131,7 +131,7 @@ class InsertExecutor : public AbstractExecutor {
       ih->insert_entry(key, rid_, context_->txn_);
     }
     // yfs 6.11 增加记录数量
-    sm_manager_->db_.get_table(tab_name_).record_count++;
+    // sm_manager_->db_.get_table(tab_name_).record_count++;
     return nullptr;
   }
   Rid &rid() override { return rid_; }
