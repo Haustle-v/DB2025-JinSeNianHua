@@ -36,12 +36,12 @@ static constexpr int64_t TXN_START_ID = 1LL << 62;  // first txn id
 static constexpr int64_t INVALID_TS = -1;           // invalid log sequence number
 static constexpr int HEADER_PAGE_ID = 0;            // the header page id
 static constexpr int PAGE_SIZE = 4096;              // size of a data page in byte  4KB
-// static constexpr int BUFFER_POOL_SIZE = 65536;      // size of buffer pool 256MB
+static constexpr int BUFFER_POOL_SIZE = 65536;      // size of buffer pool 256MB
 // static constexpr int BUFFER_POOL_SIZE = 262144 + 2;   // size of buffer pool 1GB
-static constexpr int BUFFER_POOL_SIZE = 65536 * 8;  // size of buffer pool 1GB
+// static constexpr int BUFFER_POOL_SIZE = 65536 * 8;  // size of buffer pool 1GB
 // static constexpr int INDEX_BUFFER_POOL_SIZE = 65536;  // size of index buffer pool 256MB
 // static constexpr int INDEX_BUFFER_POOL_SIZE = 65536 / 8;  // size of index buffer pool 256MB
-static constexpr int BUFFER_POOL_OBJECT_NUM = 8;  // number of buffer pool objects
+static constexpr int BUFFER_POOL_OBJECT_NUM = 1;  // number of buffer pool objects
 static constexpr int BUFFER_POOL_OBJECT_SIZE =
     BUFFER_POOL_SIZE / BUFFER_POOL_OBJECT_NUM;              // size of buffer pool objects
 static constexpr int LOG_BUFFER_SIZE = (1024 * PAGE_SIZE);  // size of a log buffer in byte
@@ -61,7 +61,7 @@ static const std::string LOG_FILE_NAME = "db.log";
 static const std::string LOG_CHECKPOINT_POS_FILE = "db.ckpt";  //  sqb 6.11
 
 // replacer
-static const std::string REPLACER_TYPE = "LRU";
-// static const std::string REPLACER_TYPE = "CLOCK";
+// static const std::string REPLACER_TYPE = "LRU";
+static const std::string REPLACER_TYPE = "CLOCK";
 
 static const std::string DB_META_NAME = "db.meta";
