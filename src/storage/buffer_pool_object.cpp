@@ -72,7 +72,7 @@ void BufferPoolObject::update_page(Page *page, PageId new_page_id, frame_id_t ne
 
   //   更新元数据
   page->id_ = new_page_id;
-  // page->reset_memory();  // 考虑一下注释掉这个
+  page->reset_memory();
   page->set_page_lsn(INVALID_LSN);
 }
 
