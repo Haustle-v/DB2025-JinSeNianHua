@@ -33,6 +33,9 @@ class SeqScanExecutor : public AbstractExecutor {
 
   SmManager *sm_manager_;
 
+  // 用于缓存 get_col_offset 结果的哈希表
+  std::unordered_map<TabCol, ColMeta> col_meta_cache_;
+
  public:
   SeqScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds, Context *context) {
     sm_manager_ = sm_manager;
@@ -103,8 +106,13 @@ class SeqScanExecutor : public AbstractExecutor {
 
   // sqb 5.23
   ColMeta get_col_offset(const TabCol &target) override {
+    auto it = col_meta_cache_.find(target);
+    if (it != col_meta_cache_.end()) {
+      return it->second;
+    }
     for (auto &col_meta : cols_) {
       if (col_meta.tab_name == target.tab_name && col_meta.name == target.col_name) {
+        col_meta_cache_[target] = col_meta;
         return col_meta;
       }
     }

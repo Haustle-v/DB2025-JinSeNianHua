@@ -30,6 +30,9 @@ class MergeJoinExecutor : public AbstractExecutor {
 
   size_t mark_pos_{0};  // 右表回溯标记
 
+  // 用于缓存 get_col_offset 结果的哈希表
+  std::unordered_map<TabCol, ColMeta> col_meta_cache_;
+
   //   目前merge join会先做两表排序，同时支持了非等值排序，需要后期在算子树上进行优化并调整
  public:
   MergeJoinExecutor(std::unique_ptr<AbstractExecutor> left, std::unique_ptr<AbstractExecutor> right,
@@ -234,8 +237,13 @@ class MergeJoinExecutor : public AbstractExecutor {
 
   // sqb 5.24
   ColMeta get_col_offset(const TabCol &target) override {
+    auto it = col_meta_cache_.find(target);
+    if (it != col_meta_cache_.end()) {
+      return it->second;
+    }
     for (auto &col_meta : cols_) {
       if (col_meta.tab_name == target.tab_name && col_meta.name == target.col_name) {
+        col_meta_cache_[target] = col_meta;
         return col_meta;
       }
     }
