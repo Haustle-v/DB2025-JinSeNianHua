@@ -270,13 +270,30 @@ std::vector<Condition> extract_join_conditions(std::vector<Condition> &joinconds
   return result;
 }
 
+// 根据表记录对表做排序
+void Planner::sort_table_on_num(std::vector<std::string> &query_tables) {
+  std::unordered_map<std::string, size_t> idxs;
+  size_t table_num = query_tables.size();
+  for (size_t i = 0; i < table_num; ++i) {
+    idxs[query_tables[i]] = i;
+  }
+  std::vector<size_t> record_nums;
+  for (auto &tab_name : query_tables) {
+    record_nums.emplace_back(sm_manager_->fhs_.at(tab_name)->get_record_num());
+  }
+
+  std::sort(query_tables.begin(), query_tables.end(),
+            [&record_nums, &idxs](const std::string &a, const std::string &b) {
+              return record_nums[idxs[a]] < record_nums[idxs[b]];
+            });
+}
+
 std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
   auto x = std::dynamic_pointer_cast<ast::SelectStmt>(query->parse);
+  //   std::vector<std::string> tables = query->tables;
+  sort_table_on_num(query->tables);
   std::vector<std::string> tables = query->tables;
-  //   // 直接原地对table按照大小升序排序
-  //   std::sort(tables.begin(), tables.end(), [&](const std::string &a, const std::string &b) {
-  //     return sm_manager_->db_.get_table(a).record_count < sm_manager_->db_.get_table(b).record_count;
-  //   });
+
   // Scan table , 生成表算子列表tab_nodes
   std::vector<std::shared_ptr<Plan>> table_scan_executors(tables.size());
   // 处理where中的只涉及一个表的条件, 也就是Filter
