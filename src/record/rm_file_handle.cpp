@@ -181,9 +181,14 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
   base_meta.is_deleted_ = false;
 
   page_hdl.page_hdr->num_records++;
-  if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
+
+  {
     std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
-    file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
+    if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
+      file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
+    }
+    // 跟踪表记录数量
+    ++file_hdr_.record_num;
   }
 
   page_hdl.page->WUnlatch();
@@ -208,11 +213,16 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
   if (!Bitmap::is_set(page_hdl.bitmap, rid.slot_no)) {
     page_hdl.page_hdr->num_records++;
     Bitmap::set(page_hdl.bitmap, rid.slot_no);
-    if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
+    {
       std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
-      file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
+      if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
+        file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
+      }
+      // 跟踪表记录数量
+      ++file_hdr_.record_num;
     }
   }
+
   page_hdl.page->WUnlatch();
   //   当前数据为脏
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
@@ -287,9 +297,17 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
   base_meta.is_deleted_ = true;
   //   考虑release
   --page_hdl.page_hdr->num_records;
-  if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
-    release_page_handle(page_hdl);
+
+  {
+    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+    if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
+      page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
+      file_hdr_.first_free_page_no = page_hdl.page->get_page_id().page_no;
+    }
+    // 跟踪表记录数量
+    --file_hdr_.record_num;
   }
+
   page_hdl.page->WUnlatch();
   //   当前数据为脏
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
@@ -363,6 +381,12 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
   }
   memcpy(page_hdl.get_slot_record(rid.slot_no), buf, file_hdr_.record_size);
   // Bitmap::set(page_hdl.bitmap, rid.slot_no);  // 出于保险加上先
+
+  // 跟踪表记录数量 由于索引永驻 逻辑删除后重用相当于插入
+  if (base_meta.is_deleted_) {
+    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+    ++file_hdr_.record_num;
+  }
   base_meta.is_deleted_ = false;
 
   page_hdl.page->WUnlatch();
@@ -447,20 +471,20 @@ RmPageHandle RmFileHandle::create_page_handle() {
   return fetch_page_handle(file_hdr_.first_free_page_no);
 }
 
-/**
- * @description:
- * 当一个页面从没有空闲空间的状态变为有空闲空间状态时，更新文件头和页头中空闲页面相关的元数据
- */
-void RmFileHandle::release_page_handle(RmPageHandle &page_handle) {
-  // Todo:
-  // 当page从已满变成未满，考虑如何更新：
-  // 1. page_handle.page_hdr->next_free_page_no
-  // 2. file_hdr_.first_free_page_no
-  std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+// /**
+//  * @description:
+//  * 当一个页面从没有空闲空间的状态变为有空闲空间状态时，更新文件头和页头中空闲页面相关的元数据
+//  */
+// void RmFileHandle::release_page_handle(RmPageHandle &page_handle) {
+//   // Todo:
+//   // 当page从已满变成未满，考虑如何更新：
+//   // 1. page_handle.page_hdr->next_free_page_no
+//   // 2. file_hdr_.first_free_page_no
+//   std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
 
-  page_handle.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
-  file_hdr_.first_free_page_no = page_handle.page->get_page_id().page_no;
-}
+//   page_handle.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
+//   file_hdr_.first_free_page_no = page_handle.page->get_page_id().page_no;
+// }
 
 // sqb 避免故障恢复时 访问不存在的页报错 暂时只考虑申请一次 6.11
 void RmFileHandle::allocate_pages(const Rid &rid) {

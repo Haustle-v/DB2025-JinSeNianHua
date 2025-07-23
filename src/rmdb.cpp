@@ -198,12 +198,22 @@ void *client_handler(void *sock_fd) {
           yy_delete_buffer(buf, scanner);
           finish_analyze = true;
           //   pthread_mutex_unlock(buffer_mutex);
-          // 优化器
-          std::shared_ptr<Plan> plan = optimizer->plan_query(query, context);
-          // portal
-          std::shared_ptr<PortalStmt> portalStmt = portal->start(plan, context);
-          portal->run(portalStmt, ql_manager.get(), &txn_id, context);  // 真正执行
-          portal->drop();
+
+          // 特判快速统计数据量
+          if (query->tables.size() == 1 && query->cols.size() == 1 && query->cols[0].aggFuncType == ast::AGG_COUNT &&
+              query->conds.empty()) {
+            auto &col = query->cols[0];
+            std::string &col_name = col.alias == "" ? col.col_name : col.alias;
+            ql_manager->quick_count_table(query->tables[0], col_name, context);
+          } else {
+            // 优化器
+            std::shared_ptr<Plan> plan = optimizer->plan_query(query, context);
+            // portal
+            std::shared_ptr<PortalStmt> portalStmt = portal->start(plan, context);
+            portal->run(portalStmt, ql_manager.get(), &txn_id, context);  // 真正执行
+            portal->drop();
+          }
+
         } catch (TransactionAbortException &e) {
           // 事务需要回滚，需要把abort信息返回给客户端并写入output.txt文件中
           std::string str = "abort\n";

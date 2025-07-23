@@ -130,8 +130,14 @@ class RmFileHandle {
   // sqb 用于改动rmscan
   TupleMeta get_meta(const Rid &rid);
 
+  // sqb 获取表中记录的数量
+  size_t get_record_num() {
+    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+    return file_hdr_.record_num;
+  }
+
  private:
   RmPageHandle create_page_handle();
 
-  void release_page_handle(RmPageHandle &page_handle);
+  //   void release_page_handle(RmPageHandle &page_handle);
 };

@@ -248,3 +248,51 @@ void QlManager::create_checkpoint(Context *context) {
     bpm_ptr->flush_all_pages(fhdl_ptr->GetFd());
   }
 }
+
+//   sqb 快速返回select count结果，仅单表
+// 执行select语句，select语句的输出除了需要返回客户端外，还需要写入output.txt文件中
+size_t QlManager::quick_count_table(std::string &tab_name, std::string &sel_col, Context *context) {
+  auto &fhdl_ptr = sm_manager_->fhs_.at(tab_name);
+  size_t record_num = fhdl_ptr->get_record_num();
+  std::vector<std::string> captions;
+  captions.emplace_back(sel_col);
+
+  // Print header into buffer
+  RecordPrinter rec_printer(1);
+  rec_printer.print_separator(context);
+  rec_printer.print_record(captions, context);
+  rec_printer.print_separator(context);
+  // print header into file
+  std::fstream outfile;
+  if (sm_manager_->io_enabled_) {  // yfs 7.3
+    outfile.open("output.txt", std::ios::out | std::ios::app);
+    outfile << "|";
+    for (int i = 0; i < captions.size(); ++i) {
+      outfile << " " << captions[i] << " |";
+    }
+    outfile << "\n";
+  }
+
+  // Print records
+  size_t num_rec = 1;
+  std::vector<std::string> columns;
+  columns.emplace_back(std::to_string(record_num));
+  // print record into buffer
+  rec_printer.print_record(columns, context);
+  // print record into file
+  if (sm_manager_->io_enabled_) {  // yfs 7.3
+    outfile << "|";
+    for (int i = 0; i < columns.size(); ++i) {
+      outfile << " " << columns[i] << " |";
+    }
+    outfile << "\n";
+  }
+
+  if (sm_manager_->io_enabled_) {
+    outfile.close();
+  }
+  // Print footer into buffer
+  rec_printer.print_separator(context);
+  // Print record count into buffer
+  RecordPrinter::print_record_count(num_rec, context);
+}

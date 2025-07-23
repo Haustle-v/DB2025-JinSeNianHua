@@ -36,6 +36,7 @@ struct RmFileHdr {
   int num_records_per_page;    // 每个页面最多能存储的元组个数
   int first_free_page_no{-1};  // 文件中当前第一个包含空闲空间的页面号（初始化为-1）
   int bitmap_size;             // 每个页面bitmap大小
+  size_t record_num{0};        // 表中记录的数量 sqb
 };
 
 /* 表数据文件中每个页面的页头，记录每个页面的元信息 */
