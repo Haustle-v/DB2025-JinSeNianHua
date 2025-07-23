@@ -272,8 +272,9 @@ std::vector<Condition> extract_join_conditions(std::vector<Condition> &joinconds
 
 // 根据表记录对表做排序
 void Planner::sort_table_on_num(std::vector<std::string> &query_tables) {
-  std::unordered_map<std::string, size_t> idxs;
   size_t table_num = query_tables.size();
+  if (table_num <= 2) return;
+  std::unordered_map<std::string, size_t> idxs;
   for (size_t i = 0; i < table_num; ++i) {
     idxs[query_tables[i]] = i;
   }
