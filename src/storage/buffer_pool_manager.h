@@ -28,7 +28,7 @@ class BufferPoolManager {
  private:
   size_t pool_size_;  // buffer_pool中可容纳页面的个数，即帧的个数
   BufferPoolObject *bpms_[BUFFER_POOL_OBJECT_NUM];
-  std::hash<PageId> mapper_;
+  //   std::hash<PageId> mapper_;
 
   //   Page *pages_;       //
   //   buffer_pool中的Page对象数组，在构造空间中申请内存空间，在析构函数中释放，大小为BUFFER_POOL_SIZE
@@ -74,5 +74,6 @@ class BufferPoolManager {
   void flush_all_pages(int fd);
 
  private:
-  inline size_t get_instance_idx(const PageId &page_id) { return mapper_(page_id) % BUFFER_POOL_OBJECT_NUM; }
+  //   inline size_t get_instance_idx(const PageId &page_id) { return mapper_(page_id) % BUFFER_POOL_OBJECT_NUM; }
+  inline size_t get_instance_idx(const PageId &page_id) { return page_id.fd % BUFFER_POOL_OBJECT_NUM; }
 };
