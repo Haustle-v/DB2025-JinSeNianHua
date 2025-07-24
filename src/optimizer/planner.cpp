@@ -428,9 +428,9 @@ std::shared_ptr<Plan> Planner::generate_select_plan(std::shared_ptr<Query> query
   plannerRoot =
       std::make_shared<ProjectionPlan>(T_Projection, std::move(plannerRoot), std::move(sel_cols), query->select_all);
   std::vector<TabCol> cols_need_retain;
-  if (!query->select_all) {
-    projection_pushdown(plannerRoot, cols_need_retain);
-  }
+  //   if (!query->select_all) {
+  //     projection_pushdown(plannerRoot, cols_need_retain);
+  //   }
 
   return plannerRoot;
 }

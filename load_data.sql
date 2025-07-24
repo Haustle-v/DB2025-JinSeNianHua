@@ -33,5 +33,11 @@ select COUNT(*) as count_orders from orders;
 select COUNT(*) as count_order_line from order_line;
 select COUNT(*) as count_item from item;
 select COUNT(*) as count_stock from stock;
-
-
+select d_next_o_id from district,warehouse where d_w_id=w_id and d_id=d_id;
+select MAX(o_id) as max_o_id from orders,warehouse,district where o_w_id=w_id and o_d_id=d_id;
+select MAX(no_o_id) as max_no_o_id from new_orders,warehouse,district where no_w_id=w_id and no_d_id=d_id;
+select COUNT(no_o_id) as count_no_o_id from new_orders,warehouse,district where no_w_id=w_id and no_d_id=d_id;
+select MAX(no_o_id) as max_no_o_id from new_orders,warehouse,district where no_w_id=w_id and no_d_id=d_id;
+select MIN(no_o_id) as min_no_o_id from new_orders,warehouse,district where no_w_id=w_id and no_d_id=d_id;
+select SUM(o_ol_cnt) as sum_ol_cnt from orders,warehouse,district where o_w_id=w_id and o_d_id=d_id;
+select COUNT(ol_o_id) as count_ol_o_id from order_line,warehouse,district where ol_w_id=w_id and ol_d_id=d_id;
