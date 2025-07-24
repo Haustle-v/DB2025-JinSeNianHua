@@ -41,7 +41,7 @@ auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->RLatch();
   {
-    std::scoped_lock<std::mutex> undo_lock(undo_latch_);
+    // std::scoped_lock<std::mutex> undo_lock(undo_latch_);
     //   std::shared_lock<std::shared_mutex> lock(latch_);
     assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
 
@@ -144,7 +144,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
 
     // 版本链记录
     {
-      std::scoped_lock<std::mutex> undo_lock(undo_latch_);
+      //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
 
       //   补充版本链 sqb 6.19
       auto [undo_log, undo_link] = generateUndoLogAndLink(ret, nullptr, &new_rec, context, schema);
@@ -258,7 +258,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
     {
       //   补充版本链 sqb 6.19
 
-      std::scoped_lock<std::mutex> undo_lock(undo_latch_);
+      //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
 
       auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, nullptr, context, schema);
       // 元数据时间戳更新
@@ -346,7 +346,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
     {
       //   补充版本链 sqb 6.19
       RmRecord new_rec(file_hdr_.record_size, buf);
-      std::scoped_lock<std::mutex> undo_lock(undo_latch_);
+      //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
       auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, &new_rec, context, schema);
       // 元数据更新
       base_meta.ts_ = context->txn_->get_temp_ts();

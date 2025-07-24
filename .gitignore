@@ -10,3 +10,4 @@ bustub/
 perf.data
 perf.svg
 test_perf.sh
+load_data.sh
