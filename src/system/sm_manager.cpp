@@ -610,7 +610,7 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
     }
   }
 
-  delete record;
+  delete[] record;
 
   file.close();
 }
