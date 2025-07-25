@@ -13,7 +13,7 @@ add_subdirectory(replacer)
 add_subdirectory(transaction)
 add_subdirectory(recovery)
 add_subdirectory(test)
-
+add_subdirectory(generate_data)
 
 target_link_libraries(parser execution pthread)
 
