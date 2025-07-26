@@ -10,6 +10,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "sm_manager.h"
 
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -511,91 +512,174 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
   }
 }
 
+// void SmManager::load_csv_data(const std::string &csv_file_path, const std::string &tab_name) {
+//   std::ifstream file(csv_file_path);
+//   if (!file.is_open()) {
+//     throw FileNotFoundError(csv_file_path);
+//   }
+
+//   TabMeta &tab_ = db_.get_table(tab_name);  // 假设是对象（不是指针）
+//   auto fhdl_ptr = fhs_.at(tab_name).get();
+
+//   size_t record_size = fh_->file_hdr_.record_size;
+//   char *record = new char[record_size];
+
+//   std::string line;
+//   // Windows换行是\r\n，std::getline(file, line)默认以\n作为分隔符读取，因此\n被剥除了，剩下的\r留在了字符串末尾
+//   // 把末尾\r给pop出来
+//   std::getline(file, line);  // 读取表头
+//   if (!line.empty() && line.back() == '\r') {
+//     line.pop_back();
+//   }
+//   std::vector<std::string> headers;
+//   std::stringstream header_stream(line);
+//   std::string header;
+//   while (std::getline(header_stream, header, ',')) {
+//     headers.emplace_back(header);
+//   }
+
+//   // 构建列名到位置的映射
+//   std::unordered_map<std::string, size_t> header_index;
+//   int header_num = headers.size();
+//   for (size_t i = 0; i < header_num; ++i) {
+//     header_index[headers[i]] = i;
+//   }
+
+//   while (std::getline(file, line)) {
+//     if (line.empty()) continue;
+//     if (!line.empty() && line.back() == '\r')  // 把末尾\r给pop出来
+//       line.pop_back();
+
+//     std::vector<std::string> cells;
+//     std::stringstream line_stream(line);
+//     std::string cell;
+//     while (std::getline(line_stream, cell, ',')) {
+//       cells.emplace_back(cell);
+//     }
+
+//     int cell_num = cells.size();
+//     std::memset(record, 0, record_size);
+//     int offset = 0;
+
+//     for (const auto &col : tab_.cols) {
+//       auto iter = header_index.find(col.name);
+//       if (iter == header_index.end()) {
+//         throw std::runtime_error("CSV missing column: " + col.name);
+//       }
+
+//       size_t col_idx = iter->second;
+//       if (col_idx >= cell_num) {
+//         throw std::runtime_error("CSV row missing field for column: " + col.name);
+//       }
+
+//       const std::string &value_str = cells[col_idx];
+//       switch (col.type) {
+//         case ColType::TYPE_INT: {
+//           int value = std::atoi(value_str.c_str());
+//           std::memcpy(record + offset, &value, col.len);
+//           break;
+//         }
+//         case ColType::TYPE_FLOAT: {
+//           float value = std::atof(value_str.c_str());
+//           std::memcpy(record + offset, &value, col.len);
+//           break;
+//         }
+//         case ColType::TYPE_STRING: {
+//           std::memcpy(record + offset, value_str.c_str(), value_str.size());
+//           break;
+//         }
+//       }
+//       offset += col.len;
+//     }
+
+//     // 插入记录
+//     Rid rid_ = fh_->insert_record(record, nullptr);
+
+//     // 插入索引
+//     for (const auto &index : tab_.indexes) {
+//       auto idx_name = IxManager::get_index_name(tab_name, index.cols);
+//       auto ih = ihs_.at(idx_name).get();
+
+//       char key[index.col_tot_len];
+//       int offset_ = 0;
+//       for (size_t i = 0; i < static_cast<size_t>(index.col_num); ++i) {
+//         std::memcpy(key + offset_, record + index.cols[i].offset, index.cols[i].len);
+//         offset_ += index.cols[i].len;
+//       }
+
+//       ih->insert_entry(key, rid_, nullptr);
+//     }
+//   }
+
+//   delete[] record;
+
+//   file.close();
+// }
+
+// 重构load data
 void SmManager::load_csv_data(const std::string &csv_file_path, const std::string &tab_name) {
-  std::ifstream file(csv_file_path);
-  if (!file.is_open()) {
+  // 利用mmap读取文件
+  int fd = open(csv_file_path.c_str(), O_RDONLY);
+  if (fd == -1) {
     throw FileNotFoundError(csv_file_path);
   }
 
-  TabMeta &tab_ = db_.get_table(tab_name);  // 假设是对象（不是指针）
-  auto fh_ = fhs_.at(tab_name).get();
+  struct stat sb;
+  if (fstat(fd, &sb) == -1) {
+    close(fd);
+    throw UnixError();
+  }
 
-  size_t record_size = fh_->file_hdr_.record_size;
+  char *file_content = static_cast<char *>(mmap(nullptr, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
+  if (file_content == MAP_FAILED) {
+    close(fd);
+    throw InternalError("mmap failed");
+  }
+  madvise(file_content, sb.st_size, MADV_SEQUENTIAL);  // 顺序访问预读建议
+
+  // 元数据
+  TabMeta &tab = db_.get_table(tab_name);  // 假设是对象（不是指针）
+  auto fhdl_ptr = fhs_.at(tab_name).get();
+  size_t record_size = fhdl_ptr->file_hdr_.record_size;
   char *record = new char[record_size];
+  char *file_slow = file_content;
+  char *file_end = file_content + sb.st_size;
 
-  std::string line;
-  // Windows换行是\r\n，std::getline(file, line)默认以\n作为分隔符读取，因此\n被剥除了，剩下的\r留在了字符串末尾
-  // 把末尾\r给pop出来
-  std::getline(file, line);  // 读取表头
-  if (!line.empty() && line.back() == '\r') {
-    line.pop_back();
-  }
-  std::vector<std::string> headers;
-  std::stringstream header_stream(line);
-  std::string header;
-  while (std::getline(header_stream, header, ',')) {
-    headers.emplace_back(header);
+  // 跳过表头
+  while (*file_slow++ != '\n') {
   }
 
-  // 构建列名到位置的映射
-  std::unordered_map<std::string, size_t> header_index;
-  int header_num = headers.size();
-  for (size_t i = 0; i < header_num; ++i) {
-    header_index[headers[i]] = i;
-  }
-
-  while (std::getline(file, line)) {
-    if (line.empty()) continue;
-    if (!line.empty() && line.back() == '\r')  // 把末尾\r给pop出来
-      line.pop_back();
-
-    std::vector<std::string> cells;
-    std::stringstream line_stream(line);
-    std::string cell;
-    while (std::getline(line_stream, cell, ',')) {
-      cells.emplace_back(cell);
-    }
-
-    int cell_num = cells.size();
-    std::memset(record, 0, record_size);
+  // 读取记录
+  size_t col_num = tab.cols.size();
+  char *file_fast = file_slow;
+  while (file_slow < file_end) {
     int offset = 0;
-
-    for (const auto &col : tab_.cols) {
-      auto iter = header_index.find(col.name);
-      if (iter == header_index.end()) {
-        throw std::runtime_error("CSV missing column: " + col.name);
-      }
-
-      size_t col_idx = iter->second;
-      if (col_idx >= cell_num) {
-        throw std::runtime_error("CSV row missing field for column: " + col.name);
-      }
-
-      const std::string &value_str = cells[col_idx];
+    for (auto &col : tab.cols) {
+      while (*file_fast != ',' && *file_fast != '\n') ++file_fast;
       switch (col.type) {
         case ColType::TYPE_INT: {
-          int value = std::atoi(value_str.c_str());
+          int value = fast_atoi(file_slow, file_fast);
           std::memcpy(record + offset, &value, col.len);
-          break;
-        }
+        } break;
         case ColType::TYPE_FLOAT: {
-          float value = std::atof(value_str.c_str());
+          float value = std::atof(file_slow);
           std::memcpy(record + offset, &value, col.len);
-          break;
-        }
+        } break;
         case ColType::TYPE_STRING: {
-          std::memcpy(record + offset, value_str.c_str(), value_str.size());
-          break;
-        }
+          std::memset(record + offset, 0, col.len);
+          std::memcpy(record + offset, file_slow, file_fast - file_slow);
+        } break;
       }
       offset += col.len;
+      file_slow = ++file_fast;
     }
 
     // 插入记录
-    Rid rid_ = fh_->insert_record(record, nullptr);
+    Rid rid_ = fhdl_ptr->insert_record(record, nullptr);
 
     // 插入索引
-    for (const auto &index : tab_.indexes) {
+    // 插入索引
+    for (const auto &index : tab.indexes) {
       auto idx_name = IxManager::get_index_name(tab_name, index.cols);
       auto ih = ihs_.at(idx_name).get();
 
@@ -610,7 +694,8 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
     }
   }
 
+  // 清理资源
   delete[] record;
-
-  file.close();
+  munmap(file_content, sb.st_size);
+  close(fd);
 }

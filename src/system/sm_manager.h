@@ -116,4 +116,17 @@ class SmManager {
 
   // yfs 7.2
   void load_csv_data(const std::string &csv_file_path, const std::string &tab_name);
+
+  // 快速读int
+  inline int fast_atoi(const char *p, const char *end) {
+    int val = 0;
+    bool neg = (*p == '-');
+    if (neg) ++p;
+
+    while (p < end && *p >= '0' && *p <= '9') {
+      val = val * 10 + (*p - '0');
+      ++p;
+    }
+    return neg ? -val : val;
+  }
 };
