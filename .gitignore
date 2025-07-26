@@ -11,3 +11,4 @@ perf.data
 perf.svg
 test_perf.sh
 src/test/performance_test/table_data/*
+csv_query.py
