@@ -78,6 +78,7 @@ struct TabMeta {
   TabMeta(const TabMeta &other) {
     name = other.name;
     for (auto col : other.cols) cols.push_back(col);
+    for (auto index : other.indexes) indexes.emplace_back(index);  // 避免后续拷贝构造函数出问题
     // record_count = other.record_count;  // yfs 6.11 这行别忘了加
   }
 

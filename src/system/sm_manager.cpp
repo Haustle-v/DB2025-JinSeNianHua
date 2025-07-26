@@ -517,7 +517,7 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
     throw FileNotFoundError(csv_file_path);
   }
 
-  auto tab_ = db_.get_table(tab_name);  // 假设是对象（不是指针）
+  TabMeta &tab_ = db_.get_table(tab_name);  // 假设是对象（不是指针）
   auto fh_ = fhs_.at(tab_name).get();
 
   size_t record_size = fh_->file_hdr_.record_size;
@@ -558,7 +558,7 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
 
     int cell_num = cells.size();
     std::memset(record, 0, record_size);
-    auto offset = 0;
+    int offset = 0;
 
     for (const auto &col : tab_.cols) {
       auto iter = header_index.find(col.name);
@@ -592,7 +592,7 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
     }
 
     // 插入记录
-    auto rid_ = fh_->insert_record(record, nullptr);
+    Rid rid_ = fh_->insert_record(record, nullptr);
 
     // 插入索引
     for (const auto &index : tab_.indexes) {
