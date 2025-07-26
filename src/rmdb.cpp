@@ -149,7 +149,7 @@ void *client_handler(void *sock_fd) {
 
       futures.emplace_back(std::async(std::launch::async, [csv_file, tab_name] {
         sm_manager->load_csv_data(csv_file, tab_name);
-        buffer_pool_manager->flush_all_pages(sm_manager->fhs_.at(tab_name)->GetFd());
+        // buffer_pool_manager->flush_all_pages(sm_manager->fhs_.at(tab_name)->GetFd());
       }));
       //   sm_manager->load_csv_data(csv_file, tab_name);
       if (write(fd, data_send, offset + 1) == -1) {
