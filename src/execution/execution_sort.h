@@ -7,6 +7,7 @@
 #include <vector>
 #include <algorithm>
 #include <functional> // For std::function
+#include <limits.h>
 
 class SortExecutor : public AbstractExecutor {
 private:
@@ -61,7 +62,7 @@ public:
         };
 
         // 优化：如果存在 limit，使用 Top-K 堆排序算法
-        if (limit_ > 0) {
+        if (limit_ != INT_MAX) {
             std::vector<std::unique_ptr<RmRecord>> heap;
             heap.reserve(limit_);
             size_t k = static_cast<size_t>(limit_);
