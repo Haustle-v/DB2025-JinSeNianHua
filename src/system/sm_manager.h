@@ -50,6 +50,8 @@ class SmManager {
   void record_update_helper(const std::string &tab_name, const Rid &rid, const RmRecord &new_rec,
                             const lsn_t lsn = INVALID_LSN);
 
+  void insert_record_for_loader(RmFileHandle *fhdl_ptr, Page *page, int slot_no, char *buf);
+
  public:
   SmManager(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager,
             BufferPoolManager *index_buffer_pool_manager, RmManager *rm_manager, IxManager *ix_manager)
