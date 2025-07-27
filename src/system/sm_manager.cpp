@@ -715,7 +715,8 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
         offset_ += index.cols[i].len;
       }
 
-      ih->insert_entry(key, {page_no, slot_no}, nullptr);
+      //   ih->insert_entry(key, {page_no, slot_no}, nullptr);
+      ih->insert_entry_for_loader(key, {page_no, slot_no});
     }
 
     // 刷盘

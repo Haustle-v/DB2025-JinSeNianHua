@@ -266,6 +266,8 @@ IxIndexHandle::IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffe
   // disk_manager管理的fd对应的文件中，设置从file_hdr_->num_pages开始分配page_no
   int now_page_no = disk_manager_->get_fd2pageno(fd);
   disk_manager_->set_fd2pageno(fd, now_page_no + 1);
+
+  last_node_ = fetch_node(IX_INIT_ROOT_PAGE);
 }
 
 /**
@@ -457,6 +459,19 @@ void IxIndexHandle::insert_into_parent(IxNodeHandle *old_node, const char *key, 
       index_buffer_pool_manager_->unpin_page(new_split_right_node->get_page_id(), true);
     }
     index_buffer_pool_manager_->unpin_page(parent_node->get_page_id(), true);
+  }
+}
+
+//   load专用
+void IxIndexHandle::insert_entry_for_loader(const char *key, const Rid &value) {
+  last_node_->insert_pair(last_node_->get_size(), key, value);
+  //   先插入 在看情况分裂
+  if (last_node_->get_size() > file_hdr_->btree_order_) {
+    IxNodeHandle *new_right_split_node = split(last_node_);
+    insert_into_parent(last_node_, new_right_split_node->get_key(0), new_right_split_node, nullptr);
+    file_hdr_->last_leaf_ = new_right_split_node->get_page_no();
+    index_buffer_pool_manager_->unpin_page(last_node_->get_page_id(), true);
+    last_node_ = new_right_split_node;
   }
 }
 
