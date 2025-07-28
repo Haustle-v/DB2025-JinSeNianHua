@@ -162,11 +162,11 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
     }
 
     // 事务写入记录
-    std::string tab_name = disk_manager_->get_file_name(fd_);
-    auto insert_wrec = std::make_unique<WriteRecord>(
-        WType::INSERT_TUPLE, tab_name, ret,
-        // auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, ret,
-        TupleMeta{context->txn_->get_read_ts(), true});
+    // std::string tab_name = disk_manager_->get_file_name(fd_);
+    // auto insert_wrec = std::make_unique<WriteRecord>(
+    //     WType::INSERT_TUPLE, tab_name, ret,
+    auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, ret,
+                                                     TupleMeta{context->txn_->get_read_ts(), true});
     context->txn_->append_write_record(std::move(insert_wrec));
 
     // // 日志记录
@@ -278,11 +278,11 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
     }
 
     // 事务写入记录
-    std::string tab_name = disk_manager_->get_file_name(fd_);
-    auto delete_wrec = std::make_unique<WriteRecord>(
-        WType::DELETE_TUPLE, tab_name, rid, *old_rec,
-        // auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *old_rec,
-        TupleMeta{context->txn_->get_read_ts(), false});
+    // std::string tab_name = disk_manager_->get_file_name(fd_);
+    // auto delete_wrec = std::make_unique<WriteRecord>(
+    //     WType::DELETE_TUPLE, tab_name, rid, *old_rec,
+    auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *old_rec,
+                                                     TupleMeta{context->txn_->get_read_ts(), false});
     context->txn_->append_write_record(std::move(delete_wrec));
 
     //   // 日志记录
@@ -368,11 +368,11 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
     }
 
     // 事务写入集记录
-    std::string tab_name = disk_manager_->get_file_name(fd_);
-    auto update_wrec = std::make_unique<WriteRecord>(
-        WType::UPDATE_TUPLE, tab_name, rid, *old_rec,
-        // auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *old_rec,
-        TupleMeta{context->txn_->get_read_ts(), false});
+    // std::string tab_name = disk_manager_->get_file_name(fd_);
+    // auto update_wrec = std::make_unique<WriteRecord>(
+    //     WType::UPDATE_TUPLE, tab_name, rid, *old_rec,
+    auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *old_rec,
+                                                     TupleMeta{context->txn_->get_read_ts(), false});
     context->txn_->append_write_record(std::move(update_wrec));
 
     // // 日志记录

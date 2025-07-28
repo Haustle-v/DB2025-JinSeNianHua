@@ -73,7 +73,7 @@ class RmFileHandle {
 
   std::mutex fhdr_latch_;  // 用于保护file_hdr sqb  7.7
 
-  //   std::string tab_name_;  // 事务记录时的表名
+  std::string tab_name_;  // 事务记录时的表名
 
  public:
   RmFileHdr file_hdr_;  // 文件头，维护当前表文件的元数据
@@ -86,7 +86,7 @@ class RmFileHandle {
     // disk_manager管理的fd对应的文件中，设置从file_hdr_.num_pages开始分配page_no
     disk_manager_->set_fd2pageno(fd, file_hdr_.num_pages);
 
-    // tab_name_ = disk_manager_->get_file_name(fd_);
+    tab_name_ = disk_manager_->get_file_name(fd_);
   }
 
   RmFileHdr get_file_hdr() { return file_hdr_; }
