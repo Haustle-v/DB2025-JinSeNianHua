@@ -616,6 +616,18 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
 //   file.close();
 // }
 
+void SmManager::insert_record_for_loader(RmFileHandle *fhdl_ptr, Page *page, int slot_no, char *buf) {
+  char *bitmap = page->get_data() + sizeof(RmPageHdr) + page->OFFSET_PAGE_HDR;
+  char *slots = bitmap + fhdl_ptr->file_hdr_.bitmap_size;
+  int record_size = fhdl_ptr->file_hdr_.record_size;
+
+  TupleMeta &base_meta = *(TupleMeta *)(slots + slot_no * (record_size + sizeof(TupleMeta)));
+  base_meta.is_deleted_ = false;
+  char *rec_slot = slots + slot_no * (record_size + sizeof(TupleMeta)) + sizeof(TupleMeta);
+  memcpy(rec_slot, buf, record_size);
+  Bitmap::set(bitmap, slot_no);
+}
+
 // 重构load data
 void SmManager::load_csv_data(const std::string &csv_file_path, const std::string &tab_name) {
   // 利用mmap读取文件
@@ -644,6 +656,21 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
   char *record = new char[record_size];
   char *file_slow = file_content;
   char *file_end = file_content + sb.st_size;
+
+  //   针对问题7而作，index的last node只在这里初始化一次
+  for (const auto &index : tab.indexes) {
+    auto ix_hdl_ptr = ihs_.at(IxManager::get_index_name(tab_name, index.cols)).get();
+    ix_hdl_ptr->init_last_node();
+  }
+  // 跳过缓冲池，操作完直接刷盘
+  int bitmap_size = fhdl_ptr->file_hdr_.bitmap_size;
+  Page *page = new Page();
+  RmPageHdr *page_hdr = reinterpret_cast<RmPageHdr *>(page->get_data() + page->OFFSET_PAGE_HDR);
+  char *bitmap = page->get_data() + sizeof(RmPageHdr) + page->OFFSET_PAGE_HDR;
+  Bitmap::init(bitmap, bitmap_size);
+  page_hdr->num_records = 0;
+  page_hdr->next_free_page_no = -1;
+  int page_no = 1;
 
   // 跳过表头
   while (*file_slow++ != '\n') {
@@ -675,9 +702,12 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
     }
 
     // 插入记录
-    Rid rid_ = fhdl_ptr->insert_record(record, nullptr);
+    // Rid rid_ = fhdl_ptr->insert_record(record, nullptr);
+    int slot_no = page_hdr->num_records;
+    insert_record_for_loader(fhdl_ptr, page, slot_no, record);
+    ++page_hdr->num_records;
+    ++fhdl_ptr->file_hdr_.record_num;
 
-    // 插入索引
     // 插入索引
     for (const auto &index : tab.indexes) {
       auto idx_name = IxManager::get_index_name(tab_name, index.cols);
@@ -690,12 +720,36 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
         offset_ += index.cols[i].len;
       }
 
-      ih->insert_entry(key, rid_, nullptr);
+      //   ih->insert_entry(key, {page_no, slot_no}, nullptr);
+      ih->insert_entry_for_loader(key, {page_no, slot_no});
+    }
+
+    // 刷盘
+    if (page_hdr->num_records == fhdl_ptr->file_hdr_.num_records_per_page) {
+      disk_manager_->write_page(fhdl_ptr->GetFd(), page_no, page->get_data(), PAGE_SIZE);
+      //   重新初始化
+      ++page_no;
+      memset(page->get_data(), page->OFFSET_PAGE_START, PAGE_SIZE);
+      page_hdr->next_free_page_no = -1;
+      page_hdr->num_records = 0;
+      Bitmap::init(bitmap, bitmap_size);
     }
   }
 
+  //   处理尾部数据和文件头
+  if (page_hdr->num_records == fhdl_ptr->file_hdr_.num_records_per_page) {
+    fhdl_ptr->file_hdr_.first_free_page_no = -1;
+    fhdl_ptr->file_hdr_.num_pages = page_no;
+  } else {
+    disk_manager_->write_page(fhdl_ptr->GetFd(), page_no, page->get_data(), PAGE_SIZE);
+    fhdl_ptr->file_hdr_.first_free_page_no = page_no;
+    fhdl_ptr->file_hdr_.num_pages = page_no + 1;
+  }
+  disk_manager_->set_fd2pageno(fhdl_ptr->GetFd(), fhdl_ptr->file_hdr_.num_pages);
+
   // 清理资源
   delete[] record;
+  delete page;
   munmap(file_content, sb.st_size);
   close(fd);
 }

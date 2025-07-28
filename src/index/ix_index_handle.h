@@ -177,6 +177,8 @@ class IxIndexHandle {
   std::mutex root_latch_;
   // std::shared_mutex root_latch_;  // 读写锁提高并发度
 
+  IxNodeHandle *last_node_{nullptr};  // load专用，跟踪尾部的叶子节点
+
  public:
   IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd);
 
@@ -188,6 +190,9 @@ class IxIndexHandle {
 
   // for insert
   page_id_t insert_entry(const char *key, const Rid &value, Transaction *transaction);
+
+  //   load专用
+  void insert_entry_for_loader(const char *key, const Rid &value);
 
   IxNodeHandle *split(IxNodeHandle *node);
 
@@ -218,6 +223,10 @@ class IxIndexHandle {
 
   // sqb 5.31
   int get_fd() { return fd_; }
+
+  void init_last_node() {
+    if (last_node_ == nullptr) last_node_ = fetch_node(IX_INIT_ROOT_PAGE);
+  }
 
  private:
   // 辅助函数
