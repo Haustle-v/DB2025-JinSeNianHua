@@ -78,6 +78,9 @@ class InsertExecutor : public AbstractExecutor {
     //   }
     // }
 
+    // 一次性预读最大长度
+    int max_index_len = 0;
+
     // sqb 添加索引唯一性检查 注意先检查所有索引再插入数据 不能边检查边插入
     bool reuse_key = false;
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
@@ -106,6 +109,7 @@ class InsertExecutor : public AbstractExecutor {
           }
         }
       }
+      max_index_len = index_meta.col_tot_len > max_index_len ? index_meta.col_tot_len : max_index_len;
     }
 
     // 复用现有键值 直接返回
@@ -120,10 +124,11 @@ class InsertExecutor : public AbstractExecutor {
     rid_ = fh_->insert_record(rec.data, context_, &tab_);
 
     // Insert into index
+    char *key = new char[max_index_len];
     for (size_t i = 0; i < tab_.indexes.size(); ++i) {
       auto &index = tab_.indexes[i];
       auto ih = sm_manager_->ihs_.at(sm_manager_->get_ix_manager()->get_index_name(tab_name_, index.cols)).get();
-      char *key = new char[index.col_tot_len];
+      //   char *key = new char[index.col_tot_len];
       int offset = 0;
       for (size_t i = 0; i < index.col_num; ++i) {
         memcpy(key + offset, rec.data + index.cols[i].offset, index.cols[i].len);
@@ -131,6 +136,7 @@ class InsertExecutor : public AbstractExecutor {
       }
       ih->insert_entry(key, rid_, context_->txn_);
     }
+    delete[] key;
     // yfs 6.11 增加记录数量
     // sm_manager_->db_.get_table(tab_name_).record_count++;
     return nullptr;
