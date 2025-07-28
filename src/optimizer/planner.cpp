@@ -354,6 +354,47 @@ void Planner::projection_pushdown(std::shared_ptr<Plan> &plan, std::vector<TabCo
     projection_pushdown(proj_plan->subplan_, cols);
     // 相当于把这层涉及到的条件push出来，因为回到上一层就不需要这些条件了
     cols.resize(original_size);
+  } else if (auto sort_plan = std::dynamic_pointer_cast<SortPlan>(plan)) {
+    size_t original_size = cols.size();
+    cols.insert(cols.end(), (sort_plan->sel_cols_).begin(), (sort_plan->sel_cols_).end());
+    projection_pushdown(sort_plan->subplan_, cols);
+    // 相当于把这层涉及到的条件push出来，因为回到上一层就不需要这些条件了
+    cols.resize(original_size);
+  } else if (auto having_plan = std::dynamic_pointer_cast<HavingPlan>(plan)) {
+    size_t original_size = cols.size();
+    for (const auto &cond : having_plan->having_conds_) {
+      cols.push_back(cond.lhs_col);
+      if (!cond.is_rhs_val) {
+        cols.push_back(cond.rhs_col);
+      }
+    }
+    projection_pushdown(having_plan->subplan_, cols);
+    // 相当于把这层涉及到的条件push出来，因为回到上一层就不需要这些条件了
+    cols.resize(original_size);
+  } else if (auto agg_plan = std::dynamic_pointer_cast<AggPlan>(plan)) {
+    size_t original_size = cols.size();
+    cols.insert(cols.end(), (agg_plan->sel_cols_).begin(), (agg_plan->sel_cols_).end());
+    cols.insert(cols.end(), (agg_plan->group_by_cols).begin(), (agg_plan->group_by_cols).end());
+    projection_pushdown(agg_plan->subplan_, cols);
+    // 相当于把这层涉及到的条件push出来，因为回到上一层就不需要这些条件了
+    cols.resize(original_size);
+  } else if (auto scan_plan = std::dynamic_pointer_cast<ScanPlan>(plan)) {
+    // 走到这里不是join下的scan，而是只有一个scan(proj-sort-having-agg-scan)
+    // 投影保留的列：cols中和当前Scan表相关的列
+    std::vector<TabCol> proj_cols;
+    std::unordered_set<std::string> seen_col_names;  // 要保证不重复
+    for (const auto &col : cols) {
+      if (col.tab_name == scan_plan->tab_name_) {
+        if (seen_col_names.insert(col.col_name).second) {  // 如果该列没有被推入proj（防止重复）
+          proj_cols.push_back(col);
+        }
+      }
+    }
+    // if (proj_cols.size()<sm_manager_->db_.get_table(scan_plan->tab_name_).cols.size()){
+    std::shared_ptr<Plan> proj_scan_plan =
+        std::make_shared<ProjectionPlan>(T_Projection, std::move(scan_plan), std::move(proj_cols));
+    plan = std::move(proj_scan_plan);
+    // }
   } else if (auto join_plan = std::dynamic_pointer_cast<JoinPlan>(plan)) {
     size_t original_size = cols.size();
     for (const auto &cond : join_plan->conds_) {
