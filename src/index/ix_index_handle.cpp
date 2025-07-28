@@ -266,8 +266,6 @@ IxIndexHandle::IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffe
   // disk_manager管理的fd对应的文件中，设置从file_hdr_->num_pages开始分配page_no
   int now_page_no = disk_manager_->get_fd2pageno(fd);
   disk_manager_->set_fd2pageno(fd, now_page_no + 1);
-
-  last_node_ = fetch_node(IX_INIT_ROOT_PAGE);
 }
 
 /**
