@@ -657,6 +657,11 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
   char *file_slow = file_content;
   char *file_end = file_content + sb.st_size;
 
+  //   针对问题7而作，index的last node只在这里初始化一次
+  for (const auto &index : tab.indexes) {
+    auto ix_hdl_ptr = ihs_.at(IxManager::get_index_name(tab_name, index.cols)).get();
+    ix_hdl_ptr->init_last_node();
+  }
   // 跳过缓冲池，操作完直接刷盘
   int bitmap_size = fhdl_ptr->file_hdr_.bitmap_size;
   Page *page = new Page();
