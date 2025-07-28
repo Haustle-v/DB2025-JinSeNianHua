@@ -32,6 +32,33 @@ struct TabCol {
   }
 };
 
+// 为 TabCol 提供相等性比较运算符
+inline bool operator==(const TabCol& lhs, const TabCol& rhs) {
+    return lhs.tab_name == rhs.tab_name &&
+           lhs.col_name == rhs.col_name &&
+           lhs.alias == rhs.alias &&
+           lhs.aggFuncType == rhs.aggFuncType;
+}
+
+// 为 TabCol 提供哈希函数
+namespace std {
+    template<>
+    struct hash<TabCol> {
+        size_t operator()(const TabCol& col) const noexcept {
+            const size_t h1 = std::hash<std::string>{}(col.tab_name);
+            const size_t h2 = std::hash<std::string>{}(col.col_name);
+            const size_t h3 = std::hash<std::string>{}(col.alias);
+            const size_t h4 = std::hash<int>{}(static_cast<int>(col.aggFuncType));
+            size_t seed = 0;
+            seed ^= h1 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= h2 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= h3 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= h4 + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            return seed;
+        }
+    };
+}
+
 struct Value {
   ColType type;  // type of value
   union {

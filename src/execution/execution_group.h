@@ -64,6 +64,9 @@ class AggPlanExecutor : public AbstractExecutor {
         std::vector<GroupKey> insert_order_;
         size_t output_idx_;
 
+        // 用于缓存 get_col_offset 结果的哈希表
+        std::unordered_map<TabCol, ColMeta> col_meta_cache_;
+
     public:
         AggPlanExecutor(std::unique_ptr<AbstractExecutor> prev, std::vector<TabCol> group_by_cols, std::vector<TabCol> sel_cols) {
             prev_ = std::move(prev);
@@ -126,19 +129,31 @@ class AggPlanExecutor : public AbstractExecutor {
         }
 
         ColMeta get_col_offset(const TabCol &target) override {
+            auto it = col_meta_cache_.find(target);
+            if (it != col_meta_cache_.end()) {
+                // 缓存命中，直接返回结果
+                return it->second;
+            }
+
+            // 缓存未命中，执行原始的线性查找逻辑
             int curr_index = 0;
+            // 查找 group by 列
             for (const auto& group_col : group_by_cols_) {
-                if (group_col.col_name == target.col_name && group_col.tab_name == target.tab_name && group_col.aggFuncType == target.aggFuncType && group_col.alias == target.alias) {
+                if (group_col == target) {
+                    col_meta_cache_[target] = cols_[curr_index];
                     return cols_[curr_index];
                 }
                 curr_index++;
             }
+            // 查找 select/aggregate 列
             for (const auto& sel_col : sel_cols_) {
-                if (sel_col.col_name == target.col_name && sel_col.tab_name == target.tab_name && sel_col.aggFuncType == target.aggFuncType && sel_col.alias == target.alias) {
+                if (sel_col == target) {
+                    col_meta_cache_[target] = cols_[curr_index];
                     return cols_[curr_index];
                 }
                 curr_index++;
             }
+
             throw ColumnNotFoundError(target.col_name);
         }
 

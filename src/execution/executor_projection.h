@@ -21,6 +21,8 @@ class ProjectionExecutor : public AbstractExecutor {
   std::vector<ColMeta> cols_;               // 需要投影的字段
   size_t len_;                              // 字段总长度
   std::vector<TabCol> sel_cols_;
+  // 用于缓存 get_col_offset 结果的哈希表
+  std::unordered_map<TabCol, ColMeta> col_meta_cache_;
 
  public:
   ProjectionExecutor(std::unique_ptr<AbstractExecutor> prev,
@@ -70,9 +72,14 @@ class ProjectionExecutor : public AbstractExecutor {
   bool is_end() const override { return prev_->is_end(); }
 
   ColMeta get_col_offset(const TabCol &target) override {
+    auto it = col_meta_cache_.find(target);
+    if (it != col_meta_cache_.end()) {
+      return it->second;
+    }
     for (auto &col_meta : cols_) {
       if (col_meta.tab_name == target.tab_name &&
           col_meta.name == target.col_name) {
+        col_meta_cache_[target] = col_meta;
         return col_meta;
       }
     }
