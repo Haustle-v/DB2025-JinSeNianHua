@@ -5,7 +5,8 @@ cd ./build
 SERVER_PATH="./bin/rmdb"
 CLIENT_PATH="../rmdb_client/build/rmdb_client"
 TEST_DB="test_load"
-SQL_FILE="../load_data.sql"
+# SQL_FILE="../load_data.sql"
+SQL_FILES=("../load_data.sql" "../check_consistency.sql")
 
 # 清理旧的测试数据库
 echo "🔄 清理旧测试环境..."
@@ -27,9 +28,26 @@ fi
 
 # 执行测试并计时
 echo "⏱️ 开始测试..."
-echo "----------------------------------------"
-time "$CLIENT_PATH" < "$SQL_FILE"
-echo "----------------------------------------"
+# echo "----------------------------------------"
+# time "$CLIENT_PATH" < "$SQL_FILE"
+# echo "----------------------------------------"
+
+# 依次执行每个SQL文件
+for SQL_FILE in "${SQL_FILES[@]}"; do
+    if [ ! -f "$SQL_FILE" ]; then
+        echo "❌ SQL文件不存在: $SQL_FILE"
+        kill $SERVER_PID
+        exit 1
+    fi
+    
+    echo "⏱️ 开始执行: $SQL_FILE"
+    echo "----------------------------------------"
+    time "$CLIENT_PATH" < "$SQL_FILE"
+    echo "----------------------------------------"
+    echo "✅ 完成执行: $SQL_FILE"
+    echo ""
+done
+
 
 # 清理并关闭服务端
 echo "🧹 测试完成，清理环境..."
