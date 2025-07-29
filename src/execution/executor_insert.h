@@ -121,9 +121,19 @@ class InsertExecutor : public AbstractExecutor {
     // // 基于锁的插入
     // rid_ = fh_->insert_record(rec.data, context_);
     // mvcc 对应的插入 考虑并发问题 插入失败重试
-    // do {
-    rid_ = fh_->insert_record(rec.data, context_, &tab_);
-    // } while (rid_.slot_no == fh_->get_file_hdr().num_records_per_page);
+    int retry_time = 0;
+    int bound = fh_->get_file_hdr().num_records_per_page;
+    int wait_time = 10;
+    do {
+      rid_ = fh_->insert_record(rec.data, context_, &tab_);
+      if (rid_.slot_no == bound) {
+        if (++retry_time >= 3) {
+          throw TransactionAbortException(context_->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
+        wait_time += 10;
+      }
+    } while (rid_.slot_no == bound);
 
     // Insert into index
     char *key = new char[max_index_len];
