@@ -131,6 +131,10 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
     }
   }
   Rid ret{page_hdl.page->get_page_id().page_no, free_slot_no};
+  //   并发情况没有空闲位置插入就需要重试
+  if (free_slot_no == file_hdr_.num_records_per_page) {
+    return ret;
+  }
 
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(ret.slot_no));
 
@@ -141,6 +145,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
     // context->lock_mgr_->lock_exclusive_on_record(context->txn_, ret, fd_);
 
     RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);
+    timestamp_t old_ts = base_meta.ts_;
 
     // 版本链记录
     {
@@ -165,8 +170,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
     // std::string tab_name = disk_manager_->get_file_name(fd_);
     // auto insert_wrec = std::make_unique<WriteRecord>(
     //     WType::INSERT_TUPLE, tab_name, ret,
-    auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, ret,
-                                                     TupleMeta{context->txn_->get_read_ts(), true});
+    auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, ret, TupleMeta{old_ts, true});
     context->txn_->append_write_record(std::move(insert_wrec));
 
     // // 日志记录
@@ -211,19 +215,22 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
   page_hdl.page->WLatch();
   memcpy(page_hdl.get_slot_record(rid.slot_no), buf, file_hdr_.record_size);
 
+  TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
+  base_meta.is_deleted_ = false;
+
   //   新的插入就得更新
-  if (!Bitmap::is_set(page_hdl.bitmap, rid.slot_no)) {
-    page_hdl.page_hdr->num_records++;
-    Bitmap::set(page_hdl.bitmap, rid.slot_no);
-    {
-      std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
-      if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
-        file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
-      }
-      // 跟踪表记录数量
-      ++file_hdr_.record_num;
+  // MVCC下bitmap必定有效
+  //   if (!Bitmap::is_set(page_hdl.bitmap, rid.slot_no)) {
+  page_hdl.page_hdr->num_records++;
+  {
+    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+    if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
+      file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
     }
+    // 跟踪表记录数量
+    ++file_hdr_.record_num;
   }
+  //   }
 
   page_hdl.page->WUnlatch();
   //   当前数据为脏
@@ -245,6 +252,8 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
   //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->WLatch();
+  assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
+
   // sqb添加事务控制语句 6.4
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
@@ -258,6 +267,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
       throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
     }
 
+    timestamp_t old_ts = base_meta.ts_;
     {
       //   补充版本链 sqb 6.19
 
@@ -281,8 +291,8 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
     // std::string tab_name = disk_manager_->get_file_name(fd_);
     // auto delete_wrec = std::make_unique<WriteRecord>(
     //     WType::DELETE_TUPLE, tab_name, rid, *old_rec,
-    auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *old_rec,
-                                                     TupleMeta{context->txn_->get_read_ts(), false});
+    auto delete_wrec =
+        std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *old_rec, TupleMeta{old_ts, false});
     context->txn_->append_write_record(std::move(delete_wrec));
 
     //   // 日志记录
@@ -349,6 +359,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
       throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
     }
 
+    timestamp_t old_ts = base_meta.ts_;
     {
       //   补充版本链 sqb 6.19
       RmRecord new_rec(file_hdr_.record_size, buf);
@@ -367,12 +378,13 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
       }
     }
 
+    bool is_insert = base_meta.is_deleted_ == true;
     // 事务写入集记录
     // std::string tab_name = disk_manager_->get_file_name(fd_);
     // auto update_wrec = std::make_unique<WriteRecord>(
     //     WType::UPDATE_TUPLE, tab_name, rid, *old_rec,
-    auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *old_rec,
-                                                     TupleMeta{context->txn_->get_read_ts(), false});
+    auto update_wrec =
+        std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *old_rec, TupleMeta{old_ts, is_insert});
     context->txn_->append_write_record(std::move(update_wrec));
 
     // // 日志记录
@@ -465,12 +477,11 @@ RmPageHandle RmFileHandle::create_page_handle() {
   //     没有空闲页：使用缓冲池来创建一个新page；可直接调用create_new_page_handle()
   //     1.2 有空闲页：直接获取第一个空闲页
   // 2. 生成page handle并返回给上层
-  {
-    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
-    if (file_hdr_.first_free_page_no == INVALID_PAGE_ID) {
-      // 没有空闲页
-      return create_new_page_handle();
-    }
+
+  std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+  if (file_hdr_.first_free_page_no == INVALID_PAGE_ID) {
+    // 没有空闲页
+    return create_new_page_handle();
   }
 
   //   有空闲页
