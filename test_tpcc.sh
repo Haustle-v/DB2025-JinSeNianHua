@@ -8,24 +8,24 @@ TEST_DB="test_tpcc"
 TXN_DIR="../tpcc_sql"
 CHECK_SQL="../check_consistency.sql"
 LOAD_SQL="../load_data.sql"
-THREADS=2  # 可调整线程数
+THREADS=4  # 可调整线程数
 
-# # 清理旧数据库
-# echo "🔄 清理旧测试环境..."
-# rm -rf "$TEST_DB"
+# 清理旧数据库
+echo "🔄 清理旧测试环境..."
+rm -rf "$TEST_DB"
 
-# # 启动服务端
-# echo "🚀 启动数据库服务端..."
-# $SERVER_PATH "$TEST_DB" &
-# SERVER_PID=$!
+# 启动服务端
+echo "🚀 启动数据库服务端..."
+$SERVER_PATH "$TEST_DB" &
+SERVER_PID=$!
 
-# # 等待服务端启动
-# echo "⏳ 等待服务端初始化..."
-# sleep 3
-# if ! ps -p $SERVER_PID > /dev/null; then
-#     echo "❌ 服务端启动失败！"
-#     exit 1
-# fi
+# 等待服务端启动
+echo "⏳ 等待服务端初始化..."
+sleep 3
+if ! ps -p $SERVER_PID > /dev/null; then
+    echo "❌ 服务端启动失败！"
+    exit 1
+fi
 
 echo "⏳ 等待数据加载..."
 "$CLIENT_PATH" < "$LOAD_SQL"
@@ -59,7 +59,7 @@ echo "🔍 执行一致性检查..."
 
 # 停止服务端
 echo "🧹 测试完成，关闭服务端..."
-# kill $SERVER_PID
-# wait $SERVER_PID 2>/dev/null
+kill $SERVER_PID
+wait $SERVER_PID 2>/dev/null
 
 echo "✅ 并发测试完成"
