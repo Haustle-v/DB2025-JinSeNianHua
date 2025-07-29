@@ -134,7 +134,8 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
   //   并发情况没有空闲位置插入就需要重试
   if (free_slot_no == file_hdr_.num_records_per_page) {
     page_hdl.page->WUnlatch();
-    return ret;
+    throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+    // return ret;
   }
 
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(ret.slot_no));

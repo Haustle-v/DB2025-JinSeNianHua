@@ -121,9 +121,9 @@ class InsertExecutor : public AbstractExecutor {
     // // 基于锁的插入
     // rid_ = fh_->insert_record(rec.data, context_);
     // mvcc 对应的插入 考虑并发问题 插入失败重试
-    do {
-      rid_ = fh_->insert_record(rec.data, context_, &tab_);
-    } while (rid_.slot_no == fh_->get_file_hdr().num_records_per_page);
+    // do {
+    rid_ = fh_->insert_record(rec.data, context_, &tab_);
+    // } while (rid_.slot_no == fh_->get_file_hdr().num_records_per_page);
 
     // Insert into index
     char *key = new char[max_index_len];
