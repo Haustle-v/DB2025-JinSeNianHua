@@ -133,6 +133,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
   Rid ret{page_hdl.page->get_page_id().page_no, free_slot_no};
   //   并发情况没有空闲位置插入就需要重试
   if (free_slot_no == file_hdr_.num_records_per_page) {
+    page_hdl.page->WUnlatch();
     return ret;
   }
 
