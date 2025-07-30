@@ -247,7 +247,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
 
   // sqb添加事务控制语句 6.4
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
-  RmRecord current_tuple(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
+  //   RmRecord current_tuple(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
     // 锁控制并发 6.9
@@ -265,8 +265,8 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
 
       //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
 
-      //   auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, nullptr, context, schema);
-      auto [undo_log, undo_link] = generateUndoLogAndLink(rid, &current_tuple, nullptr, context, schema);
+      auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, nullptr, context, schema);
+      //   auto [undo_log, undo_link] = generateUndoLogAndLink(rid, &current_tuple, nullptr, context, schema);
       // 元数据时间戳更新
       base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -285,8 +285,8 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
     // auto delete_wrec = std::make_unique<WriteRecord>(
     //     WType::DELETE_TUPLE, tab_name, rid, *old_rec,
     auto delete_wrec =
-        std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, current_tuple, TupleMeta{old_ts, false});
-    // std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *old_rec, TupleMeta{old_ts, false});
+        // std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, current_tuple, TupleMeta{old_ts, false});
+        std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *old_rec, TupleMeta{old_ts, false});
     context->txn_->append_write_record(std::move(delete_wrec));
 
     //   // 日志记录
@@ -342,7 +342,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
 
   // sqb添加事务控制语句 6.4
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
-  RmRecord current_tuple(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
+  //   RmRecord current_tuple(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
     // 锁控制并发 6.9
@@ -359,8 +359,8 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
       //   补充版本链 sqb 6.19
       RmRecord new_rec(file_hdr_.record_size, buf);
       //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
-      //   auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, &new_rec, context, schema);
-      auto [undo_log, undo_link] = generateUndoLogAndLink(rid, &current_tuple, &new_rec, context, schema);
+      auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, &new_rec, context, schema);
+      //   auto [undo_log, undo_link] = generateUndoLogAndLink(rid, &current_tuple, &new_rec, context, schema);
       // 元数据更新
       base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -380,8 +380,9 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
     // auto update_wrec = std::make_unique<WriteRecord>(
     //     WType::UPDATE_TUPLE, tab_name, rid, *old_rec,
     auto update_wrec =
-        std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, current_tuple, TupleMeta{old_ts, is_insert});
-    // std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *old_rec, TupleMeta{old_ts, is_insert});
+        // std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, current_tuple, TupleMeta{old_ts,
+        // is_insert});
+        std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *old_rec, TupleMeta{old_ts, is_insert});
     context->txn_->append_write_record(std::move(update_wrec));
 
     // // 日志记录
