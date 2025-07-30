@@ -410,7 +410,11 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
 
   // 跟踪表记录数量 由于索引永驻 逻辑删除后重用相当于插入
   if (base_meta.is_deleted_) {
+    ++page_hdl.page_hdr->num_records;
     std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+    if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
+      file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
+    }
     ++file_hdr_.record_num;
   }
   base_meta.is_deleted_ = false;
