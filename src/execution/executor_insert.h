@@ -123,7 +123,7 @@ class InsertExecutor : public AbstractExecutor {
     // mvcc 对应的插入 考虑并发问题 插入失败重试
     int retry_time = 0;
     int bound = fh_->get_file_hdr().num_records_per_page;
-    int wait_time = 20;
+    int wait_time = 100;
     do {
       rid_ = fh_->insert_record(rec.data, context_, &tab_);
       if (rid_.slot_no == bound) {
@@ -131,7 +131,7 @@ class InsertExecutor : public AbstractExecutor {
           throw TransactionAbortException(context_->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(wait_time));
-        wait_time += 30;
+        wait_time += 100;
       }
     } while (rid_.slot_no == bound);
 
