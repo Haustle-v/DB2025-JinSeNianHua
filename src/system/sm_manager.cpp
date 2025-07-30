@@ -737,7 +737,7 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
   }
 
   //   处理尾部数据和文件头
-  if (page_hdr->num_records == fhdl_ptr->file_hdr_.num_records_per_page) {
+  if (page_hdr->num_records == 0) {
     fhdl_ptr->file_hdr_.first_free_page_no = -1;
     fhdl_ptr->file_hdr_.num_pages = page_no;
   } else {

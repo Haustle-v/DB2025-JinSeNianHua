@@ -512,6 +512,7 @@ RmPageHandle RmFileHandle::create_page_handle() {
 
 // sqb 避免故障恢复时 访问不存在的页报错 暂时只考虑申请一次 6.11
 void RmFileHandle::allocate_pages(const Rid &rid) {
+  std::shared_lock<std::shared_mutex> lock(latch_);
   std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
   if (rid.page_no >= file_hdr_.num_pages) {
     page_id_t old_fisrt_free_page = file_hdr_.first_free_page_no;

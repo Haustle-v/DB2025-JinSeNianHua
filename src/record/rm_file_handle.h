@@ -136,6 +136,7 @@ class RmFileHandle {
 
   // sqb 获取表中记录的数量
   size_t get_record_num() {
+    std::shared_lock<std::shared_mutex> lock(latch_);
     std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
     return file_hdr_.record_num;
   }
