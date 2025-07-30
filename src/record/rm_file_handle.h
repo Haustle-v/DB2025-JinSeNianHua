@@ -67,7 +67,7 @@ class RmFileHandle {
   BufferPoolManager *buffer_pool_manager_;
   int fd_;  // 打开文件后产生的文件句柄
 
-  //   mutable std::shared_mutex latch_;  // sqb 加锁保证线程安全 6.17
+  mutable std::shared_mutex latch_;  // sqb 加锁保证线程安全 6.17
 
   std::mutex undo_latch_;  // 用于保护undo_log,undo_link的相关操作 sqb 7.7
 

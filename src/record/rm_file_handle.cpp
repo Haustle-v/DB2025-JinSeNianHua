@@ -108,7 +108,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
   // 4. 更新page_handle.page_hdr中的数据结构
   // 注意考虑插入一条记录后页面已满的情况，需要更新file_hdr_.first_free_page_no
 
-  //   std::unique_lock<std::shared_mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = create_page_handle();
   page_hdl.page->WLatch();
 
@@ -130,13 +130,8 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
       }
     }
   }
+  assert(free_slot_no != file_hdr_.num_records_per_page);
   Rid ret{page_hdl.page->get_page_id().page_no, free_slot_no};
-  //   并发情况没有空闲位置插入就需要重试
-  if (free_slot_no == file_hdr_.num_records_per_page) {
-    page_hdl.page->WUnlatch();
-    // throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
-    return ret;
-  }
 
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(ret.slot_no));
 
