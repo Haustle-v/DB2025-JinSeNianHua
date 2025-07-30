@@ -120,10 +120,10 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
     page_hdl.page->WUnlatch();
     buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
     page_hdl = create_new_page_handle();
+    page_hdl.page->WLatch();
+    free_slot_no = find_free_slot_no(page_hdl, context);
   }
-  page_hdl.page->WLatch();
 
-  free_slot_no = find_free_slot_no(page_hdl, context);
   assert(free_slot_no != file_hdr_.num_records_per_page);
   Rid ret{page_hdl.page->get_page_id().page_no, free_slot_no};
 
