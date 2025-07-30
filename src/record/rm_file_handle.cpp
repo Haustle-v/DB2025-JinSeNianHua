@@ -114,6 +114,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
 
   // 找空闲位置
   // int free_slot_no = Bitmap::next_bit(0, page_hdl.bitmap, file_hdr_.num_records_per_page, -1);
+  bool has_conflict = false;
   int free_slot_no = file_hdr_.num_records_per_page;
   for (int i = 0; i < file_hdr_.num_records_per_page; ++i) {
     // bm=0 代表没有 bm=1 is_delete=true 代表逻辑删除 写写冲突检查将允许事务自己插入到为1的地方 其它事务将仍无法处理
@@ -123,6 +124,9 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
     } else {
       TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(i));
       //   插入到逻辑删除的位置需要进行写写冲突检查 该函数不应出现写写冲突
+      if (base_meta.is_deleted_ == true && context != nullptr && IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
+        has_conflict = true;
+      }
       if (base_meta.is_deleted_ == true &&
           !(context != nullptr && IsWriteWriteConflict(base_meta.ts_, context->txn_))) {
         free_slot_no = i;
@@ -130,7 +134,8 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
       }
     }
   }
-  assert(free_slot_no != file_hdr_.num_records_per_page);
+  assert(!(free_slot_no == file_hdr_.num_records_per_page && has_conflict));
+
   Rid ret{page_hdl.page->get_page_id().page_no, free_slot_no};
 
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(ret.slot_no));
