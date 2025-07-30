@@ -113,29 +113,18 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
   page_hdl.page->WLatch();
 
   // 找空闲位置
-  // int free_slot_no = Bitmap::next_bit(0, page_hdl.bitmap, file_hdr_.num_records_per_page, -1);
-  bool has_conflict = false;
-  int free_slot_no = file_hdr_.num_records_per_page;
-  for (int i = 0; i < file_hdr_.num_records_per_page; ++i) {
-    // bm=0 代表没有 bm=1 is_delete=true 代表逻辑删除 写写冲突检查将允许事务自己插入到为1的地方 其它事务将仍无法处理
-    if (Bitmap::is_set(page_hdl.bitmap, i) == 0) {
-      free_slot_no = i;
-      break;
-    } else {
-      TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(i));
-      //   插入到逻辑删除的位置需要进行写写冲突检查 该函数不应出现写写冲突
-      if (base_meta.is_deleted_ == true && context != nullptr && IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
-        has_conflict = true;
-      }
-      if (base_meta.is_deleted_ == true &&
-          !(context != nullptr && IsWriteWriteConflict(base_meta.ts_, context->txn_))) {
-        free_slot_no = i;
-        break;
-      }
-    }
-  }
-  assert(!(free_slot_no == file_hdr_.num_records_per_page && has_conflict));
+  int free_slot_no = find_free_slot_no(page_hdl, context);
 
+  //   如果因为逻辑删除指向了一个无真实空闲槽的数据页，直接创建新页
+  if (free_slot_no == file_hdr_.num_records_per_page) {
+    page_hdl.page->WUnlatch();
+    buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
+    page_hdl = create_new_page_handle();
+  }
+  page_hdl.page->WLatch();
+
+  free_slot_no = find_free_slot_no(page_hdl, context);
+  assert(free_slot_no != file_hdr_.num_records_per_page);
   Rid ret{page_hdl.page->get_page_id().page_no, free_slot_no};
 
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(ret.slot_no));
@@ -517,7 +506,7 @@ RmPageHandle RmFileHandle::create_page_handle() {
 
 // sqb 避免故障恢复时 访问不存在的页报错 暂时只考虑申请一次 6.11
 void RmFileHandle::allocate_pages(const Rid &rid) {
-  std::shared_lock<std::shared_mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
   if (rid.page_no >= file_hdr_.num_pages) {
     page_id_t old_fisrt_free_page = file_hdr_.first_free_page_no;
@@ -526,4 +515,24 @@ void RmFileHandle::allocate_pages(const Rid &rid) {
     page_hdl.page_hdr->next_free_page_no = old_fisrt_free_page;  // 可能有问题，也可能压根没用
     buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
   }
+}
+
+int RmFileHandle::find_free_slot_no(RmPageHandle &page_hdl, Context *context) {
+  int free_slot_no = file_hdr_.num_records_per_page;
+  for (int i = 0; i < file_hdr_.num_records_per_page; ++i) {
+    // bm=0 代表没有 bm=1 is_delete=true 代表逻辑删除 写写冲突检查将允许事务自己插入到为1的地方 其它事务将仍无法处理
+    if (Bitmap::is_set(page_hdl.bitmap, i) == 0) {
+      free_slot_no = i;
+      break;
+    } else {
+      TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(i));
+      //   插入到逻辑删除的位置需要进行写写冲突检查 该函数不应出现写写冲突
+      if (base_meta.is_deleted_ == true &&
+          !(context != nullptr && IsWriteWriteConflict(base_meta.ts_, context->txn_))) {
+        free_slot_no = i;
+        break;
+      }
+    }
+  }
+  return free_slot_no;
 }

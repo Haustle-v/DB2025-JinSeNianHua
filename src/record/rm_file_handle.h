@@ -145,4 +145,6 @@ class RmFileHandle {
   RmPageHandle create_page_handle();
 
   //   void release_page_handle(RmPageHandle &page_handle);
+
+  int find_free_slot_no(RmPageHandle &page_hdl, Context *context);
 };
