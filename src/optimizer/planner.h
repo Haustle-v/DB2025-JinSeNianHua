@@ -71,4 +71,7 @@ class Planner {
         {ast::SV_TYPE_INT, TYPE_INT}, {ast::SV_TYPE_FLOAT, TYPE_FLOAT}, {ast::SV_TYPE_STRING, TYPE_STRING}};
     return m.at(sv_type);
   }
+
+  //   针对决赛sql而加
+  void simplify_conds(std::vector<Condition> &conds);
 };

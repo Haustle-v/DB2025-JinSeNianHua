@@ -154,9 +154,30 @@ std::shared_ptr<Plan> pop_scan(int *scantbl, std::string table, std::vector<std:
   return nullptr;
 }
 
+// 为决赛sql而加 若连接的列被筛选为固定值 那么将等值连接的列也改为具体值
+// 针对select c_discount, c_last, c_credit, w_tax from customer, warehouse where w_id=:w_id and c_w_id = w_id and c_d_id
+// = : d_id and c_id = : c_id;
+void Planner::simplify_conds(std::vector<Condition> &conds) {
+  for (auto &cond : conds) {
+    // 等值连接 右侧为列
+    if (cond.op == OP_EQ && !cond.is_rhs_val) {
+      for (auto iter = conds.begin(); iter != conds.end(); ++iter) {
+        // 等值连接 右侧为值
+        if (iter->is_rhs_val && cond.rhs_col.col_name == iter->lhs_col.col_name &&
+            cond.rhs_col.tab_name == iter->lhs_col.tab_name) {
+          cond.is_rhs_val = true;
+          cond.rhs_val = iter->rhs_val;
+        }
+      }
+    }
+  }
+}
+
 std::shared_ptr<Query> Planner::logical_optimization(std::shared_ptr<Query> query, Context *context) {
   // TODO 实现逻辑优化规则
-
+  if (query->tables.size() > 1) {
+    simplify_conds(query->conds);
+  }
   return query;
 }
 
