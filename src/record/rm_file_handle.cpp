@@ -100,7 +100,7 @@ auto RmFileHandle::get_reconstructed_tuple(const Rid &rid, Context *context, Tab
  * @param {Context*} context
  * @return {Rid} 插入的记录的记录号（位置）
  */
-Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *schema, TupleMeta &old_meta) {
+Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *schema, TupleMeta *old_meta) {
   // Todo:
   // 1. 获取当前未满的page handle
   // 2. 在page handle中找到空闲slot位置
@@ -138,8 +138,8 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
     RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);
 
     // 用于事务记录
-    old_meta.ts_ = base_meta.ts_;
-    old_meta.is_deleted_ = true;
+    old_meta->ts_ = base_meta.ts_;
+    old_meta->is_deleted_ = true;
 
     // 版本链记录
     {
@@ -230,7 +230,7 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
  * @param {Context*} context
  */
 void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old_rec, const TabMeta *schema,
-                                 TupleMeta &old_meta) {
+                                 TupleMeta *old_meta) {
   // Todo:
   // 1. 获取指定记录所在的page handle
   // 2. 更新page_handle.page_hdr中的数据结构
@@ -256,8 +256,8 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
     }
 
     // 事务写入记录
-    old_meta.ts_ = base_meta.ts_;
-    old_meta.is_deleted_ = false;
+    old_meta->ts_ = base_meta.ts_;
+    old_meta->is_deleted_ = false;
 
     {
       //   补充版本链 sqb 6.19
@@ -317,7 +317,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
  * @param {Context*} context
  */
 void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec, const TabMeta *schema,
-                                 TupleMeta &old_meta) {
+                                 TupleMeta *old_meta) {
   // Todo:
   // 1. 获取指定记录所在的page handle
   // 2. 更新记录
@@ -343,8 +343,8 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
     }
 
     // 事务写入记录
-    old_meta.ts_ = base_meta.ts_;
-    old_meta.is_deleted_ = base_meta.is_deleted_;
+    old_meta->ts_ = base_meta.ts_;
+    old_meta->is_deleted_ = base_meta.is_deleted_;
 
     {
       //   补充版本链 sqb 6.19

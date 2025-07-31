@@ -122,7 +122,7 @@ class UpdateExecutor : public AbstractExecutor {
 
       TupleMeta old_meta;
       //   mvcc下的更新
-      fh_->update_record(rid, rec_ptr->data, context_, &old_rec, &tab_, old_meta);
+      fh_->update_record(rid, rec_ptr->data, context_, &old_rec, &tab_, &old_meta);
       if (context_ != nullptr) {
         auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, old_rec, old_meta);
         context_->txn_->append_write_record(std::move(update_wrec));

@@ -98,16 +98,16 @@ class RmFileHandle {
   std::unique_ptr<RmRecord> get_record(const Rid &rid, Context *context) const;
 
   // sqb 再次修改增删改接口 让undo link同时更新
-  Rid insert_record(char *buf, Context *context, const TabMeta *schema = nullptr, TupleMeta &old_meta);
+  Rid insert_record(char *buf, Context *context, const TabMeta *schema = nullptr, TupleMeta *old_meta = nullptr);
 
   void insert_record(const Rid &rid, char *buf);
 
   // sqb 6.4更改 delete update 接口 便于封装事务与日志
   void delete_record(const Rid &rid, Context *context, RmRecord *old_rec = nullptr, const TabMeta *schema = nullptr,
-                     TupleMeta &old_meta);
+                     TupleMeta *old_meta = nullptr);
 
   void update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec = nullptr,
-                     const TabMeta *schema = nullptr, TupleMeta &old_meta);
+                     const TabMeta *schema = nullptr, TupleMeta *old_meta = nullptr);
 
   RmPageHandle create_new_page_handle();
 

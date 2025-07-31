@@ -65,7 +65,7 @@ class DeleteExecutor : public AbstractExecutor {
 
       TupleMeta old_meta;  // 元组现在的tuple_meta，用于事务记录
       //   mvcc 下的删除
-      fh_->delete_record(rid, context_, rec_ptr.get(), &tab_);
+      fh_->delete_record(rid, context_, rec_ptr.get(), &tab_, &old_meta);
       // 将事务记录移出临界区
       if (context_ != nullptr) {
         auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *rec_ptr, old_meta);

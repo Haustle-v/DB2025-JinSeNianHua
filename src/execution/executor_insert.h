@@ -119,7 +119,7 @@ class InsertExecutor : public AbstractExecutor {
 
     TupleMeta old_meta;  // 元组现在的tuple_meta，用于事务记录
     // mvcc 对应的插入
-    rid_ = fh_->insert_record(rec.data, context_, &tab_);
+    rid_ = fh_->insert_record(rec.data, context_, &tab_, &old_meta);
     // 没有故障恢复的情况下，事务插入直接移出临界区
     if (context_ != nullptr) {
       auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, rid_, old_meta);
