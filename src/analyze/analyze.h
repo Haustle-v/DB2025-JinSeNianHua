@@ -65,9 +65,7 @@ class Analyze {
 
  private:
   TabCol check_column(const std::vector<ColMeta> &all_cols, TabCol target);
-  TabCol check_column4semi_join(const std::vector<ColMeta> &all_cols, TabCol target);
   void get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols);
-  void get_all_cols_of_left_tab(const std::string &tab_name, std::vector<ColMeta> &all_cols);
   void get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds, std::vector<Condition> &conds);
   void get_clause2(const std::vector<std::shared_ptr<ast::JoinExpr>> &sv_conds,
                    std::vector<Condition> &conds);  // 给jointree的cond

@@ -71,40 +71,21 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
     get_all_cols(query->tables, all_cols);
 
     // 处理target list，再target list中添加上表名，例如 a.id
-    if (query->join_type_ == JoinType::SEMI_JOIN) {  // 检查列名的选择是否符合半连接的定义
-      std::vector<ColMeta> all_cols_of_left_tab;
-      get_all_cols_of_left_tab(x->jointree[0]->left, all_cols_of_left_tab);
-
-      if (query->cols.empty()) {  // select * 表示 select all
-        query->select_all = true;
-        // select all columns
-        for (auto &col : all_cols_of_left_tab) {
-          TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name};
-          query->cols.push_back(sel_col);
-        }
-      } else {
-        // infer table name from column name
-        for (auto &sel_col : query->cols) {
-          sel_col = check_column4semi_join(all_cols_of_left_tab, sel_col);  // 列元数据校验
-        }
+    if (query->cols.empty()) {
+      query->select_all = true;
+      // select all columns
+      for (auto &col : all_cols) {
+        TabCol sel_col = {
+            .tab_name = col.tab_name, .col_name = col.name, .alias = "", .aggFuncType = ast::AGG_INVALID};
+        query->cols.push_back(sel_col);
       }
     } else {
-      if (query->cols.empty()) {
-        query->select_all = true;
-        // select all columns
-        for (auto &col : all_cols) {
-          TabCol sel_col = {
-              .tab_name = col.tab_name, .col_name = col.name, .alias = "", .aggFuncType = ast::AGG_INVALID};
-          query->cols.push_back(sel_col);
+      // infer table name from column name
+      for (auto &sel_col : query->cols) {
+        if (sel_col.col_name == "*") {
+          continue;
         }
-      } else {
-        // infer table name from column name
-        for (auto &sel_col : query->cols) {
-          if (sel_col.col_name == "*") {
-            continue;
-          }
-          sel_col = check_column(all_cols, sel_col);  // 列元数据校验
-        }
+        sel_col = check_column(all_cols, sel_col);  // 列元数据校验
       }
     }
 
@@ -234,34 +215,6 @@ TabCol Analyze::check_column(const std::vector<ColMeta> &all_cols, TabCol target
   return target;
 }
 
-// 列没有指定表明，搜索所有表的所有列来匹配
-// 如果select的列为多个表所共有，就会报错AmbiguousColumnError
-// 但是semi join应该忽略这种情况，因为列名都是join左边的表
-// 为通过测试点4，如果发现cols是其他表的，则报错
-TabCol Analyze::check_column4semi_join(const std::vector<ColMeta> &all_cols,  // 左表的所有列
-                                       TabCol target) {  // select的某一列（这只是一列，对select的列的遍历在函数外）
-  if (target.tab_name.empty()) {                         // 选择的列没有表名
-    // 检查列是否都是左表的
-    std::string tab_name;
-    for (auto &col : all_cols) {
-      if (col.name == target.col_name) {
-        tab_name = col.tab_name;
-      }
-    }
-    if (tab_name.empty()) {  // 在左表的所有列中没有匹配到select的列
-      throw ChooseColumnOfOtherTableError(target.col_name);
-      // std::cout << "failure" << std::endl;
-    }
-    target.tab_name = tab_name;  // 把表名附带上去了
-  } else {
-    /** TODO: Make sure target column exists */
-    // sqb: down! 5.24
-    if (!sm_manager_->db_.get_table(target.tab_name).is_col(target.col_name)) {
-      throw ColumnNotFoundError(target.col_name);
-    }
-  }
-  return target;
-}
 
 void Analyze::get_all_cols(const std::vector<std::string> &tab_names, std::vector<ColMeta> &all_cols) {
   for (auto &sel_tab_name : tab_names) {
@@ -271,11 +224,6 @@ void Analyze::get_all_cols(const std::vector<std::string> &tab_names, std::vecto
   }
 }
 
-void Analyze::get_all_cols_of_left_tab(const std::string &tab_name, std::vector<ColMeta> &all_cols) {
-  // 这里db_不能写成get_db(), 注意要传指针
-  const auto &sel_tab_cols = sm_manager_->db_.get_table(tab_name).cols;
-  all_cols.insert(all_cols.end(), sel_tab_cols.begin(), sel_tab_cols.end());
-}
 
 void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv_conds,
                                 std::vector<Condition> &conds) {
