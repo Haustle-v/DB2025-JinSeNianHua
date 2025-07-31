@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 #include "common/config.h"
 #include "log_defs.h"
 #include "record/rm_defs.h"
+#include "config.h"
 
 /* 日志记录对应操作的类型 */
 enum LogType : int { UPDATE = 0, INSERT, DELETE, begin, commit, ABORT, CHECKPOINT };
@@ -47,13 +48,13 @@ class LogRecord {
   }
   // used for debug
   virtual void format_print() {
-    std::cout << "log type in father_function: " << LogTypeStr[log_type_] << "\n";
-    printf("Print Log Record:\n");
-    printf("log_type_: %s\n", LogTypeStr[log_type_].c_str());
-    printf("lsn: %d\n", lsn_);
-    printf("log_tot_len: %d\n", log_tot_len_);
-    printf("log_tid: %d\n", log_tid_);
-    printf("prev_lsn: %d\n", prev_lsn_);
+    DEBUG_PRINT("log type in father_function: " << LogTypeStr[log_type_]);
+    DEBUG_PRINT("Print Log Record:");
+    DEBUG_PRINT("log_type_: " << LogTypeStr[log_type_].c_str());
+    DEBUG_PRINT("lsn: " << lsn_);
+    DEBUG_PRINT("log_tot_len: " << log_tot_len_);
+    DEBUG_PRINT("log_tid:" << log_tid_);
+    DEBUG_PRINT("prev_lsn: " << prev_lsn_);
   }
 };
 
@@ -72,7 +73,7 @@ class BeginLogRecord : public LogRecord {
   // 从src中反序列化出一条Begin日志记录
   void deserialize(const char *src) override { LogRecord::deserialize(src); }
   virtual void format_print() override {
-    std::cout << "log type in son_function: " << LogTypeStr[log_type_] << "\n";
+    DEBUG_PRINT("log type in son_function: " << LogTypeStr[log_type_]);
     LogRecord::format_print();
   }
 };
@@ -96,7 +97,7 @@ class CommitLogRecord : public LogRecord {
   // 从src中反序列化出一条Begin日志记录
   void deserialize(const char *src) override { LogRecord::deserialize(src); }
   virtual void format_print() override {
-    std::cout << "log type in son_function: " << LogTypeStr[log_type_] << "\n";
+    DEBUG_PRINT("log type in son_function: " << LogTypeStr[log_type_]);
     LogRecord::format_print();
   }
 };
@@ -120,7 +121,7 @@ class AbortLogRecord : public LogRecord {
   // 从src中反序列化出一条Begin日志记录
   void deserialize(const char *src) override { LogRecord::deserialize(src); }
   virtual void format_print() override {
-    std::cout << "log type in son_function: " << LogTypeStr[log_type_] << "\n";
+    DEBUG_PRINT("log type in son_function: " << LogTypeStr[log_type_]);
     LogRecord::format_print();
   }
 };
@@ -141,7 +142,7 @@ class CkptLogRecord : public LogRecord {
   // 从src中反序列化出一条checkpoint日志记录
   void deserialize(const char *src) override { LogRecord::deserialize(src); }
   virtual void format_print() override {
-    std::cout << "log type in son_function: " << LogTypeStr[log_type_] << "\n";
+    DEBUG_PRINT("log type in son_function: " << LogTypeStr[log_type_]);
     LogRecord::format_print();
   }
 };
@@ -196,11 +197,11 @@ class InsertLogRecord : public LogRecord {
     memcpy(table_name_, src + offset, table_name_size_);
   }
   void format_print() override {
-    printf("insert record\n");
+    DEBUG_PRINT("insert record\n");
     LogRecord::format_print();
-    printf("insert_value: %s\n", insert_value_.data);
-    printf("insert rid: %d, %d\n", rid_.page_no, rid_.slot_no);
-    printf("table name: %s\n", table_name_);
+    DEBUG_PRINT("insert_value: " << insert_value_.data);
+    DEBUG_PRINT("insert rid: " << rid_.page_no <<"," << rid_.slot_no);
+    DEBUG_PRINT("table name: " << table_name_);
   }
 
   RmRecord insert_value_;   // 插入的记录
@@ -263,11 +264,11 @@ class DeleteLogRecord : public LogRecord {
     memcpy(table_name_, src + offset, table_name_size_);
   }
   void format_print() override {
-    printf("delete record\n");
+    DEBUG_PRINT("delete record");
     LogRecord::format_print();
-    printf("delete_value: %s\n", delete_value_.data);
-    printf("delete rid: %d, %d\n", rid_.page_no, rid_.slot_no);
-    printf("table name: %s\n", table_name_);
+    DEBUG_PRINT("delete_value: " << delete_value_.data);
+    DEBUG_PRINT("delete rid: " << rid_.page_no << "," << rid_.slot_no);
+    DEBUG_PRINT("table name: " << table_name_);
   }
 
   RmRecord delete_value_;
@@ -340,12 +341,12 @@ class UpdateLogRecord : public LogRecord {
     memcpy(table_name_, src + offset, table_name_size_);
   }
   void format_print() override {
-    printf("update record\n");
+    DEBUG_PRINT("update record");
     LogRecord::format_print();
-    printf("old_value: %s\n", old_value_.data);
-    printf("new_value: %s\n", new_value_.data);
-    printf("update rid: %d, %d\n", rid_.page_no, rid_.slot_no);
-    printf("table name: %s\n", table_name_);
+    DEBUG_PRINT("old_value: " << old_value_.data);
+    DEBUG_PRINT("new_value: " << new_value_.data);
+    DEBUG_PRINT("update rid: " << rid_.page_no << "," << rid_.slot_no);
+    DEBUG_PRINT("table name: " << table_name_);
   }
   RmRecord old_value_;
   RmRecord new_value_;

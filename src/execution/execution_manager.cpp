@@ -20,6 +20,7 @@ See the Mulan PSL v2 for more details. */
 #include "executor_update.h"
 #include "index/ix.h"
 #include "record_printer.h"
+#include "config.h"
 
 const char *help_info =
     "Supported SQL syntax:\n"
@@ -170,11 +171,12 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
     }
   }
 
-  // Print header into buffer
+  // Print header into buffer`
   RecordPrinter rec_printer(sel_cols.size());
+  DEBUG_PRINT_BLOCK(
   rec_printer.print_separator(context);
   rec_printer.print_record(captions, context);
-  rec_printer.print_separator(context);
+  rec_printer.print_separator(context););
   // print header into file
   std::fstream outfile;
   if (sm_manager_->io_enabled_) {  // yfs 7.3
@@ -206,7 +208,7 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
       columns.push_back(col_str);
     }
     // print record into buffer
-    rec_printer.print_record(columns, context);
+    DEBUG_PRINT_BLOCK(rec_printer.print_record(columns, context););
     // print record into file
     if (sm_manager_->io_enabled_) {  // yfs 7.3
       outfile << "|";
@@ -221,9 +223,9 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
     outfile.close();
   }
   // Print footer into buffer
-  rec_printer.print_separator(context);
+  DEBUG_PRINT_BLOCK(rec_printer.print_separator(context););
   // Print record count into buffer
-  RecordPrinter::print_record_count(num_rec, context);
+  DEBUG_PRINT_BLOCK(RecordPrinter::print_record_count(num_rec, context););
 }
 
 // 执行DML语句
@@ -259,9 +261,10 @@ void QlManager::quick_count_table(std::string &tab_name, std::string &sel_col, C
 
   // Print header into buffer
   RecordPrinter rec_printer(1);
+  DEBUG_PRINT_BLOCK(
   rec_printer.print_separator(context);
   rec_printer.print_record(captions, context);
-  rec_printer.print_separator(context);
+  rec_printer.print_separator(context););
   // print header into file
   std::fstream outfile;
   if (sm_manager_->io_enabled_) {  // yfs 7.3
@@ -278,7 +281,7 @@ void QlManager::quick_count_table(std::string &tab_name, std::string &sel_col, C
   std::vector<std::string> columns;
   columns.emplace_back(std::to_string(record_num));
   // print record into buffer
-  rec_printer.print_record(columns, context);
+  DEBUG_PRINT_BLOCK(rec_printer.print_record(columns, context););
   // print record into file
   if (sm_manager_->io_enabled_) {  // yfs 7.3
     outfile << "|";
@@ -292,7 +295,7 @@ void QlManager::quick_count_table(std::string &tab_name, std::string &sel_col, C
     outfile.close();
   }
   // Print footer into buffer
-  rec_printer.print_separator(context);
+  DEBUG_PRINT_BLOCK(rec_printer.print_separator(context););
   // Print record count into buffer
-  RecordPrinter::print_record_count(num_rec, context);
+  DEBUG_PRINT_BLOCK(RecordPrinter::print_record_count(num_rec, context););
 }

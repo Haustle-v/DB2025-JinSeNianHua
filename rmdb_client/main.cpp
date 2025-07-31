@@ -13,6 +13,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include "config.h"
 
 #define MAX_MEM_BUFFER_SIZE 8192
 #define PORT_DEFAULT 8765
@@ -22,7 +23,8 @@ bool is_exit_command(std::string &cmd) { return cmd == "exit" || cmd == "exit;" 
 int init_unix_sock(const char *unix_sock_path) {
     int sockfd = socket(PF_UNIX, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        fprintf(stderr, "failed to create unix socket. %s", strerror(errno));
+        // fprintf(stderr, "failed to create unix socket. %s", strerror(errno));
+        DEBUG_PRINT("failed to create unix socket" << strerror(errno));
         return -1;
     }
 
@@ -32,8 +34,8 @@ int init_unix_sock(const char *unix_sock_path) {
     snprintf(sockaddr.sun_path, sizeof(sockaddr.sun_path), "%s", unix_sock_path);
 
     if (connect(sockfd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) < 0) {
-        fprintf(stderr, "failed to connect to server. unix socket path '%s'. error %s", sockaddr.sun_path,
-                strerror(errno));
+        // fprintf(stderr, "failed to connect to server. unix socket path '%s'. error %s", sockaddr.sun_path, strerror(errno));
+        DEBUG_PRINT("failed to connect to server. unix socket path" << sockaddr.sun_path << "error" << strerror(errno));
         close(sockfd);
         return -1;
     }
@@ -45,13 +47,15 @@ int init_tcp_sock(const char *server_host, int server_port) {
     struct sockaddr_in serv_addr;
 
     if ((host = gethostbyname(server_host)) == NULL) {
-        fprintf(stderr, "gethostbyname failed. errmsg=%d:%s\n", errno, strerror(errno));
+        // fprintf(stderr, "gethostbyname failed. errmsg=%d:%s\n", errno, strerror(errno));
+        DEBUG_PRINT("gethostbyname failed. errmsg="<<errno<<":"<<strerror(errno));
         return -1;
     }
 
     int sockfd;
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
-        fprintf(stderr, "create socket error. errmsg=%d:%s\n", errno, strerror(errno));
+        // fprintf(stderr, "create socket error. errmsg=%d:%s\n", errno, strerror(errno));
+        DEBUG_PRINT("create socket error. errmsg="<<errno<<":"<<strerror(errno));
         return -1;
     }
 
@@ -61,7 +65,8 @@ int init_tcp_sock(const char *server_host, int server_port) {
     bzero(&(serv_addr.sin_zero), 8);
 
     if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(struct sockaddr)) == -1) {
-        fprintf(stderr, "Failed to connect. errmsg=%d:%s\n", errno, strerror(errno));
+        // fprintf(stderr, "Failed to connect. errmsg=%d:%s\n", errno, strerror(errno));
+        DEBUG_PRINT("Failed to connect. errmsg="<<errno<<":"<<strerror(errno));
         close(sockfd);
         return -1;
     }
@@ -125,7 +130,7 @@ int main(int argc, char *argv[]) {
         if (!command.empty()) {
             add_history(command.c_str());
             if (is_exit_command(command)) {
-                printf("The client will be closed.\n");
+                DEBUG_PRINT("The client will be closed.");
                 break;
             }
 
@@ -136,17 +141,18 @@ int main(int argc, char *argv[]) {
             }
             int len = recv(sockfd, recv_buf, MAX_MEM_BUFFER_SIZE, 0);
             if (len < 0) {
-                fprintf(stderr, "Connection was broken: %s\n", strerror(errno));
+                // fprintf(stderr, "Connection was broken: %s\n", strerror(errno));
+                DEBUG_PRINT("Connection was broken: \n" << strerror(errno));
                 break;
             } else if (len == 0) {
-                printf("Connection has been closed\n");
+                DEBUG_PRINT("Connection has been closed");
                 break;
             } else {
                 for (int i = 0; i <= len; i++) {
                     if (recv_buf[i] == '\0') {
                         break;
                     } else {
-                        printf("%c", recv_buf[i]);
+                        DEBUG_PRINT(recv_buf[i]);
                     }
                 }
                 memset(recv_buf, 0, MAX_MEM_BUFFER_SIZE);
@@ -154,6 +160,6 @@ int main(int argc, char *argv[]) {
         }
     }
     close(sockfd);
-    printf("Bye.\n");
+    DEBUG_PRINT("Bye.");
     return 0;
 }

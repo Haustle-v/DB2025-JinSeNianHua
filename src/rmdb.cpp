@@ -25,6 +25,7 @@ See the Mulan PSL v2 for more details. */
 #include "optimizer/planner.h"
 #include "portal.h"
 #include "recovery/log_recovery.h"
+#include "config.h"
 
 #define SOCK_PORT 8765
 #define MAX_CONN_LIMIT 8
@@ -59,7 +60,7 @@ static jmp_buf jmpbuf;
 void sigint_handler(int signo) {
   should_exit = true;
   log_manager->flush_log_to_disk();
-  std::cout << "The Server receive Crtl+C, will been closed\n";
+  DEBUG_PRINT("The Server receive Crtl+C, will been closed\n");
   longjmp(jmpbuf, 1);
 }
 
@@ -92,32 +93,31 @@ void *client_handler(void *sock_fd) {
   yyscan_t scanner;
   yylex_init(&scanner);
 
-  std::string output = "establish client connection, sockfd: " + std::to_string(fd) + "\n";
-  std::cout << output;
+  DEBUG_PRINT("establish client connection, sockfd: " + std::to_string(fd) + "\n");
 
   while (true) {
-    std::cout << "Waiting for request..." << std::endl;
+    DEBUG_PRINT("Waiting for request...");
     memset(data_recv, 0, BUFFER_LENGTH);
 
     i_recvBytes = read(fd, data_recv, BUFFER_LENGTH);
 
     if (i_recvBytes == 0) {
-      std::cout << "Maybe the client has closed" << std::endl;
+      DEBUG_PRINT("Maybe the client has closed");
       break;
     }
     if (i_recvBytes == -1) {
-      std::cout << "Client read error!" << std::endl;
+      DEBUG_PRINT("Client read error!");
       break;
     }
 
-    printf("i_recvBytes: %d \n ", i_recvBytes);
+    DEBUG_PRINT("i_recvBytes:" << i_recvBytes);
 
     if (strcmp(data_recv, "exit") == 0) {
-      std::cout << "Client exit." << std::endl;
+      DEBUG_PRINT("Client exit.");
       break;
     }
     if (strcmp(data_recv, "crash") == 0) {
-      std::cout << "Server crash" << std::endl;
+      DEBUG_PRINT("Server crash");
       exit(1);
     }
 
@@ -174,7 +174,7 @@ void *client_handler(void *sock_fd) {
     futures.clear();
     pool_mutex.unlock();
 
-    std::cout << "Read from client " << fd << ": " << data_recv << std::endl;
+    DEBUG_PRINT("Read from client " << fd << ": " << data_recv);
 
     memset(data_send, '\0', BUFFER_LENGTH);
     offset = 0;
@@ -223,7 +223,7 @@ void *client_handler(void *sock_fd) {
 
           // 回滚事务
           txn_manager->abort(context->txn_, log_manager.get());
-          std::cout << e.GetInfo() << std::endl;
+          DEBUG_PRINT(e.GetInfo());
 
           if (sm_manager->io_enabled_) {  // yfs 7.3
             std::fstream outfile;
@@ -281,7 +281,7 @@ void *client_handler(void *sock_fd) {
   }
 
   // Clear
-  std::cout << "Terminating current client_connection..." << std::endl;
+  DEBUG_PRINT("Terminating current client_connection...");
   close(fd);           // close a file descriptor.
   pthread_exit(NULL);  // terminate calling thread!
 }
@@ -310,24 +310,24 @@ void start_server() {
   s_addr_in.sin_port = htons(SOCK_PORT);
   fd_temp = bind(sockfd_server, (struct sockaddr *)(&s_addr_in), sizeof(s_addr_in));
   if (fd_temp == -1) {
-    std::cout << "Bind error!" << std::endl;
+    DEBUG_PRINT("Bind error!");
     exit(1);
   }
 
   fd_temp = listen(sockfd_server, MAX_CONN_LIMIT);
   if (fd_temp == -1) {
-    std::cout << "Listen error!" << std::endl;
+    DEBUG_PRINT("Listen error!");
     exit(1);
   }
 
   while (!should_exit) {
-    std::cout << "Waiting for new connection..." << std::endl;
+    DEBUG_PRINT("Waiting for new connection...");
     pthread_t thread_id;
     struct sockaddr_in s_addr_client{};
     int client_length = sizeof(s_addr_client);
 
     if (setjmp(jmpbuf)) {
-      std::cout << "Break from Server Listen Loop\n";
+      DEBUG_PRINT("Break from Server Listen Loop\n");
       break;
     }
 
@@ -335,28 +335,28 @@ void start_server() {
     pthread_mutex_lock(sockfd_mutex);
     int sockfd = accept(sockfd_server, (struct sockaddr *)(&s_addr_client), (socklen_t *)(&client_length));
     if (sockfd == -1) {
-      std::cout << "Accept error!" << std::endl;
+      DEBUG_PRINT("Accept error!");
       continue;  // ignore current socket ,continue while loop.
     }
 
     // 和客户端建立连接，并开启一个线程负责处理客户端请求
     if (pthread_create(&thread_id, nullptr, &client_handler, (void *)(&sockfd)) != 0) {
-      std::cout << "Create thread fail!" << std::endl;
+      DEBUG_PRINT("Create thread fail!");
       break;  // break while loop
     }
   }
 
   // Clear
-  std::cout << " Try to close all client-connection.\n";
+  DEBUG_PRINT(" Try to close all client-connection.\n");
   int ret = shutdown(sockfd_server,
                      SHUT_WR);  // shut down the all or part of a full-duplex connection.
   if (ret == -1) {
-    printf("%s\n", strerror(errno));
+    DEBUG_PRINT(strerror(errno));
   }
   //    assert(ret != -1);
   sm_manager->close_db();
-  std::cout << " DB has been closed.\n";
-  std::cout << "Server shuts down." << std::endl;
+  DEBUG_PRINT(" DB has been closed.\n");
+  DEBUG_PRINT("Server shuts down.");
 }
 
 int main(int argc, char **argv) {
@@ -368,7 +368,7 @@ int main(int argc, char **argv) {
 
   signal(SIGINT, sigint_handler);
   try {
-    std::cout << "\n"
+    DEBUG_PRINT("\n"
                  "  _____  __  __ _____  ____  \n"
                  " |  __ \\|  \\/  |  __ \\|  _ \\ \n"
                  " | |__) | \\  / | |  | | |_) |\n"
@@ -378,7 +378,7 @@ int main(int argc, char **argv) {
                  "\n"
                  "Welcome to RMDB!\n"
                  "Type 'help;' for help.\n"
-                 "\n";
+                 "\n");
     // Database name is passed by args
     std::string db_name = argv[1];
     if (!sm_manager->is_dir(db_name)) {

@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 #include "index/ix.h"
 #include "record/rm.h"
 #include "record_printer.h"
+#include "config.h"
 
 /**
  * @description: 判断是否为一个文件夹
@@ -162,17 +163,18 @@ void SmManager::show_tables(Context *context) {
     outfile << "| Tables |\n";
   }
   RecordPrinter printer(1);
+  DEBUG_PRINT_BLOCK(
   printer.print_separator(context);
   printer.print_record({"Tables"}, context);
-  printer.print_separator(context);
+  printer.print_separator(context););
   for (auto &entry : db_.tabs_) {
     auto &tab = entry.second;
-    printer.print_record({tab.name}, context);
+    DEBUG_PRINT_BLOCK(printer.print_record({tab.name}, context););
     if (io_enabled_) {  // yfs 7.2 -R
       outfile << "| " << tab.name << " |\n";
     }
   }
-  printer.print_separator(context);
+  DEBUG_PRINT_BLOCK(printer.print_separator(context););
   if (io_enabled_) {  // yfs 7.2 -R
     outfile.close();
   }
@@ -188,17 +190,17 @@ void SmManager::desc_table(const std::string &tab_name, Context *context) {
 
   std::vector<std::string> captions = {"Field", "Type", "Index"};
   RecordPrinter printer(captions.size());
-  // Print header
+  DEBUG_PRINT_BLOCK(
   printer.print_separator(context);
   printer.print_record(captions, context);
-  printer.print_separator(context);
+  printer.print_separator(context););
   // Print fields
   for (auto &col : tab.cols) {
     std::vector<std::string> field_info = {col.name, coltype2str(col.type), col.index ? "YES" : "NO"};
-    printer.print_record(field_info, context);
+    DEBUG_PRINT_BLOCK(printer.print_record(field_info, context););
   }
   // Print footer
-  printer.print_separator(context);
+  DEBUG_PRINT_BLOCK(printer.print_separator(context););
 }
 
 /**
@@ -393,7 +395,7 @@ void SmManager::show_index(const std::string &tab_name, Context *context) {
       outfile << ") |\n";
       output += ")";  // 剩下的 | \n 在下个函数里
     }
-    printer.print_index({output}, context);
+    DEBUG_PRINT_BLOCK(printer.print_index({output}, context););
   }
   if (io_enabled_) {  // yfs 7.2 -R
     outfile.close();
