@@ -208,7 +208,7 @@ TabCol Analyze::check_column(const std::vector<ColMeta> &all_cols, TabCol target
     /** TODO: Make sure target column exists */
     // sqb: down! 5.24
     // yfs 6.11 在这里修改了get_table，如果是用别名找到的，则将别名替换成表
-    if (!(sm_manager_->db_.get_table2(target.tab_name).is_col(target.col_name))) {
+    if (!(sm_manager_->db_.get_table(target.tab_name).is_col(target.col_name))) {
       throw ColumnNotFoundError(target.col_name);
     }
   }

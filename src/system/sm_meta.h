@@ -196,19 +196,6 @@ class DbMeta {
     return os;
   }
 
-  // get_table2只需要在check_clomun()里用，把别名改为表名需要tab_name非const，就不改动原来的get_table了(否则牵涉到的太多)
-  TabMeta &get_table2(std::string &tab_name) {
-    auto pos = tabs_.find(tab_name);
-    if (pos == tabs_.end()) {
-      auto pos = tabs_.find(alias_map[tab_name]);  // yfs 如果没找到，用别名试着找一下
-      if (pos == tabs_.end()) {
-        throw TableNotFoundError(tab_name);
-      }
-      tab_name = alias_map[tab_name];  // yfs 6.11 如果发现用的是表的别名，就在这里把别名改为原名
-      return pos->second;
-    }
-    return pos->second;
-  }
 
   friend std::istream &operator>>(std::istream &is, DbMeta &db_meta) {
     size_t n;
