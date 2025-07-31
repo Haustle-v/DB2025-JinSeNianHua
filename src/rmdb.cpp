@@ -147,10 +147,8 @@ void *client_handler(void *sock_fd) {
       std::string csv_file = load_stmt.substr(5, csv_file_end - 5);
       std::string tab_name = load_stmt.substr(tab_name_start, tab_name_end - tab_name_start);
 
-      futures.emplace_back(std::async(std::launch::async, [csv_file, tab_name] {
-        sm_manager->load_csv_data(csv_file, tab_name);
-        // buffer_pool_manager->flush_all_pages(sm_manager->fhs_.at(tab_name)->GetFd());
-      }));
+      futures.emplace_back(
+          std::async(std::launch::async, [csv_file, tab_name] { sm_manager->load_csv_data(csv_file, tab_name); }));
       //   sm_manager->load_csv_data(csv_file, tab_name);
       if (write(fd, data_send, offset + 1) == -1) {
         break;
@@ -163,13 +161,11 @@ void *client_handler(void *sock_fd) {
     for (auto &future : futures) {
       future.get();
     }
-    // if(!futures.empty()){
-    //     for(auto &entry:sm_manager->fhs_){
-    //       buffer_pool_manager->flush_all_pages(entry.second->GetFd());
-    //     }
-    //     for(auto &entry:sm_manager->ihs_){
-    //       index_buffer_pool_manager->flush_all_pages(entry.second->get_fd());
-    //     }
+
+    // if (!futures.empty()) {
+    //   for (auto &entry : sm_manager->ihs_) {
+    //     index_buffer_pool_manager->flush_all_pages(entry.second->get_fd());
+    //   }
     // }
     futures.clear();
     pool_mutex.unlock();

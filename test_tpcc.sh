@@ -8,7 +8,7 @@ TEST_DB="test_tpcc"
 TXN_DIR="../tpcc_sql"
 CHECK_SQL="../check_consistency.sql"
 LOAD_SQL="../load_data.sql"
-THREADS=4  # 可调整线程数
+THREADS=1  # 可调整线程数
 
 # 清理旧数据库
 echo "🔄 清理旧测试环境..."
@@ -21,20 +21,25 @@ SERVER_PID=$!
 
 # 等待服务端启动
 echo "⏳ 等待服务端初始化..."
-sleep 3
+sleep 5
 if ! ps -p $SERVER_PID > /dev/null; then
     echo "❌ 服务端启动失败！"
     exit 1
 fi
 
 echo "⏳ 等待数据加载..."
-"$CLIENT_PATH" < "$LOAD_SQL"
+time "$CLIENT_PATH" < "$LOAD_SQL"
 echo "⏱️ 数据加载完毕"
 
 # 执行并发事务
 echo "⚙️ 并发执行事务脚本..."
 echo "----------------------------------------"
 start_time=$(date +%s)
+
+# 启动perf采样（后台运行）
+echo "🔍 开始性能采样..."
+sudo perf record -F 99 -g -p $SERVER_PID -o "$PERF_DATA" &
+PERF_PID=$!
 
 PIDS=()
 for ((i=0; i<$THREADS; i++)); do

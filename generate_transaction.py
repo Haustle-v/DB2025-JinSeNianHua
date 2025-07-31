@@ -30,13 +30,13 @@ class TPCCSQLGenerator:
 
         sqls = []
 
-        # # 查询客户和仓库信息
-        # sqls.append(f"SELECT c_discount, c_last, c_credit, w_tax FROM customer, warehouse "
-        #             f"WHERE w_id={w_id} AND c_w_id={w_id} AND c_d_id={d_id} AND c_id={c_id};")
+        # 查询客户和仓库信息
+        sqls.append(f"SELECT c_discount, c_last, c_credit, w_tax FROM customer, warehouse "
+                    f"WHERE w_id={w_id} AND c_w_id={w_id} AND c_d_id={d_id} AND c_id={c_id};")
 
-        # # 查询地区信息
-        # sqls.append(f"SELECT d_next_o_id, d_tax FROM district "
-        #             f"WHERE d_id={d_id} AND d_w_id={w_id};")
+        # 查询地区信息
+        sqls.append(f"SELECT d_next_o_id, d_tax FROM district "
+                    f"WHERE d_id={d_id} AND d_w_id={w_id};")
 
         # 更新地区订单ID
         next_o_id = o_id + 1
@@ -59,13 +59,13 @@ class TPCCSQLGenerator:
             ol_amount = round(random.uniform(1, 100), 2)
             ol_dist_info = f"'DIST_INFO_{random.randint(1, 100)}'"
 
-            # # 查询商品信息
-            # sqls.append(f"SELECT i_price, i_name, i_data FROM item WHERE i_id={ol_i_id};")
+            # 查询商品信息
+            sqls.append(f"SELECT i_price, i_name, i_data FROM item WHERE i_id={ol_i_id};")
 
-            # # 查询库存信息
-            # sqls.append(f"SELECT s_quantity, s_data, s_dist_01, s_dist_02, s_dist_03, "
-            #             f"s_dist_04, s_dist_05, s_dist_06, s_dist_07, s_dist_08, s_dist_09, "
-            #             f"s_dist_10 FROM stock WHERE s_i_id={ol_i_id} AND s_w_id={ol_supply_w_id};")
+            # 查询库存信息
+            sqls.append(f"SELECT s_quantity, s_data, s_dist_01, s_dist_02, s_dist_03, "
+                        f"s_dist_04, s_dist_05, s_dist_06, s_dist_07, s_dist_08, s_dist_09, "
+                        f"s_dist_10 FROM stock WHERE s_i_id={ol_i_id} AND s_w_id={ol_supply_w_id};")
 
             # 更新库存
             new_quantity = random.randint(1, 100)  # 简化处理
@@ -91,22 +91,22 @@ class TPCCSQLGenerator:
         # 更新仓库余额
         sqls.append(f"UPDATE warehouse SET w_ytd=w_ytd+{h_amount} WHERE w_id={w_id};")
 
-        # # 查询仓库信息
-        # sqls.append(f"SELECT w_street_1, w_street_2, w_city, w_state, w_zip, w_name "
-        #             f"FROM warehouse WHERE w_id={w_id};")
+        # 查询仓库信息
+        sqls.append(f"SELECT w_street_1, w_street_2, w_city, w_state, w_zip, w_name "
+                    f"FROM warehouse WHERE w_id={w_id};")
 
         # 更新地区余额
         sqls.append(f"UPDATE district SET d_ytd=d_ytd+{h_amount} "
                     f"WHERE d_w_id={w_id} AND d_id={d_id};")
 
-        # # 查询地区信息
-        # sqls.append(f"SELECT d_street_1, d_street_2, d_city, d_state, d_zip, d_name "
-        #             f"FROM district WHERE d_w_id={w_id} AND d_id={d_id};")
+        # 查询地区信息
+        sqls.append(f"SELECT d_street_1, d_street_2, d_city, d_state, d_zip, d_name "
+                    f"FROM district WHERE d_w_id={w_id} AND d_id={d_id};")
 
-        # # 查询客户信息
-        # sqls.append(f"SELECT c_first, c_middle, c_last, c_street_1, c_street_2, c_city, "
-        #             f"c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, "
-        #             f"c_since FROM customer WHERE c_w_id={w_id} AND c_d_id={d_id} AND c_id={c_id};")
+        # 查询客户信息
+        sqls.append(f"SELECT c_first, c_middle, c_last, c_street_1, c_street_2, c_city, "
+                    f"c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, "
+                    f"c_since FROM customer WHERE c_w_id={w_id} AND c_d_id={d_id} AND c_id={c_id};")
 
         # 更新客户余额
         c_balance = round(random.uniform(-1000, 10000), 2)
@@ -129,9 +129,9 @@ class TPCCSQLGenerator:
 
         sqls = []
 
-        # # 查询最小订单ID
-        # sqls.append(f"SELECT min(no_o_id) as min_o_id FROM new_orders "
-        #             f"WHERE no_d_id={d_id} AND no_w_id={w_id};")
+        # 查询最小订单ID
+        sqls.append(f"SELECT min(no_o_id) as min_o_id FROM new_orders "
+                    f"WHERE no_d_id={d_id} AND no_w_id={w_id};")
 
         # 假设获取的订单ID
         o_id = random.randint(1, 1000000)
@@ -140,9 +140,9 @@ class TPCCSQLGenerator:
         sqls.append(f"DELETE FROM new_orders WHERE no_o_id={o_id} "
                     f"AND no_d_id={d_id} AND no_w_id={w_id};")
 
-        # # 查询订单客户ID
-        # sqls.append(f"SELECT o_c_id FROM orders WHERE o_id={o_id} "
-        #             f"AND o_d_id={d_id} AND o_w_id={w_id};")
+        # 查询订单客户ID
+        sqls.append(f"SELECT o_c_id FROM orders WHERE o_id={o_id} "
+                    f"AND o_d_id={d_id} AND o_w_id={w_id};")
 
         # 假设获取的客户ID
         c_id = random.randint(1, self.customers_per_district)
@@ -155,9 +155,9 @@ class TPCCSQLGenerator:
         sqls.append(f"UPDATE order_line SET ol_delivery_d={datetime_str} "
                     f"WHERE ol_o_id={o_id} AND ol_d_id={d_id} AND ol_w_id={w_id};")
 
-        # # 计算订单总金额
-        # sqls.append(f"SELECT sum(ol_amount) as sum_amount FROM order_line "
-        #             f"WHERE ol_o_id={o_id} AND ol_d_id={d_id};")
+        # 计算订单总金额
+        sqls.append(f"SELECT sum(ol_amount) as sum_amount FROM order_line "
+                    f"WHERE ol_o_id={o_id} AND ol_d_id={d_id};")
 
         # 假设获取的订单总金额
         sum_amount = round(random.uniform(50, 500), 2)
@@ -258,14 +258,12 @@ def generate_tpcc_workload(output_file, transaction_count=30):
                 trans_type = "new_order"
             elif rand < 0.87:
                 trans_type = "payment"
-            elif rand < 0.92:
+            # elif rand < 0.92:
+            #     trans_type = "order_status"
+            elif rand < 0.97:
                 trans_type = "delivery"
             else:
-                trans_type = "new_order"
-            # elif rand < 0.97:
-            #     trans_type = "order_status"
-            # else:
-            #     trans_type = "stock_level"
+                trans_type = "stock_level"
 
             sqls = generator.generate_transaction(trans_type)
             sqls.insert(0, "begin;")
@@ -281,5 +279,5 @@ if __name__ == "__main__":
     os.makedirs("tpcc_sql", exist_ok=True)
     print("生成TPCC测试SQL文件...")
     for i in range(0, thread):
-        generate_tpcc_workload(f"tpcc_sql/tpcc_txn_{i}.sql", transaction_count=10)
+        generate_tpcc_workload(f"tpcc_sql/tpcc_txn_{i}.sql", transaction_count=50)
     print("生成完成，文件已保存")
