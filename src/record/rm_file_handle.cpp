@@ -100,7 +100,7 @@ auto RmFileHandle::get_reconstructed_tuple(const Rid &rid, Context *context, Tab
  * @param {Context*} context
  * @return {Rid} 插入的记录的记录号（位置）
  */
-Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *schema) {
+Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *schema, TupleMeta &old_meta) {
   // Todo:
   // 1. 获取当前未满的page handle
   // 2. 在page handle中找到空闲slot位置
@@ -136,7 +136,10 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
     // context->lock_mgr_->lock_exclusive_on_record(context->txn_, ret, fd_);
 
     RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);
-    timestamp_t old_ts = base_meta.ts_;
+
+    // 用于事务记录
+    old_meta.ts_ = base_meta.ts_;
+    old_meta.is_deleted_ = true;
 
     // 版本链记录
     {
@@ -156,13 +159,6 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
         context->txn_mgr_->UpdateUndoLink(ret, undo_link);
       }
     }
-
-    // 事务写入记录
-    // std::string tab_name = disk_manager_->get_file_name(fd_);
-    // auto insert_wrec = std::make_unique<WriteRecord>(
-    //     WType::INSERT_TUPLE, tab_name, ret,
-    auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, ret, TupleMeta{old_ts, true});
-    context->txn_->append_write_record(std::move(insert_wrec));
 
     // // 日志记录
     // InsertLogRecord log_record{context->txn_->get_transaction_id(), new_rec, ret, tab_name};
@@ -233,7 +229,8 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
  * @param {Rid&} rid 要删除的记录的记录号（位置）
  * @param {Context*} context
  */
-void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old_rec, const TabMeta *schema) {
+void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old_rec, const TabMeta *schema,
+                                 TupleMeta &old_meta) {
   // Todo:
   // 1. 获取指定记录所在的page handle
   // 2. 更新page_handle.page_hdr中的数据结构
@@ -247,7 +244,6 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
 
   // sqb添加事务控制语句 6.4
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
-  //   RmRecord current_tuple(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
     // 锁控制并发 6.9
@@ -259,14 +255,16 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
       throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
     }
 
-    timestamp_t old_ts = base_meta.ts_;
+    // 事务写入记录
+    old_meta.ts_ = base_meta.ts_;
+    old_meta.is_deleted_ = false;
+
     {
       //   补充版本链 sqb 6.19
 
       //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
 
       auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, nullptr, context, schema);
-      //   auto [undo_log, undo_link] = generateUndoLogAndLink(rid, &current_tuple, nullptr, context, schema);
       // 元数据时间戳更新
       base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -279,15 +277,6 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
         context->txn_mgr_->UpdateUndoLink(rid, undo_link);
       }
     }
-
-    // 事务写入记录
-    // std::string tab_name = disk_manager_->get_file_name(fd_);
-    // auto delete_wrec = std::make_unique<WriteRecord>(
-    //     WType::DELETE_TUPLE, tab_name, rid, *old_rec,
-    auto delete_wrec =
-        // std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, current_tuple, TupleMeta{old_ts, false});
-        std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *old_rec, TupleMeta{old_ts, false});
-    context->txn_->append_write_record(std::move(delete_wrec));
 
     //   // 日志记录
     //   DeleteLogRecord log_record{context->txn_->get_transaction_id(), *old_rec, rid, tab_name};
@@ -327,8 +316,8 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
  * @param {char*} buf 新记录的数据
  * @param {Context*} context
  */
-void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec,
-                                 const TabMeta *schema) {
+void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, RmRecord *old_rec, const TabMeta *schema,
+                                 TupleMeta &old_meta) {
   // Todo:
   // 1. 获取指定记录所在的page handle
   // 2. 更新记录
@@ -342,7 +331,6 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
 
   // sqb添加事务控制语句 6.4
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
-  //   RmRecord current_tuple(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
   if (context != nullptr && (context->txn_->get_state() == TransactionState::DEFAULT ||
                              context->txn_->get_state() == TransactionState::GROWING)) {
     // 锁控制并发 6.9
@@ -354,13 +342,15 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
       throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
     }
 
-    timestamp_t old_ts = base_meta.ts_;
+    // 事务写入记录
+    old_meta.ts_ = base_meta.ts_;
+    old_meta.is_deleted_ = base_meta.is_deleted_;
+
     {
       //   补充版本链 sqb 6.19
       RmRecord new_rec(file_hdr_.record_size, buf);
       //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
       auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, &new_rec, context, schema);
-      //   auto [undo_log, undo_link] = generateUndoLogAndLink(rid, &current_tuple, &new_rec, context, schema);
       // 元数据更新
       base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -373,17 +363,6 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
         context->txn_mgr_->UpdateUndoLink(rid, undo_link);
       }
     }
-
-    bool is_insert = base_meta.is_deleted_ == true;
-    // 事务写入集记录
-    // std::string tab_name = disk_manager_->get_file_name(fd_);
-    // auto update_wrec = std::make_unique<WriteRecord>(
-    //     WType::UPDATE_TUPLE, tab_name, rid, *old_rec,
-    auto update_wrec =
-        // std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, current_tuple, TupleMeta{old_ts,
-        // is_insert});
-        std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *old_rec, TupleMeta{old_ts, is_insert});
-    context->txn_->append_write_record(std::move(update_wrec));
 
     // // 日志记录
     // RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);

@@ -114,14 +114,17 @@ class InsertExecutor : public AbstractExecutor {
 
     // 复用现有键值 直接返回
     if (reuse_key) {
-      //   sm_manager_->db_.get_table(tab_name_).record_count++;
       return nullptr;
     }
 
-    // // 基于锁的插入
-    // rid_ = fh_->insert_record(rec.data, context_);
-    // mvcc 对应的插入 考虑并发问题 插入失败重试
+    TupleMeta old_meta;  // 元组现在的tuple_meta，用于事务记录
+    // mvcc 对应的插入
     rid_ = fh_->insert_record(rec.data, context_, &tab_);
+    // 没有故障恢复的情况下，事务插入直接移出临界区
+    if (context_ != nullptr) {
+      auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, rid_, old_meta);
+      context_->txn_->append_write_record(std::move(insert_wrec));
+    }
 
     // Insert into index
     char *key = new char[max_index_len];
@@ -137,8 +140,7 @@ class InsertExecutor : public AbstractExecutor {
       ih->insert_entry(key, rid_, context_->txn_);
     }
     delete[] key;
-    // yfs 6.11 增加记录数量
-    // sm_manager_->db_.get_table(tab_name_).record_count++;
+
     return nullptr;
   }
   Rid &rid() override { return rid_; }

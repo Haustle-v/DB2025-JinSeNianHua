@@ -63,13 +63,16 @@ class DeleteExecutor : public AbstractExecutor {
       //     ix_hdl_ptr->delete_entry(key_buffer, context_->txn_);
       //   }
 
-      //   //   基于锁的删除
-      //   fh_->delete_record(rid, context_, rec_ptr.get());
+      TupleMeta old_meta;  // 元组现在的tuple_meta，用于事务记录
       //   mvcc 下的删除
       fh_->delete_record(rid, context_, rec_ptr.get(), &tab_);
+      // 将事务记录移出临界区
+      if (context_ != nullptr) {
+        auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *rec_ptr, old_meta);
+        context_->txn_->append_write_record(std::move(delete_wrec));
+      }
     }
-    // yfs 6.11 减少记录数量
-    // sm_manager_->db_.get_table(tab_name_).record_count--;
+
     return nullptr;
   }
 
