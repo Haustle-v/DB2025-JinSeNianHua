@@ -48,5 +48,5 @@ class QlManager {
   void create_checkpoint(Context *context);
 
   //   sqb 快速返回select count结果，仅单表
-  size_t quick_count_table(std::string &tab_name, std::string &col_name, Context *context);
+  void quick_count_table(std::string &tab_name, std::string &col_name, Context *context);
 };

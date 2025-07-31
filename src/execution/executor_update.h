@@ -26,9 +26,12 @@ class UpdateExecutor : public AbstractExecutor {
   std::vector<SetClause> set_clauses_;
   SmManager *sm_manager_;
 
+  std::vector<std::unique_ptr<RmRecord>> old_recs;  // 减少一次读 sqb
+
  public:
   UpdateExecutor(SmManager *sm_manager, const std::string &tab_name, std::vector<SetClause> set_clauses,
-                 std::vector<Condition> conds, std::vector<Rid> rids, Context *context) {
+                 std::vector<Condition> conds, std::vector<Rid> rids, std::vector<std::unique_ptr<RmRecord>> recs,
+                 Context *context) {
     sm_manager_ = sm_manager;
     tab_name_ = tab_name;
     set_clauses_ = set_clauses;
@@ -36,6 +39,7 @@ class UpdateExecutor : public AbstractExecutor {
     fh_ = sm_manager_->fhs_.at(tab_name).get();
     conds_ = conds;
     rids_ = rids;
+    old_recs = std::move(recs);  // sqb add
     context_ = context;
   }
 
@@ -63,8 +67,13 @@ class UpdateExecutor : public AbstractExecutor {
       single_set_clause.rhs.init_raw(col_meta_iter->len);
     }
 
-    for (auto &rid : rids_) {
-      std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
+    // for (auto &rid : rids_) {
+    // std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
+    RmRecord *pre_rec = new RmRecord(fh_->get_file_hdr().record_size);  // 被update赋值 存当前表堆最新记录
+    size_t rec_num = rids_.size();
+    for (size_t i = 0; i < rec_num; ++i) {
+      Rid &rid = rids_[i];
+      std::unique_ptr<RmRecord> &rec_ptr = old_recs[i];  // 当前可见版本记录
       RmRecord old_rec = *rec_ptr;
 
       //   更新数据
@@ -96,7 +105,7 @@ class UpdateExecutor : public AbstractExecutor {
 
       // MVCC下，索引键只增加，不删除
       //    处理索引
-      RmRecord new_rec = *rec_ptr;
+      //   RmRecord new_rec = *rec_ptr;
       for (auto &index_meta : tab_.indexes) {
         char old_key[index_meta.col_tot_len], new_key[index_meta.col_tot_len];
         std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
@@ -105,7 +114,8 @@ class UpdateExecutor : public AbstractExecutor {
         int offset = 0;
         for (auto &col_meta : index_meta.cols) {
           memcpy(old_key + offset, old_rec.data + col_meta.offset, col_meta.len);
-          memcpy(new_key + offset, new_rec.data + col_meta.offset, col_meta.len);
+          //   memcpy(new_key + offset, new_rec.data + col_meta.offset, col_meta.len);
+          memcpy(new_key + offset, rec_ptr->data + col_meta.offset, col_meta.len);
           offset += col_meta.len;
         }
         // 检查键是否相同 相同无需更新 不相同要保证键的唯一性
@@ -122,12 +132,13 @@ class UpdateExecutor : public AbstractExecutor {
 
       TupleMeta old_meta;
       //   mvcc下的更新
-      fh_->update_record(rid, rec_ptr->data, context_, &old_rec, &tab_, &old_meta);
+      fh_->update_record(rid, rec_ptr->data, context_, pre_rec, &tab_, &old_meta);
       if (context_ != nullptr) {
-        auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, old_rec, old_meta);
+        auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *pre_rec, old_meta);
         context_->txn_->append_write_record(std::move(update_wrec));
       }
     }
+    delete pre_rec;
 
     return nullptr;
   }

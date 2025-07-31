@@ -251,7 +251,7 @@ void QlManager::create_checkpoint(Context *context) {
 
 //   sqb 快速返回select count结果，仅单表
 // 执行select语句，select语句的输出除了需要返回客户端外，还需要写入output.txt文件中
-size_t QlManager::quick_count_table(std::string &tab_name, std::string &sel_col, Context *context) {
+void QlManager::quick_count_table(std::string &tab_name, std::string &sel_col, Context *context) {
   auto &fhdl_ptr = sm_manager_->fhs_.at(tab_name);
   size_t record_num = fhdl_ptr->get_record_num();
   std::vector<std::string> captions;

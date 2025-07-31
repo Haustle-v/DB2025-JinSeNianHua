@@ -44,10 +44,11 @@ class DeleteExecutor : public AbstractExecutor {
     // if (context_ != nullptr) {
     //   context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
     // }
-    IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
+    // IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
 
+    RmRecord *pre_rec = new RmRecord(fh_->get_file_hdr().record_size);
     for (auto &rid : rids_) {
-      std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
+      //   std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
 
       // MVCC支持索引时，删除不会删除键值
       //   //   删除索引
@@ -65,13 +66,14 @@ class DeleteExecutor : public AbstractExecutor {
 
       TupleMeta old_meta;  // 元组现在的tuple_meta，用于事务记录
       //   mvcc 下的删除
-      fh_->delete_record(rid, context_, rec_ptr.get(), &tab_, &old_meta);
+      fh_->delete_record(rid, context_, pre_rec, &tab_, &old_meta);
       // 将事务记录移出临界区
       if (context_ != nullptr) {
-        auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *rec_ptr, old_meta);
+        auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *pre_rec, old_meta);
         context_->txn_->append_write_record(std::move(delete_wrec));
       }
     }
+    delete pre_rec;
 
     return nullptr;
   }

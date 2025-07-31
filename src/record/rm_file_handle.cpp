@@ -258,6 +258,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
     // 事务写入记录
     old_meta->ts_ = base_meta.ts_;
     old_meta->is_deleted_ = false;
+    old_rec->SetData(page_hdl.get_slot_record(rid.slot_no));
 
     {
       //   补充版本链 sqb 6.19
@@ -345,6 +346,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
     // 事务写入记录
     old_meta->ts_ = base_meta.ts_;
     old_meta->is_deleted_ = base_meta.is_deleted_;
+    old_rec->SetData(page_hdl.get_slot_record(rid.slot_no));
 
     {
       //   补充版本链 sqb 6.19
