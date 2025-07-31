@@ -22,7 +22,7 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
   // 1. 获取指定记录所在的page handle
   // 2. 初始化一个指向RmRecord的指针（赋值其内部的data和size）
 
-  std::shared_lock<std::shared_mutex> lock(latch_);
+  //   std::shared_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->RLatch();
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
@@ -38,7 +38,7 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
 auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
     -> std::tuple<TupleMeta, RmRecord, std::optional<UndoLink>> {
   std::tuple<TupleMeta, RmRecord, std::optional<UndoLink>> ret;
-  std::shared_lock<std::shared_mutex> lock(latch_);
+  //   std::shared_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->RLatch();
   {
@@ -58,7 +58,7 @@ auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
 
 // sqb 6.17 事务commit时更新所有写操作的时间戳 abort时还要恢复is_delete状态
 void RmFileHandle::set_meta(const Rid &rid, timestamp_t ts, bool is_delete) {
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->WLatch();
 
@@ -72,7 +72,7 @@ void RmFileHandle::set_meta(const Rid &rid, timestamp_t ts, bool is_delete) {
 
 // sqb 用于改动rmscan
 TupleMeta RmFileHandle::get_meta(const Rid &rid) {
-  std::shared_lock<std::shared_mutex> lock(latch_);
+  //   std::shared_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->RLatch();
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
@@ -108,7 +108,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
   // 4. 更新page_handle.page_hdr中的数据结构
   // 注意考虑插入一条记录后页面已满的情况，需要更新file_hdr_.first_free_page_no
 
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = create_page_handle();
   page_hdl.page->WLatch();
 
@@ -197,7 +197,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
  * @param {char*} buf 要插入记录的数据
  */
 void RmFileHandle::insert_record(const Rid &rid, char *buf) {
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->WLatch();
   memcpy(page_hdl.get_slot_record(rid.slot_no), buf, file_hdr_.record_size);
@@ -237,7 +237,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
   // 注意考虑删除一条记录后页面未满的情况，需要调用release_page_handle()
 
   //   还是只考虑rid存在的情况
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->WLatch();
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
@@ -324,7 +324,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
   // 2. 更新记录
 
   //   暂时只考虑数据存在的情况
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
 
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->WLatch();
@@ -488,7 +488,7 @@ RmPageHandle RmFileHandle::create_page_handle() {
 
 // sqb 避免故障恢复时 访问不存在的页报错 暂时只考虑申请一次 6.11
 void RmFileHandle::allocate_pages(const Rid &rid) {
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
   std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
   if (rid.page_no >= file_hdr_.num_pages) {
     page_id_t old_fisrt_free_page = file_hdr_.first_free_page_no;
