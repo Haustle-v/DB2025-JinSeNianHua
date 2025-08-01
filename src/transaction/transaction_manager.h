@@ -77,7 +77,8 @@ class TransactionManager {
   Transaction *get_transaction(txn_id_t txn_id) {
     if (txn_id == INVALID_TXN_ID) return nullptr;
 
-    std::unique_lock<std::mutex> lock(latch_);
+    // std::unique_lock<std::mutex> lock(latch_);
+    std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
     assert(TransactionManager::txn_map.find(txn_id) != TransactionManager::txn_map.end());
     auto *res = TransactionManager::txn_map[txn_id];
     lock.unlock();
@@ -153,7 +154,7 @@ class TransactionManager {
   ConcurrencyMode concurrency_mode_;            // 事务使用的并发控制算法，目前只需要考虑2PL
   std::atomic<txn_id_t> next_txn_id_{0};        // 用于分发事务ID
   std::atomic<timestamp_t> next_timestamp_{0};  // 用于分发事务时间戳
-  std::mutex latch_;                            // 用于txn_map的并发
+  std::mutex latch_;                            // 用于txn_map的并发 sqb--框架有问题，压根没用上
   SmManager *sm_manager_;
   LockManager *lock_manager_;
 
