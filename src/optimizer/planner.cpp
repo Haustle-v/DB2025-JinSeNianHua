@@ -348,10 +348,16 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
 
 // 投影下推需要保留的列：Select选择到的列; Scan的cond (也就是Filter条件涉及的列); Join的join_cond
 void Planner::projection_pushdown(std::shared_ptr<Plan> &plan, std::vector<TabCol> &cols) {
+  // 进入到proj_plan这个if分支的只可能是plan的root
   if (auto proj_plan = std::dynamic_pointer_cast<ProjectionPlan>(plan)) {
     size_t original_size = cols.size();
     cols.insert(cols.end(), (proj_plan->sel_cols_).begin(), (proj_plan->sel_cols_).end());
-    projection_pushdown(proj_plan->subplan_, cols);
+    // 如果是 project-scan，则直接从这里结束
+    if (auto scan_plan = std::dynamic_pointer_cast<ScanPlan>(proj_plan->subplan_)) {
+      return;
+    }else{
+      projection_pushdown(proj_plan->subplan_, cols);
+    }
     // 相当于把这层涉及到的条件push出来，因为回到上一层就不需要这些条件了
     cols.resize(original_size);
   } else if (auto sort_plan = std::dynamic_pointer_cast<SortPlan>(plan)) {
