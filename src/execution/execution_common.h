@@ -239,11 +239,11 @@ inline std::optional<UndoLink> WalkLinkToTxnLink(const Rid &rid, TransactionMana
     }
     UndoLog log = txn_mgr->GetUndoLog(link);
     if (!log.prev_version_.IsValid()) {
-      return link;
+      break;
     }
     link = log.prev_version_;
   }
-  return std::nullopt;
+  return op_undo_link;
 }
 
 inline std::tuple<UndoLog, UndoLink> generateUndoLogAndLink(const Rid &rid, const RmRecord *old_rec,
