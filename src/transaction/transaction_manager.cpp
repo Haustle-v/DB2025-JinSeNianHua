@@ -120,7 +120,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
  * @param {Transaction *} txn 需要回滚的事务
  * @param {LogManager} *log_manager 日志管理器指针
  */
-void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
+void TransactionManager::abort(Transaction *txn, LogManager *log_manager, TransactionManager *txn_mgr) {
   // Todo:
   // 1. 回滚所有写操作
   // 2. 释放所有锁
@@ -145,7 +145,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
         // log_record.prev_lsn_ = txn->get_prev_lsn();
         // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
         // txn->set_prev_lsn(undo_lsn);
-        sm_manager_->rollback_insert(tab_name, write_rec_ptr->GetRid());
+        sm_manager_->rollback_insert(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetTupleMeta(), txn_mgr);
         break;
       }
       case WType::DELETE_TUPLE: {
@@ -154,7 +154,8 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
         // log_record.prev_lsn_ = txn->get_prev_lsn();
         // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
         // txn->set_prev_lsn(undo_lsn);
-        sm_manager_->rollback_delete(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord());
+        sm_manager_->rollback_delete(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord(),
+                                     write_rec_ptr->GetTupleMeta(), txn_mgr);
         break;
       }
       case WType::UPDATE_TUPLE: {
@@ -164,25 +165,11 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
         // log_record.prev_lsn_ = txn->get_prev_lsn();
         // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
         // txn->set_prev_lsn(undo_lsn);
-        sm_manager_->rollback_update(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord());
+        sm_manager_->rollback_update(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord(),
+                                     write_rec_ptr->GetTupleMeta(), txn_mgr);
         break;
       }
     }
-  }
-
-  //   给所有回滚后的记录重写ts
-  std::unordered_set<Rid> reseted_rids;
-  timestamp_t pre_verison_ts = txn->get_read_ts();
-  for (auto iter = write_set_ptr->begin(); iter != write_set_ptr->end(); ++iter) {
-    Rid rid = (*iter)->GetRid();
-    if (reseted_rids.find(rid) != reseted_rids.end()) {
-      continue;
-    } else {
-      reseted_rids.insert(rid);
-    }
-    std::string &tab_name = (*iter)->GetTableName();
-    auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
-    fhdl_ptr->set_meta(rid, pre_verison_ts, (*iter)->GetTupleMeta().is_deleted_);
   }
 
   //  释放锁

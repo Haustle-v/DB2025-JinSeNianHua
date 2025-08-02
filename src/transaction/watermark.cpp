@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 
 // sqb 6.16
 auto Watermark::AddTxn(timestamp_t read_ts) -> void {
+  std::scoped_lock<std::mutex> lock(latch_);
   if (read_ts < commit_ts_) {
     throw InternalError("read ts < commit ts");
   }
@@ -23,6 +24,7 @@ auto Watermark::AddTxn(timestamp_t read_ts) -> void {
 
 // sqb 6.16
 auto Watermark::RemoveTxn(timestamp_t read_ts) -> void {
+  std::scoped_lock<std::mutex> lock(latch_);
   auto iter = current_reads_.find(read_ts);
   if (iter != current_reads_.end()) {
     current_reads_.erase(iter);

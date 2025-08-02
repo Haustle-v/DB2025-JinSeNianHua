@@ -142,6 +142,13 @@ class RmFileHandle {
     return file_hdr_.record_num;
   }
 
+  //   为了重构回滚 支持MVCC的垃圾回收 加回滚时rec和meta原子回滚的函数
+  void rollback_insert_helper(const Rid &rid, const RmRecord &old_rec, const TupleMeta &old_meta,
+                              TransactionManager *txn_mgr);
+  void rollback_delete_helper(const Rid &rid, const TupleMeta &old_meta, TransactionManager *txn_mgr);
+  void rollback_update_helper(const Rid &rid, const RmRecord &old_rec, const TupleMeta &old_meta,
+                              TransactionManager *txn_mgr);
+
  private:
   RmPageHandle create_page_handle();
 
