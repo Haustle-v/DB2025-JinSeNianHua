@@ -68,9 +68,12 @@ class DeleteExecutor : public AbstractExecutor {
       //   mvcc 下的删除
       fh_->delete_record(rid, context_, pre_rec, &tab_, &old_meta);
       // 将事务记录移出临界区
-      if (context_ != nullptr) {
-        auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *pre_rec, old_meta);
-        context_->txn_->append_write_record(std::move(delete_wrec));
+      if (context_ != nullptr && !context_->txn_->check_rid_operated(rid)) {
+        // auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *pre_rec, old_meta);
+        // context_->txn_->append_write_record(std::move(delete_wrec));
+        auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *pre_rec, old_meta);
+        context_->txn_->append_write_record(std::move(update_wrec));
+        context_->txn_->append_write_rid(rid);
       }
     }
     delete pre_rec;

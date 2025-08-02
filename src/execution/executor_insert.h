@@ -117,13 +117,17 @@ class InsertExecutor : public AbstractExecutor {
       return nullptr;
     }
 
-    TupleMeta old_meta;  // 元组现在的tuple_meta，用于事务记录
+    TupleMeta old_meta;                                                 // 元组现在的tuple_meta，用于事务记录
+    RmRecord *pre_rec = new RmRecord(fh_->get_file_hdr().record_size);  // 存当前表堆最新记录
     // mvcc 对应的插入
-    rid_ = fh_->insert_record(rec.data, context_, &tab_, &old_meta);
+    rid_ = fh_->insert_record(rec.data, context_, pre_rec, &tab_, &old_meta);
     // 没有故障恢复的情况下，事务插入直接移出临界区
-    if (context_ != nullptr) {
-      auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, rid_, old_meta);
-      context_->txn_->append_write_record(std::move(insert_wrec));
+    if (context_ != nullptr && !context_->txn_->check_rid_operated(rid_)) {
+      //   auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, rid_, old_meta);
+      //   context_->txn_->append_write_record(std::move(insert_wrec));
+      auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid_, *pre_rec, old_meta);
+      context_->txn_->append_write_record(std::move(update_wrec));
+      context_->txn_->append_write_rid(rid_);
     }
 
     // Insert into index
@@ -140,6 +144,7 @@ class InsertExecutor : public AbstractExecutor {
       ih->insert_entry(key, rid_, context_->txn_);
     }
     delete[] key;
+    delete pre_rec;
 
     return nullptr;
   }

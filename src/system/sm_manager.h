@@ -93,13 +93,13 @@ class SmManager {
   void show_index(const std::string &tab_name, Context *context);
 
   // 重构roll back,将record和meta原子完成 以便支持垃圾回收 sqb
-  void rollback_insert(const std::string &tab_name, const Rid &rid, const TupleMeta &old_meta,
-                       TransactionManager *txn_mgr, const lsn_t lsn = INVALID_LSN);
+  //   void rollback_insert(const std::string &tab_name, WriteRecord &write_rec, Transaction *txn,
+  //                        TransactionManager *txn_mgr, const lsn_t lsn = INVALID_LSN);
 
-  void rollback_delete(const std::string &tab_name, const Rid &rid, const RmRecord &old_rec, const TupleMeta &old_meta,
-                       TransactionManager *txn_mgr, const lsn_t lsn = INVALID_LSN);
+  //   void rollback_delete(const std::string &tab_name, WriteRecord &write_rec, Transaction *txn,
+  //                        TransactionManager *txn_mgr, const lsn_t lsn = INVALID_LSN);
 
-  void rollback_update(const std::string &tab_name, const Rid &rid, const RmRecord &old_rec, const TupleMeta &old_meta,
+  void rollback_update(const std::string &tab_name, WriteRecord &write_rec, Transaction *txn,
                        TransactionManager *txn_mgr, const lsn_t lsn = INVALID_LSN);
 
   // yfs 7.2

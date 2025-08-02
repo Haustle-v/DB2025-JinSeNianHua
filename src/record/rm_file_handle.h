@@ -102,7 +102,8 @@ class RmFileHandle {
   std::unique_ptr<RmRecord> get_record(const Rid &rid, Context *context) const;
 
   // sqb 再次修改增删改接口 让undo link同时更新
-  Rid insert_record(char *buf, Context *context, const TabMeta *schema = nullptr, TupleMeta *old_meta = nullptr);
+  Rid insert_record(char *buf, Context *context, RmRecord *old_rec = nullptr, const TabMeta *schema = nullptr,
+                    TupleMeta *old_meta = nullptr);
 
   void insert_record(const Rid &rid, char *buf);
 
@@ -129,8 +130,8 @@ class RmFileHandle {
   // sqb 6.20 获取对应版本的tuple
   auto get_reconstructed_tuple(const Rid &rid, Context *context, TabMeta &tab) -> std::unique_ptr<RmRecord>;
 
-  // sqb 事务提交更新所有时间戳 事务回滚时用来
-  void set_meta(const Rid &rid, timestamp_t ts, bool is_delete);
+  // sqb 事务提交更新所有时间戳
+  void set_meta_ts(const Rid &rid, timestamp_t ts);
 
   // sqb 用于改动rmscan
   TupleMeta get_meta(const Rid &rid);
@@ -143,10 +144,11 @@ class RmFileHandle {
   }
 
   //   为了重构回滚 支持MVCC的垃圾回收 加回滚时rec和meta原子回滚的函数
-  void rollback_insert_helper(const Rid &rid, const RmRecord &old_rec, const TupleMeta &old_meta,
-                              TransactionManager *txn_mgr);
-  void rollback_delete_helper(const Rid &rid, const TupleMeta &old_meta, TransactionManager *txn_mgr);
-  void rollback_update_helper(const Rid &rid, const RmRecord &old_rec, const TupleMeta &old_meta,
+  //   void rollback_insert_helper(const Rid &rid, const RmRecord &old_rec, const TupleMeta &old_meta, Transaction *txn,
+  //                               TransactionManager *txn_mgr);
+  //   void rollback_delete_helper(const Rid &rid, const TupleMeta &old_meta, Transaction *txn, TransactionManager
+  //   *txn_mgr);
+  void rollback_update_helper(const Rid &rid, const RmRecord &old_rec, const TupleMeta &old_meta, Transaction *txn,
                               TransactionManager *txn_mgr);
 
  private:

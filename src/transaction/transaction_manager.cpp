@@ -72,18 +72,9 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   std::unordered_set<Rid> reseted_rids;
   for (auto iter = write_set_ptr->rbegin(); iter != write_set_ptr->rend(); ++iter) {
     Rid rid = (*iter)->GetRid();
-    if (reseted_rids.find(rid) != reseted_rids.end()) {
-      continue;
-    } else {
-      reseted_rids.insert(rid);
-    }
     std::string &tab_name = (*iter)->GetTableName();
     auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
-    if (((*iter)->GetWriteType() == WType::UPDATE_TUPLE)) {
-      fhdl_ptr->set_meta(rid, commit_ts, (*iter)->GetTupleMeta().is_deleted_);
-    } else {
-      fhdl_ptr->set_meta(rid, commit_ts, !((*iter)->GetTupleMeta().is_deleted_));
-    }
+    fhdl_ptr->set_meta_ts(rid, commit_ts);
   }
   // 更新undo log的时间戳
   txn->CommitAllUndoLogs(commit_ts);
@@ -96,6 +87,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   //   释放资源 感觉后面可以去掉
   lock_set_ptr->clear();
   txn->get_write_set()->clear();
+  txn->get_write_rids().clear();
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 
@@ -138,38 +130,15 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager, Transa
     // 给回滚操作加锁 加日志 6.12
     std::string &tab_name = write_rec_ptr->GetTableName();
     // lock_manager_->lock_exclusive_on_record(txn, write_rec_ptr->GetRid(), sm_manager_->fhs_.at(tab_name)->GetFd());
-    switch (write_rec_ptr->GetWriteType()) {
-      case WType::INSERT_TUPLE: {
-        // auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
-        // DeleteLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRid(), tab_name};
-        // log_record.prev_lsn_ = txn->get_prev_lsn();
-        // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
-        // txn->set_prev_lsn(undo_lsn);
-        sm_manager_->rollback_insert(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetTupleMeta(), txn_mgr);
-        break;
-      }
-      case WType::DELETE_TUPLE: {
-        // InsertLogRecord log_record{txn->get_transaction_id(), write_rec_ptr->GetRecord(), write_rec_ptr->GetRid(),
-        //                            tab_name};
-        // log_record.prev_lsn_ = txn->get_prev_lsn();
-        // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
-        // txn->set_prev_lsn(undo_lsn);
-        sm_manager_->rollback_delete(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord(),
-                                     write_rec_ptr->GetTupleMeta(), txn_mgr);
-        break;
-      }
-      case WType::UPDATE_TUPLE: {
-        // auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
-        // UpdateLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRecord(),
-        //                            write_rec_ptr->GetRid(), tab_name};
-        // log_record.prev_lsn_ = txn->get_prev_lsn();
-        // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
-        // txn->set_prev_lsn(undo_lsn);
-        sm_manager_->rollback_update(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord(),
-                                     write_rec_ptr->GetTupleMeta(), txn_mgr);
-        break;
-      }
-    }
+
+    // 现在全部都是update wrec 便于线下加故障恢复
+    // auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
+    // UpdateLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRecord(),
+    //                            write_rec_ptr->GetRid(), tab_name};
+    // log_record.prev_lsn_ = txn->get_prev_lsn();
+    // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
+    // txn->set_prev_lsn(undo_lsn);
+    sm_manager_->rollback_update(tab_name, *write_rec_ptr, txn, txn_mgr);
   }
 
   //  释放锁
@@ -180,6 +149,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager, Transa
   //   释放资源 感觉后面可以去掉
   lock_set_ptr->clear();
   txn->get_write_set()->clear();
+  txn->get_write_rids().clear();
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 
