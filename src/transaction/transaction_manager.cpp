@@ -44,7 +44,7 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
   // sqb 加水印 6.16
   std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn_map.emplace(txn->get_transaction_id(), txn);
-  running_txns_.AddTxn(txn->get_read_ts());
+  //   running_txns_.AddTxn(txn->get_read_ts());
 
   return txn;
 }
@@ -103,8 +103,8 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   txn->set_state(TransactionState::COMMITTED);
   txn->set_commit_ts(commit_ts);
   last_commit_ts_ = commit_ts;
-  running_txns_.UpdateCommitTs(commit_ts);
-  running_txns_.RemoveTxn(txn->get_read_ts());
+  //   running_txns_.UpdateCommitTs(commit_ts);
+  //   running_txns_.RemoveTxn(txn->get_read_ts());
 }
 
 /**
@@ -163,7 +163,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager, Transa
   //   sqb 6.16 加水印
   std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn->set_state(TransactionState::ABORTED);
-  running_txns_.RemoveTxn(txn->get_read_ts());
+  //   running_txns_.RemoveTxn(txn->get_read_ts());
 }
 
 //------------------------关于MVCC部分的实现,参考15445,sqb---------------
