@@ -22,6 +22,8 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 #include <unordered_map>
 
+#include <shared_mutex> // 引入读写锁头文件
+
 #include "common/config.h"
 #include "errors.h"
 
@@ -105,5 +107,5 @@ class DiskManager {
   std::mutex latch_;
 
   //   为每个文件提供单独的锁
-  std::unordered_map<int, std::shared_ptr<std::mutex>> fd_locks_;
+  std::unordered_map<int, std::shared_ptr<std::shared_mutex>> fd_locks_;
 };
