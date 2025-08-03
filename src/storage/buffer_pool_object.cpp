@@ -95,7 +95,7 @@ Page *BufferPoolObject::fetch_page(PageId page_id) {
   //  4.     固定目标页，更新pin_count_
   //  5.     返回目标页
 
-  std::scoped_lock<std::mutex> lock(latch_);
+  latch_.lock();
   auto iter = page_table_.find(page_id);
   frame_id_t useable_frame_id = INVALID_FRAME_ID;
   if (iter != page_table_.end()) {
@@ -105,24 +105,28 @@ Page *BufferPoolObject::fetch_page(PageId page_id) {
     replacer_->pin(iter->second);  // unpin会在外面被调用 这里必须加
     // std::cerr << "[DEBUG] bpm fetch_page cached hit! page "
     //           << page_id.toString() << std::endl;
+    latch_.unlock();
     return &target_page;
   }
 
   // 缓存未命中 找可用页框
   // 无空闲页框
   if (!find_victim_page(&useable_frame_id)) {
+    latch_.unlock();
     return nullptr;
   }
 
   // 找到可替换页 更新相关元数据
   update_page(&pages_[useable_frame_id], page_id, useable_frame_id);
 
-  // 将目标页读入到给定页框
-  disk_manager_->read_page(page_id.fd, page_id.page_no, pages_[useable_frame_id].get_data(), PAGE_SIZE);
-
   //    加载到内存时把它定住
   pages_[useable_frame_id].pin_count_ = 1;
   replacer_->pin(useable_frame_id);
+
+  latch_.unlock();
+
+  // 将目标页读入到给定页框
+  disk_manager_->read_page(page_id.fd, page_id.page_no, pages_[useable_frame_id].get_data(), PAGE_SIZE);
 
   return pages_ + useable_frame_id;
 }
