@@ -30,9 +30,9 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
 
   // sqb 涉及mvcc 6.5
   if (txn == nullptr) {
-    txn = new Transaction(next_txn_id_++);
-    txn->set_start_ts(next_timestamp_++);
-    txn->set_read_ts(last_commit_ts_);
+    txn = new Transaction(next_txn_id_.fetch_add(1));
+    txn->set_start_ts(next_timestamp_.fetch_add(1));
+    txn->set_read_ts(last_commit_ts_.load());
   }
   //   txn->set_state(TransactionState::GROWING);
 
@@ -44,7 +44,7 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
   // sqb 加水印 6.16
   std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn_map.emplace(txn->get_transaction_id(), txn);
-  //   running_txns_.AddTxn(txn->get_read_ts());
+  running_txns_.AddTxn(txn->get_read_ts());
 
   return txn;
 }
@@ -67,17 +67,17 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   // 直接进行写操作 所以不会存在未提交的写
   //   更新所有写操作的提交时间戳
   std::scoped_lock<std::mutex> lck(commit_mutex_);
-  timestamp_t commit_ts = next_timestamp_++;
+  timestamp_t commit_ts = next_timestamp_.fetch_add(1);
   auto write_set_ptr = txn->get_write_set();
-  std::unordered_set<Rid> reseted_rids;
-  for (auto iter = write_set_ptr->rbegin(); iter != write_set_ptr->rend(); ++iter) {
+  size_t idx = 0;  // 跟踪rid，因为一个rid仅在undo中出现一次，按顺序就是对应的undo_log顺序
+  for (auto iter = write_set_ptr->begin(); iter != write_set_ptr->end(); ++iter) {
     Rid rid = (*iter)->GetRid();
     std::string &tab_name = (*iter)->GetTableName();
     auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
-    fhdl_ptr->set_meta_ts(rid, commit_ts);
+    fhdl_ptr->set_meta_ts(txn, idx++, rid, commit_ts);
   }
   // 更新undo log的时间戳
-  txn->CommitAllUndoLogs(commit_ts);
+  //   txn->CommitAllUndoLogs(commit_ts);
 
   //  释放锁
   auto lock_set_ptr = txn->get_lock_set();
@@ -102,9 +102,9 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn->set_state(TransactionState::COMMITTED);
   txn->set_commit_ts(commit_ts);
-  last_commit_ts_ = commit_ts;
-  //   running_txns_.UpdateCommitTs(commit_ts);
-  //   running_txns_.RemoveTxn(txn->get_read_ts());
+  last_commit_ts_.store(commit_ts);
+  running_txns_.UpdateCommitTs(commit_ts);
+  running_txns_.RemoveTxn(txn->get_read_ts());
 }
 
 /**
@@ -163,7 +163,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager, Transa
   //   sqb 6.16 加水印
   std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn->set_state(TransactionState::ABORTED);
-  //   running_txns_.RemoveTxn(txn->get_read_ts());
+  running_txns_.RemoveTxn(txn->get_read_ts());
 }
 
 //------------------------关于MVCC部分的实现,参考15445,sqb---------------

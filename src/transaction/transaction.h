@@ -138,12 +138,10 @@ class Transaction {
     return undo_logs_.size();
   }
 
-  // sqb 6.18 commit时更新所有的undo log对应时间戳
-  inline void CommitAllUndoLogs(timestamp_t commit_ts) {
+  // sqb 6.18 commit时更新undo log对应时间戳
+  inline void CommitUndoLog(size_t idx, timestamp_t commit_ts) {
     std::scoped_lock<std::mutex> lck(latch_);
-    for (auto &log : undo_logs_) {
-      log.ts_ = commit_ts;
-    }
+    undo_logs_[idx].ts_ = commit_ts;
   }
 
  private:

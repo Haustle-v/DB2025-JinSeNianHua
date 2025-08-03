@@ -31,7 +31,7 @@ class Watermark {
   /** 调用者应在从水印中移除事务之前更新提交时间戳，以便我们能够正确跟踪水印。 */
   // sqb 6.16
   void UpdateCommitTs(timestamp_t commit_ts) {
-    std::scoped_lock<std::mutex> lock(latch_);
+    std::unique_lock<std::shared_mutex> lock(latch_);
     commit_ts_ = commit_ts;
     if (current_reads_.empty()) {
       watermark_ = commit_ts_;
@@ -39,7 +39,7 @@ class Watermark {
   }
 
   timestamp_t GetWatermark() {
-    std::scoped_lock<std::mutex> lock(latch_);
+    std::shared_lock<std::shared_mutex> lock(latch_);
     return watermark_;
   }
 
@@ -50,5 +50,5 @@ class Watermark {
   //   std::map<timestamp_t, int> current_reads_;
   std::multiset<timestamp_t> current_reads_;  // sqb 换个高效的写法
 
-  std::mutex latch_;  // 支持并发
+  std::shared_mutex latch_;  // 支持并发
 };

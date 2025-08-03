@@ -130,8 +130,8 @@ class RmFileHandle {
   // sqb 6.20 获取对应版本的tuple
   auto get_reconstructed_tuple(const Rid &rid, Context *context, TabMeta &tab) -> std::unique_ptr<RmRecord>;
 
-  // sqb 事务提交更新所有时间戳
-  void set_meta_ts(const Rid &rid, timestamp_t ts);
+  // sqb 事务提交更新表堆和undo_log的时间戳
+  void set_meta_ts(Transaction *txn, size_t log_idx, const Rid &rid, timestamp_t ts);
 
   // sqb 用于改动rmscan
   TupleMeta get_meta(const Rid &rid);

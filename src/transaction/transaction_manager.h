@@ -154,7 +154,7 @@ class TransactionManager {
  private:
   ConcurrencyMode concurrency_mode_;            // 事务使用的并发控制算法，目前只需要考虑2PL
   std::atomic<txn_id_t> next_txn_id_{0};        // 用于分发事务ID
-  std::atomic<timestamp_t> next_timestamp_{0};  // 用于分发事务时间戳
+  std::atomic<timestamp_t> next_timestamp_{1};  // 用于分发事务时间戳
   std::mutex latch_;                            // 用于txn_map的并发 sqb--框架有问题，压根没用上
   SmManager *sm_manager_;
   LockManager *lock_manager_;

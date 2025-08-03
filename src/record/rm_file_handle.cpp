@@ -56,8 +56,8 @@ auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
   return ret;
 }
 
-// sqb 6.17 事务commit时更新所有写操作的时间戳
-void RmFileHandle::set_meta_ts(const Rid &rid, timestamp_t ts) {
+// sqb 6.17 事务commit时更新所有写操作的时间戳 undo_log的时间戳应该一起更改
+void RmFileHandle::set_meta_ts(Transaction *txn, size_t log_idx, const Rid &rid, timestamp_t ts) {
   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->WLatch();
@@ -65,6 +65,7 @@ void RmFileHandle::set_meta_ts(const Rid &rid, timestamp_t ts) {
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
   base_meta.ts_ = ts;
   //   base_meta.is_deleted_ = is_delete;
+  txn->CommitUndoLog(log_idx, ts);
 
   page_hdl.page->WUnlatch();
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
