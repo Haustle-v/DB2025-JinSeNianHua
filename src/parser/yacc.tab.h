@@ -130,7 +130,6 @@ struct YYLTYPE
 
 
 
-// int yyparse (yyscan_t scanner);
 int yyparse (void *yyscanner);
 
 #endif /* !YY_YY_HOME_SQB_CAREER_GAMEPROJECT_DBS_KERNEL_DB2025_SRC_PARSER_YACC_TAB_H_INCLUDED  */

@@ -122,12 +122,12 @@ class InsertExecutor : public AbstractExecutor {
     // mvcc 对应的插入
     rid_ = fh_->insert_record(rec.data, context_, pre_rec, &tab_, &old_meta);
     // 没有故障恢复的情况下，事务插入直接移出临界区
-    if (context_ != nullptr && !context_->txn_->check_rid_operated(rid_)) {
+    if (context_ != nullptr && !context_->txn_->check_tuple_operated(fh_->GetFd(), rid_)) {
       //   auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, rid_, old_meta);
       //   context_->txn_->append_write_record(std::move(insert_wrec));
       auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid_, *pre_rec, old_meta);
       context_->txn_->append_write_record(std::move(update_wrec));
-      context_->txn_->append_write_rid(rid_);
+      context_->txn_->append_write_tuple(fh_->GetFd(), rid_);
     }
 
     // Insert into index

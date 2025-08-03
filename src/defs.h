@@ -37,13 +37,28 @@ struct Rid {
   friend bool operator!=(const Rid &x, const Rid &y) { return !(x == y); }
 
   // sqb 哈希用
-  inline int64_t Get() const { return (static_cast<int64_t>(page_no) << 32) | slot_no; }
+  inline int64_t Get() const { return (static_cast<int64_t>(page_no) << 16) | slot_no; }
 };
 
 // sqb 自定义哈希 用于事务commit
 template <>
 struct std::hash<Rid> {
   size_t operator()(const Rid &rid) const { return std::hash<int64_t>{}(rid.Get()); }
+};
+
+// sqb 定义tupleId 跟踪记录在每张表的位置，mvcc回滚用
+struct TupleId {
+  int fd;
+  Rid rid;
+
+  bool operator==(const TupleId &other) const { return fd == other.fd && rid == other.rid; }
+};
+
+template <>
+struct std::hash<TupleId> {
+  size_t operator()(const TupleId &t) const {
+    return std::hash<int64_t>{}((static_cast<int64_t>(t.fd) << 32) ^ (t.rid.Get()));
+  }
 };
 
 enum ColType { TYPE_INT, TYPE_FLOAT, TYPE_STRING };

@@ -1,6 +1,6 @@
-#line 2 "lex.yy.cpp"
+#line 2 "/home/sqb/career/GameProject/DBS-kernel/db2025/src/parser/lex.yy.cpp"
 
-#line 4 "lex.yy.cpp"
+#line 4 "/home/sqb/career/GameProject/DBS-kernel/db2025/src/parser/lex.yy.cpp"
 
 #define  YY_INT_ALIGNED short int
 
@@ -680,9 +680,9 @@ static const flex_int16_t yy_chk[580] =
         } \
     }
 
-#line 684 "lex.yy.cpp"
+#line 684 "/home/sqb/career/GameProject/DBS-kernel/db2025/src/parser/lex.yy.cpp"
 
-#line 686 "lex.yy.cpp"
+#line 686 "/home/sqb/career/GameProject/DBS-kernel/db2025/src/parser/lex.yy.cpp"
 
 #define INITIAL 0
 #define STATE_COMMENT 1
@@ -969,7 +969,7 @@ YY_DECL
 
 #line 51 "lex.l"
     /* block comment */
-#line 973 "lex.yy.cpp"
+#line 973 "/home/sqb/career/GameProject/DBS-kernel/db2025/src/parser/lex.yy.cpp"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1424,7 +1424,7 @@ YY_RULE_SETUP
 #line 153 "lex.l"
 ECHO;
 	YY_BREAK
-#line 1428 "lex.yy.cpp"
+#line 1428 "/home/sqb/career/GameProject/DBS-kernel/db2025/src/parser/lex.yy.cpp"
 
 	case YY_END_OF_BUFFER:
 		{

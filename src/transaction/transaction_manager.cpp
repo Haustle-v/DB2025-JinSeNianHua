@@ -87,7 +87,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   //   释放资源 感觉后面可以去掉
   lock_set_ptr->clear();
   txn->get_write_set()->clear();
-  txn->get_write_rids().clear();
+  txn->get_write_tuples().clear();
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 
@@ -149,7 +149,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager, Transa
   //   释放资源 感觉后面可以去掉
   lock_set_ptr->clear();
   txn->get_write_set()->clear();
-  txn->get_write_rids().clear();
+  txn->get_write_tuples().clear();
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 

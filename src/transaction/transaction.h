@@ -91,9 +91,9 @@ class Transaction {
     write_set_->push_back(std::move(write_record));
   }
 
-  inline std::unordered_set<Rid> &get_write_rids() { return write_rids_; }
-  inline bool check_rid_operated(Rid &rid) { return write_rids_.count(rid) > 0; }
-  inline void append_write_rid(Rid &rid) { write_rids_.emplace(rid); }
+  inline std::unordered_set<TupleId> &get_write_tuples() { return write_tuples_; }
+  inline bool check_tuple_operated(int fd, Rid &rid) { return write_tuples_.count({fd, rid}) > 0; }
+  inline void append_write_tuple(int fd, Rid &rid) { write_tuples_.insert({fd, rid}); }
 
   //   inline std::shared_ptr<std::deque<std::unique_ptr<WriteRecord> *>> get_write_set() { return write_set_; }
   //   inline void append_write_record(WriteRecord *write_record) { write_set_->push_back(write_record); }
@@ -155,8 +155,8 @@ class Transaction {
   txn_id_t txn_id_;                 // 事务的ID，唯一标识符
   timestamp_t start_ts_;            // 事务的开始时间戳
 
-  std::unordered_set<Rid>
-      write_rids_;  // 记录写操作对应的元组，让write_set只保留每个元组的初始值 便于mvcc下并发回滚 sqb
+  std::unordered_set<TupleId>
+      write_tuples_;  // 记录写操作对应的元组，让write_set只保留每个元组的初始值 便于mvcc下并发回滚 sqb
   // std::shared_ptr<std::deque<WriteRecord *>> write_set_;  // 事务包含的所有写操作
   std::shared_ptr<std::deque<std::unique_ptr<WriteRecord>>>
       write_set_;                                               // 事务包含的所有写操作 sqb懒狗不愿意手动释放内存
