@@ -172,15 +172,16 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager, Transa
  * 在更新之前，将调用 `check` 函数以确保有效性。
  */
 // 不确定
-bool TransactionManager::UpdateUndoLink(Rid rid, std::optional<UndoLink> prev_link,
+bool TransactionManager::UpdateUndoLink(int fd, Rid rid, std::optional<UndoLink> prev_link,
                                         std::function<bool(std::optional<UndoLink>)> &&check) {
+  PageId page_id{fd, rid.page_no};
   std::unique_lock<std::shared_mutex> verion_table_lock(version_info_mutex_);
   std::shared_ptr<PageVersionInfo> pvi_ptr = nullptr;
-  auto iter = version_info_.find(rid.page_no);
+  auto iter = version_info_.find(page_id);
   if (iter == version_info_.end()) {
     // 无则创建
     pvi_ptr = std::make_shared<PageVersionInfo>();
-    version_info_[rid.page_no] = pvi_ptr;
+    version_info_[page_id] = pvi_ptr;
   } else {
     // 有则准备修改
     pvi_ptr = iter->second;
@@ -209,15 +210,16 @@ bool TransactionManager::UpdateUndoLink(Rid rid, std::optional<UndoLink> prev_li
  * @brief 更新一个撤销链接，该链接将表堆元组与第一个撤销日志连接起来。
  * 在更新之前，将调用 `check` 函数以确保有效性。
  */
-bool TransactionManager::UpdateVersionLink(Rid rid, std::optional<VersionUndoLink> prev_version,
+bool TransactionManager::UpdateVersionLink(int fd, Rid rid, std::optional<VersionUndoLink> prev_version,
                                            std::function<bool(std::optional<VersionUndoLink>)> &&check) {
+  PageId page_id{fd, rid.page_no};
   std::unique_lock<std::shared_mutex> verion_table_lock(version_info_mutex_);
   std::shared_ptr<PageVersionInfo> pvi_ptr = nullptr;
-  auto iter = version_info_.find(rid.page_no);
+  auto iter = version_info_.find(page_id);
   if (iter == version_info_.end()) {
     // 无则创建
     pvi_ptr = std::make_shared<PageVersionInfo>();
-    version_info_[rid.page_no] = pvi_ptr;
+    version_info_[page_id] = pvi_ptr;
   } else {
     // 有则准备修改
     pvi_ptr = iter->second;
@@ -243,9 +245,10 @@ bool TransactionManager::UpdateVersionLink(Rid rid, std::optional<VersionUndoLin
 }
 
 /** @brief 获取表堆元组的第一个撤销日志。 */
-std::optional<UndoLink> TransactionManager::GetUndoLink(Rid rid) {
+std::optional<UndoLink> TransactionManager::GetUndoLink(int fd, Rid rid) {
+  PageId page_id{fd, rid.page_no};
   std::shared_lock<std::shared_mutex> version_table_lock(version_info_mutex_);
-  auto iter = version_info_.find(rid.page_no);
+  auto iter = version_info_.find(page_id);
   if (iter == version_info_.end()) {
     return std::nullopt;
   }
@@ -260,9 +263,10 @@ std::optional<UndoLink> TransactionManager::GetUndoLink(Rid rid) {
 }
 
 /** @brief 获取表堆元组的第一个撤销日志。*/
-std::optional<VersionUndoLink> TransactionManager::GetVersionLink(Rid rid) {
+std::optional<VersionUndoLink> TransactionManager::GetVersionLink(int fd, Rid rid) {
+  PageId page_id{fd, rid.page_no};
   std::shared_lock<std::shared_mutex> version_table_lock(version_info_mutex_);
-  auto iter = version_info_.find(rid.page_no);
+  auto iter = version_info_.find(page_id);
   if (iter == version_info_.end()) {
     return std::nullopt;
   }
