@@ -61,7 +61,7 @@ class TransactionManager {
 
   void commit(Transaction *txn, LogManager *log_manager);
 
-  void abort(Transaction *txn, LogManager *log_manager);
+  void abort(Transaction *txn, LogManager *log_manager, TransactionManager *txn_mgr);
 
   ConcurrencyMode get_concurrency_mode() { return concurrency_mode_; }
 
@@ -77,7 +77,8 @@ class TransactionManager {
   Transaction *get_transaction(txn_id_t txn_id) {
     if (txn_id == INVALID_TXN_ID) return nullptr;
 
-    std::unique_lock<std::mutex> lock(latch_);
+    // std::unique_lock<std::mutex> lock(latch_);
+    std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
     assert(TransactionManager::txn_map.find(txn_id) != TransactionManager::txn_map.end());
     auto *res = TransactionManager::txn_map[txn_id];
     lock.unlock();
@@ -105,21 +106,21 @@ class TransactionManager {
    * @brief 更新一个撤销链接，该链接将表堆元组与第一个撤销日志连接起来。
    * 在更新之前，将调用 `check` 函数以确保有效性。
    */
-  bool UpdateUndoLink(Rid rid, std::optional<UndoLink> prev_link,
+  bool UpdateUndoLink(int fd, Rid rid, std::optional<UndoLink> prev_link,
                       std::function<bool(std::optional<UndoLink>)> &&check = nullptr);
 
   /**
    * @brief 更新一个撤销链接，该链接将表堆元组与第一个撤销日志连接起来。
    * 在更新之前，将调用 `check` 函数以确保有效性。
    */
-  bool UpdateVersionLink(Rid rid, std::optional<VersionUndoLink> prev_version,
+  bool UpdateVersionLink(int fd, Rid rid, std::optional<VersionUndoLink> prev_version,
                          std::function<bool(std::optional<VersionUndoLink>)> &&check = nullptr);
 
   /** @brief 获取表堆元组的第一个撤销日志。 */
-  std::optional<UndoLink> GetUndoLink(Rid rid);
+  std::optional<UndoLink> GetUndoLink(int fd, Rid rid);
 
   /** @brief 获取表堆元组的第一个撤销日志。*/
-  std::optional<VersionUndoLink> GetVersionLink(Rid rid);
+  std::optional<VersionUndoLink> GetVersionLink(int fd, Rid rid);
 
   /** @brief 访问事务撤销日志缓冲区并获取撤销日志。如果事务不存在，返回 nullopt。
    * 如果索引超出范围仍然会抛出异常。 */
@@ -144,16 +145,17 @@ class TransactionManager {
     std::unordered_map<slot_offset_t, VersionUndoLink> prev_version_;
   };
 
+  //   之前的MVCC仅支持单表，重构以保证多表操作安全 pageId{fd,page_no}
   /** 保护版本信息 */
   std::shared_mutex version_info_mutex_;
   /** 存储表堆中每个元组的先前版本。 */
-  std::unordered_map<page_id_t, std::shared_ptr<PageVersionInfo>> version_info_;
+  std::unordered_map<PageId, std::shared_ptr<PageVersionInfo>, PageIdHash> version_info_;
 
  private:
   ConcurrencyMode concurrency_mode_;            // 事务使用的并发控制算法，目前只需要考虑2PL
   std::atomic<txn_id_t> next_txn_id_{0};        // 用于分发事务ID
-  std::atomic<timestamp_t> next_timestamp_{0};  // 用于分发事务时间戳
-  std::mutex latch_;                            // 用于txn_map的并发
+  std::atomic<timestamp_t> next_timestamp_{1};  // 用于分发事务时间戳
+  std::mutex latch_;                            // 用于txn_map的并发 sqb--框架有问题，压根没用上
   SmManager *sm_manager_;
   LockManager *lock_manager_;
 

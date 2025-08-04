@@ -400,75 +400,92 @@ void SmManager::show_index(const std::string &tab_name, Context *context) {
   }
 }
 
-// sqb 定义redo undo的helper 减少重复代码 6.8
-void SmManager::record_insert_helper(const std::string &tab_name, const Rid &rid, const RmRecord &rec,
-                                     const lsn_t lsn) {
-  // 先插入记录再插入索引
-  TabMeta &tab_meta = db_.get_table(tab_name);
-  auto fhdl_ptr = fhs_.at(tab_name).get();
+// // 重构roll back,将record和meta原子完成 以便支持垃圾回收 sqb
+// void SmManager::rollback_insert(const std::string &tab_name, WriteRecord &write_rec, Transaction *txn,
+//                                 TransactionManager *txn_mgr, const lsn_t lsn) {
+//   // 记录的字段
+//   Rid &rid = write_rec.GetRid();
+//   TupleMeta &old_meta = write_rec.GetTupleMeta();
 
-  //   插入记录
-  //   Rid rid = fhdl_ptr->insert_record(rec.data, nullptr);
-  fhdl_ptr->allocate_pages(rid);
-  fhdl_ptr->insert_record(rid, rec.data);
+//   //   插入对应删除
+//   TabMeta &tab_meta = db_.get_table(tab_name);
+//   auto fhdl_ptr = fhs_.at(tab_name).get();
+//   fhdl_ptr->allocate_pages(rid);
+//   //   std::unique_ptr<RmRecord> rec_ptr = fhdl_ptr->get_record(rid, nullptr);
 
-  //   //   插入索引
-  //   for (auto &index_meta : tab_meta.indexes) {
-  //     std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
-  //     auto ix_hdl_ptr = ihs_[index_name].get();
-  //     char key_buffer[index_meta.col_tot_len];
-  //     int offset = 0;
-  //     for (auto &col_meta : index_meta.cols) {
-  //       memcpy(key_buffer + offset, rec.data + col_meta.offset, col_meta.len);
-  //       offset += col_meta.len;
-  //     }
-  //     ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
-  //   }
+//   //   //   删除索引
+//   //   for (auto &index_meta : tab_meta.indexes) {
+//   //     std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
+//   //     auto ix_hdl_ptr = ihs_[index_name].get();
+//   //     char key_buffer[index_meta.col_tot_len];
+//   //     int offset = 0;
+//   //     for (auto &col_meta : index_meta.cols) {
+//   //       memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
+//   //       offset += col_meta.len;
+//   //     }
+//   //     ix_hdl_ptr->delete_entry(key_buffer, nullptr);
+//   //   }
 
-  // 给redo与undo加上lsn
-  if (lsn != INVALID_LSN) {
-    PageId page_id{fhdl_ptr->GetFd(), rid.page_no};
-    Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
-    page_ptr->set_page_lsn(lsn);
-    buffer_pool_manager_->unpin_page(page_id, true);
-  }
-}
+//   //   删除记录
+//   //   fhdl_ptr->delete_record(rid, nullptr);
+//   fhdl_ptr->rollback_delete_helper(rid, old_meta, txn, txn_mgr);
 
-void SmManager::record_delete_helper(const std::string &tab_name, const Rid &rid, const lsn_t lsn) {
-  //   先删索引再删记录
-  TabMeta &tab_meta = db_.get_table(tab_name);
-  auto fhdl_ptr = fhs_.at(tab_name).get();
-  fhdl_ptr->allocate_pages(rid);
-  //   std::unique_ptr<RmRecord> rec_ptr = fhdl_ptr->get_record(rid, nullptr);
+//   // 日志加上lsn
+//   if (lsn != INVALID_LSN) {
+//     PageId page_id{fhdl_ptr->GetFd(), rid.page_no};
+//     Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
+//     page_ptr->set_page_lsn(lsn);
+//     buffer_pool_manager_->unpin_page(page_id, true);
+//   }
+// }
 
-  //   //   删除索引
-  //   for (auto &index_meta : tab_meta.indexes) {
-  //     std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
-  //     auto ix_hdl_ptr = ihs_[index_name].get();
-  //     char key_buffer[index_meta.col_tot_len];
-  //     int offset = 0;
-  //     for (auto &col_meta : index_meta.cols) {
-  //       memcpy(key_buffer + offset, rec_ptr->data + col_meta.offset, col_meta.len);
-  //       offset += col_meta.len;
-  //     }
-  //     ix_hdl_ptr->delete_entry(key_buffer, nullptr);
-  //   }
+// void SmManager::rollback_delete(const std::string &tab_name, WriteRecord &write_rec, Transaction *txn,
+//                                 TransactionManager *txn_mgr, const lsn_t lsn) {
+//   // 记录的字段
+//   Rid &rid = write_rec.GetRid();
+//   RmRecord &old_rec = write_rec.GetRecord();
+//   TupleMeta &old_meta = write_rec.GetTupleMeta();
 
-  //   删除记录
-  fhdl_ptr->delete_record(rid, nullptr);
+//   // 删除对应插入
+//   TabMeta &tab_meta = db_.get_table(tab_name);
+//   auto fhdl_ptr = fhs_.at(tab_name).get();
 
-  // 给redo与undo加上lsn
-  if (lsn != INVALID_LSN) {
-    PageId page_id{fhdl_ptr->GetFd(), rid.page_no};
-    Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
-    page_ptr->set_page_lsn(lsn);
-    buffer_pool_manager_->unpin_page(page_id, true);
-  }
-}
+//   //   插入记录
+//   //   Rid rid = fhdl_ptr->insert_record(rec.data, nullptr);
+//   fhdl_ptr->allocate_pages(rid);
+//   //   fhdl_ptr->insert_record(rid, rec.data);
+//   fhdl_ptr->rollback_insert_helper(rid, old_rec, old_meta, txn, txn_mgr);
 
-void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid, const RmRecord &new_rec,
-                                     const lsn_t lsn) {
-  // 更新回滚与自身行为一致  先删旧索引 插入新记录 插入新索引
+//   //   //   插入索引
+//   //   for (auto &index_meta : tab_meta.indexes) {
+//   //     std::string index_name = ix_manager_->get_index_name(tab_name, index_meta.cols);
+//   //     auto ix_hdl_ptr = ihs_[index_name].get();
+//   //     char key_buffer[index_meta.col_tot_len];
+//   //     int offset = 0;
+//   //     for (auto &col_meta : index_meta.cols) {
+//   //       memcpy(key_buffer + offset, rec.data + col_meta.offset, col_meta.len);
+//   //       offset += col_meta.len;
+//   //     }
+//   //     ix_hdl_ptr->insert_entry(key_buffer, rid, nullptr);
+//   //   }
+
+//   // 日志加上lsn
+//   if (lsn != INVALID_LSN) {
+//     PageId page_id{fhdl_ptr->GetFd(), rid.page_no};
+//     Page *page_ptr = buffer_pool_manager_->fetch_page(page_id);
+//     page_ptr->set_page_lsn(lsn);
+//     buffer_pool_manager_->unpin_page(page_id, true);
+//   }
+// }
+
+void SmManager::rollback_update(const std::string &tab_name, WriteRecord &write_rec, Transaction *txn,
+                                TransactionManager *txn_mgr, const lsn_t lsn) {
+  // 记录的字段
+  Rid &rid = write_rec.GetRid();
+  RmRecord &old_rec = write_rec.GetRecord();
+  TupleMeta &old_meta = write_rec.GetTupleMeta();
+
+  // 更新回滚与自身行为一致
   TabMeta &tab_meta = db_.get_table(tab_name);
   auto fhdl_ptr = fhs_.at(tab_name).get();
   fhdl_ptr->allocate_pages(rid);
@@ -488,7 +505,8 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
   //   }
 
   //   插入记录
-  fhdl_ptr->update_record(rid, new_rec.data, nullptr);
+  //   fhdl_ptr->update_record(rid, new_rec.data, nullptr);
+  fhdl_ptr->rollback_update_helper(rid, old_rec, old_meta, txn, txn_mgr);
 
   //   //   插入新索引
   //   for (auto &index_meta : tab_meta.indexes) {
@@ -511,110 +529,6 @@ void SmManager::record_update_helper(const std::string &tab_name, const Rid &rid
     buffer_pool_manager_->unpin_page(page_id, true);
   }
 }
-
-// void SmManager::load_csv_data(const std::string &csv_file_path, const std::string &tab_name) {
-//   std::ifstream file(csv_file_path);
-//   if (!file.is_open()) {
-//     throw FileNotFoundError(csv_file_path);
-//   }
-
-//   TabMeta &tab_ = db_.get_table(tab_name);  // 假设是对象（不是指针）
-//   auto fhdl_ptr = fhs_.at(tab_name).get();
-
-//   size_t record_size = fh_->file_hdr_.record_size;
-//   char *record = new char[record_size];
-
-//   std::string line;
-//   // Windows换行是\r\n，std::getline(file, line)默认以\n作为分隔符读取，因此\n被剥除了，剩下的\r留在了字符串末尾
-//   // 把末尾\r给pop出来
-//   std::getline(file, line);  // 读取表头
-//   if (!line.empty() && line.back() == '\r') {
-//     line.pop_back();
-//   }
-//   std::vector<std::string> headers;
-//   std::stringstream header_stream(line);
-//   std::string header;
-//   while (std::getline(header_stream, header, ',')) {
-//     headers.emplace_back(header);
-//   }
-
-//   // 构建列名到位置的映射
-//   std::unordered_map<std::string, size_t> header_index;
-//   int header_num = headers.size();
-//   for (size_t i = 0; i < header_num; ++i) {
-//     header_index[headers[i]] = i;
-//   }
-
-//   while (std::getline(file, line)) {
-//     if (line.empty()) continue;
-//     if (!line.empty() && line.back() == '\r')  // 把末尾\r给pop出来
-//       line.pop_back();
-
-//     std::vector<std::string> cells;
-//     std::stringstream line_stream(line);
-//     std::string cell;
-//     while (std::getline(line_stream, cell, ',')) {
-//       cells.emplace_back(cell);
-//     }
-
-//     int cell_num = cells.size();
-//     std::memset(record, 0, record_size);
-//     int offset = 0;
-
-//     for (const auto &col : tab_.cols) {
-//       auto iter = header_index.find(col.name);
-//       if (iter == header_index.end()) {
-//         throw std::runtime_error("CSV missing column: " + col.name);
-//       }
-
-//       size_t col_idx = iter->second;
-//       if (col_idx >= cell_num) {
-//         throw std::runtime_error("CSV row missing field for column: " + col.name);
-//       }
-
-//       const std::string &value_str = cells[col_idx];
-//       switch (col.type) {
-//         case ColType::TYPE_INT: {
-//           int value = std::atoi(value_str.c_str());
-//           std::memcpy(record + offset, &value, col.len);
-//           break;
-//         }
-//         case ColType::TYPE_FLOAT: {
-//           float value = std::atof(value_str.c_str());
-//           std::memcpy(record + offset, &value, col.len);
-//           break;
-//         }
-//         case ColType::TYPE_STRING: {
-//           std::memcpy(record + offset, value_str.c_str(), value_str.size());
-//           break;
-//         }
-//       }
-//       offset += col.len;
-//     }
-
-//     // 插入记录
-//     Rid rid_ = fh_->insert_record(record, nullptr);
-
-//     // 插入索引
-//     for (const auto &index : tab_.indexes) {
-//       auto idx_name = IxManager::get_index_name(tab_name, index.cols);
-//       auto ih = ihs_.at(idx_name).get();
-
-//       char key[index.col_tot_len];
-//       int offset_ = 0;
-//       for (size_t i = 0; i < static_cast<size_t>(index.col_num); ++i) {
-//         std::memcpy(key + offset_, record + index.cols[i].offset, index.cols[i].len);
-//         offset_ += index.cols[i].len;
-//       }
-
-//       ih->insert_entry(key, rid_, nullptr);
-//     }
-//   }
-
-//   delete[] record;
-
-//   file.close();
-// }
 
 void SmManager::insert_record_for_loader(RmFileHandle *fhdl_ptr, Page *page, int slot_no, char *buf) {
   char *bitmap = page->get_data() + sizeof(RmPageHdr) + page->OFFSET_PAGE_HDR;

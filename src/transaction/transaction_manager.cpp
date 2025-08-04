@@ -30,9 +30,9 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
 
   // sqb 涉及mvcc 6.5
   if (txn == nullptr) {
-    txn = new Transaction(next_txn_id_++);
-    txn->set_start_ts(next_timestamp_++);
-    txn->set_read_ts(last_commit_ts_);
+    txn = new Transaction(next_txn_id_.fetch_add(1));
+    txn->set_start_ts(next_timestamp_.fetch_add(1));
+    txn->set_read_ts(last_commit_ts_.load());
   }
   //   txn->set_state(TransactionState::GROWING);
 
@@ -44,7 +44,7 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
   // sqb 加水印 6.16
   std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn_map.emplace(txn->get_transaction_id(), txn);
-  running_txns_.AddTxn(txn->get_read_ts());
+  //   running_txns_.AddTxn(txn->get_read_ts());
 
   return txn;
 }
@@ -67,26 +67,17 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   // 直接进行写操作 所以不会存在未提交的写
   //   更新所有写操作的提交时间戳
   std::scoped_lock<std::mutex> lck(commit_mutex_);
-  timestamp_t commit_ts = next_timestamp_++;
+  timestamp_t commit_ts = next_timestamp_.fetch_add(1);
   auto write_set_ptr = txn->get_write_set();
-  std::unordered_set<Rid> reseted_rids;
-  for (auto iter = write_set_ptr->rbegin(); iter != write_set_ptr->rend(); ++iter) {
+  size_t idx = 0;  // 跟踪rid，因为一个rid仅在undo中出现一次，按顺序就是对应的undo_log顺序
+  for (auto iter = write_set_ptr->begin(); iter != write_set_ptr->end(); ++iter) {
     Rid rid = (*iter)->GetRid();
-    if (reseted_rids.find(rid) != reseted_rids.end()) {
-      continue;
-    } else {
-      reseted_rids.insert(rid);
-    }
     std::string &tab_name = (*iter)->GetTableName();
     auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
-    if (((*iter)->GetWriteType() == WType::UPDATE_TUPLE)) {
-      fhdl_ptr->set_meta(rid, commit_ts, (*iter)->GetTupleMeta().is_deleted_);
-    } else {
-      fhdl_ptr->set_meta(rid, commit_ts, !((*iter)->GetTupleMeta().is_deleted_));
-    }
+    fhdl_ptr->set_meta_ts(txn, idx++, rid, commit_ts);
   }
   // 更新undo log的时间戳
-  txn->CommitAllUndoLogs(commit_ts);
+  //   txn->CommitAllUndoLogs(commit_ts);
 
   //  释放锁
   auto lock_set_ptr = txn->get_lock_set();
@@ -96,6 +87,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   //   释放资源 感觉后面可以去掉
   lock_set_ptr->clear();
   txn->get_write_set()->clear();
+  txn->get_write_tuples().clear();
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 
@@ -110,9 +102,9 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn->set_state(TransactionState::COMMITTED);
   txn->set_commit_ts(commit_ts);
-  last_commit_ts_ = commit_ts;
-  running_txns_.UpdateCommitTs(commit_ts);
-  running_txns_.RemoveTxn(txn->get_read_ts());
+  last_commit_ts_.store(commit_ts);
+  //   running_txns_.UpdateCommitTs(commit_ts);
+  //   running_txns_.RemoveTxn(txn->get_read_ts());
 }
 
 /**
@@ -120,7 +112,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
  * @param {Transaction *} txn 需要回滚的事务
  * @param {LogManager} *log_manager 日志管理器指针
  */
-void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
+void TransactionManager::abort(Transaction *txn, LogManager *log_manager, TransactionManager *txn_mgr) {
   // Todo:
   // 1. 回滚所有写操作
   // 2. 释放所有锁
@@ -138,51 +130,15 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
     // 给回滚操作加锁 加日志 6.12
     std::string &tab_name = write_rec_ptr->GetTableName();
     // lock_manager_->lock_exclusive_on_record(txn, write_rec_ptr->GetRid(), sm_manager_->fhs_.at(tab_name)->GetFd());
-    switch (write_rec_ptr->GetWriteType()) {
-      case WType::INSERT_TUPLE: {
-        // auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
-        // DeleteLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRid(), tab_name};
-        // log_record.prev_lsn_ = txn->get_prev_lsn();
-        // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
-        // txn->set_prev_lsn(undo_lsn);
-        sm_manager_->rollback_insert(tab_name, write_rec_ptr->GetRid());
-        break;
-      }
-      case WType::DELETE_TUPLE: {
-        // InsertLogRecord log_record{txn->get_transaction_id(), write_rec_ptr->GetRecord(), write_rec_ptr->GetRid(),
-        //                            tab_name};
-        // log_record.prev_lsn_ = txn->get_prev_lsn();
-        // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
-        // txn->set_prev_lsn(undo_lsn);
-        sm_manager_->rollback_delete(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord());
-        break;
-      }
-      case WType::UPDATE_TUPLE: {
-        // auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
-        // UpdateLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRecord(),
-        //                            write_rec_ptr->GetRid(), tab_name};
-        // log_record.prev_lsn_ = txn->get_prev_lsn();
-        // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
-        // txn->set_prev_lsn(undo_lsn);
-        sm_manager_->rollback_update(tab_name, write_rec_ptr->GetRid(), write_rec_ptr->GetRecord());
-        break;
-      }
-    }
-  }
 
-  //   给所有回滚后的记录重写ts
-  std::unordered_set<Rid> reseted_rids;
-  timestamp_t pre_verison_ts = txn->get_read_ts();
-  for (auto iter = write_set_ptr->begin(); iter != write_set_ptr->end(); ++iter) {
-    Rid rid = (*iter)->GetRid();
-    if (reseted_rids.find(rid) != reseted_rids.end()) {
-      continue;
-    } else {
-      reseted_rids.insert(rid);
-    }
-    std::string &tab_name = (*iter)->GetTableName();
-    auto fhdl_ptr = sm_manager_->fhs_.at(tab_name).get();
-    fhdl_ptr->set_meta(rid, pre_verison_ts, (*iter)->GetTupleMeta().is_deleted_);
+    // 现在全部都是update wrec 便于线下加故障恢复
+    // auto old_rec = sm_manager_->fhs_[tab_name]->get_record(write_rec_ptr->GetRid(), nullptr);
+    // UpdateLogRecord log_record{txn->get_transaction_id(), *old_rec, write_rec_ptr->GetRecord(),
+    //                            write_rec_ptr->GetRid(), tab_name};
+    // log_record.prev_lsn_ = txn->get_prev_lsn();
+    // lsn_t undo_lsn = log_manager->add_log_to_buffer(&log_record);
+    // txn->set_prev_lsn(undo_lsn);
+    sm_manager_->rollback_update(tab_name, *write_rec_ptr, txn, txn_mgr);
   }
 
   //  释放锁
@@ -193,6 +149,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
   //   释放资源 感觉后面可以去掉
   lock_set_ptr->clear();
   txn->get_write_set()->clear();
+  txn->get_write_tuples().clear();
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
 
@@ -206,7 +163,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
   //   sqb 6.16 加水印
   std::unique_lock<std::shared_mutex> lock(txn_map_mutex_);
   txn->set_state(TransactionState::ABORTED);
-  running_txns_.RemoveTxn(txn->get_read_ts());
+  //   running_txns_.RemoveTxn(txn->get_read_ts());
 }
 
 //------------------------关于MVCC部分的实现,参考15445,sqb---------------
@@ -215,15 +172,16 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager) {
  * 在更新之前，将调用 `check` 函数以确保有效性。
  */
 // 不确定
-bool TransactionManager::UpdateUndoLink(Rid rid, std::optional<UndoLink> prev_link,
+bool TransactionManager::UpdateUndoLink(int fd, Rid rid, std::optional<UndoLink> prev_link,
                                         std::function<bool(std::optional<UndoLink>)> &&check) {
+  PageId page_id{fd, rid.page_no};
   std::unique_lock<std::shared_mutex> verion_table_lock(version_info_mutex_);
   std::shared_ptr<PageVersionInfo> pvi_ptr = nullptr;
-  auto iter = version_info_.find(rid.page_no);
+  auto iter = version_info_.find(page_id);
   if (iter == version_info_.end()) {
     // 无则创建
     pvi_ptr = std::make_shared<PageVersionInfo>();
-    version_info_[rid.page_no] = pvi_ptr;
+    version_info_[page_id] = pvi_ptr;
   } else {
     // 有则准备修改
     pvi_ptr = iter->second;
@@ -252,15 +210,16 @@ bool TransactionManager::UpdateUndoLink(Rid rid, std::optional<UndoLink> prev_li
  * @brief 更新一个撤销链接，该链接将表堆元组与第一个撤销日志连接起来。
  * 在更新之前，将调用 `check` 函数以确保有效性。
  */
-bool TransactionManager::UpdateVersionLink(Rid rid, std::optional<VersionUndoLink> prev_version,
+bool TransactionManager::UpdateVersionLink(int fd, Rid rid, std::optional<VersionUndoLink> prev_version,
                                            std::function<bool(std::optional<VersionUndoLink>)> &&check) {
+  PageId page_id{fd, rid.page_no};
   std::unique_lock<std::shared_mutex> verion_table_lock(version_info_mutex_);
   std::shared_ptr<PageVersionInfo> pvi_ptr = nullptr;
-  auto iter = version_info_.find(rid.page_no);
+  auto iter = version_info_.find(page_id);
   if (iter == version_info_.end()) {
     // 无则创建
     pvi_ptr = std::make_shared<PageVersionInfo>();
-    version_info_[rid.page_no] = pvi_ptr;
+    version_info_[page_id] = pvi_ptr;
   } else {
     // 有则准备修改
     pvi_ptr = iter->second;
@@ -286,9 +245,10 @@ bool TransactionManager::UpdateVersionLink(Rid rid, std::optional<VersionUndoLin
 }
 
 /** @brief 获取表堆元组的第一个撤销日志。 */
-std::optional<UndoLink> TransactionManager::GetUndoLink(Rid rid) {
+std::optional<UndoLink> TransactionManager::GetUndoLink(int fd, Rid rid) {
+  PageId page_id{fd, rid.page_no};
   std::shared_lock<std::shared_mutex> version_table_lock(version_info_mutex_);
-  auto iter = version_info_.find(rid.page_no);
+  auto iter = version_info_.find(page_id);
   if (iter == version_info_.end()) {
     return std::nullopt;
   }
@@ -303,9 +263,10 @@ std::optional<UndoLink> TransactionManager::GetUndoLink(Rid rid) {
 }
 
 /** @brief 获取表堆元组的第一个撤销日志。*/
-std::optional<VersionUndoLink> TransactionManager::GetVersionLink(Rid rid) {
+std::optional<VersionUndoLink> TransactionManager::GetVersionLink(int fd, Rid rid) {
+  PageId page_id{fd, rid.page_no};
   std::shared_lock<std::shared_mutex> version_table_lock(version_info_mutex_);
-  auto iter = version_info_.find(rid.page_no);
+  auto iter = version_info_.find(page_id);
   if (iter == version_info_.end()) {
     return std::nullopt;
   }

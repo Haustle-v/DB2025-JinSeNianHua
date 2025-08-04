@@ -69,6 +69,7 @@ class UpdateExecutor : public AbstractExecutor {
 
     // for (auto &rid : rids_) {
     // std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
+    TupleMeta old_meta;
     RmRecord *pre_rec = new RmRecord(fh_->get_file_hdr().record_size);  // 被update赋值 存当前表堆最新记录
     size_t rec_num = rids_.size();
     for (size_t i = 0; i < rec_num; ++i) {
@@ -106,6 +107,7 @@ class UpdateExecutor : public AbstractExecutor {
       // MVCC下，索引键只增加，不删除
       //    处理索引
       //   RmRecord new_rec = *rec_ptr;
+      bool reuse_key = false;
       for (auto &index_meta : tab_.indexes) {
         char old_key[index_meta.col_tot_len], new_key[index_meta.col_tot_len];
         std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
@@ -122,20 +124,52 @@ class UpdateExecutor : public AbstractExecutor {
         if (memcmp(old_key, new_key, index_meta.col_tot_len) != 0) {
           std::vector<Rid> tmp;
           if (ix_hdl_ptr->get_value(new_key, &tmp, context_->txn_)) {
-            throw InternalError("index unique constration error");
+            // throw InternalError("index unique constration error");
+            // update情况下 MVCC也应考虑键值复用 这时的复用等价于删除和插入 便于后期加功能
+            // 若对性能影响大，那么还是考虑原地更新
+            for (auto &ix_rid : tmp) {
+              TupleMeta meta = fh_->get_meta(ix_rid);
+              if (meta.is_deleted_ &&
+                  (meta.ts_ <= context_->txn_->get_read_ts() || meta.ts_ == context_->txn_->get_temp_ts())) {
+                fh_->delete_record(ix_rid, context_, pre_rec, &tab_, &old_meta);
+                if (context_ != nullptr && !context_->txn_->check_tuple_operated(fh_->GetFd(), ix_rid)) {
+                  auto update_wrec =
+                      std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, ix_rid, *pre_rec, old_meta);
+                  context_->txn_->append_write_record(std::move(update_wrec));
+                  context_->txn_->append_write_tuple(fh_->GetFd(), ix_rid);
+                }
+                Rid new_rid = fh_->insert_record(rec_ptr->data, context_, pre_rec, &tab_, &old_meta);
+                // 没有故障恢复的情况下，事务插入直接移出临界区
+                if (context_ != nullptr && !context_->txn_->check_tuple_operated(fh_->GetFd(), new_rid)) {
+                  auto update_wrec =
+                      std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, new_rid, *pre_rec, old_meta);
+                  context_->txn_->append_write_record(std::move(update_wrec));
+                  context_->txn_->append_write_tuple(fh_->GetFd(), new_rid);
+                }
+
+                reuse_key = true;
+                ix_hdl_ptr->insert_entry(new_key, new_rid, context_->txn_);
+              } else {
+                // throw TransactionAbortException(context_->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+                throw InternalError("index unique constration error");
+              }
+            }
           }
 
           //   ix_hdl_ptr->delete_entry(old_key, context_->txn_);
-          ix_hdl_ptr->insert_entry(new_key, rid, context_->txn_);
+          //   ix_hdl_ptr->insert_entry(new_key, rid, context_->txn_);
         }
       }
 
-      TupleMeta old_meta;
-      //   mvcc下的更新
+      //   涉及主键的更改在索引处完成 非主键的更改直接在原地完成
+      if (reuse_key) continue;
+
+      //   mvcc下的非主键的更新
       fh_->update_record(rid, rec_ptr->data, context_, pre_rec, &tab_, &old_meta);
-      if (context_ != nullptr) {
+      if (context_ != nullptr && !context_->txn_->check_tuple_operated(fh_->GetFd(), rid)) {
         auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *pre_rec, old_meta);
         context_->txn_->append_write_record(std::move(update_wrec));
+        context_->txn_->append_write_tuple(fh_->GetFd(), rid);
       }
     }
     delete pre_rec;

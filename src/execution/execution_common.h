@@ -70,9 +70,8 @@ inline auto IsWriteWriteConflict(timestamp_t tuple_ts, Transaction *txn) -> bool
 //----------------------------------sqb 参考15445添加下面的辅助函数 6.17----------------------------------
 
 // 给定事务读取时间戳 获取重建元组所需的undo logs
-inline auto CollectUndoLogs(Rid rid, const TupleMeta &base_meta, const RmRecord &base_tuple,
-                            std::optional<UndoLink> undo_link, Transaction *txn, TransactionManager *txn_mgr)
-    -> std::vector<UndoLog> {
+inline auto CollectUndoLogs(const TupleMeta &base_meta, std::optional<UndoLink> undo_link, Transaction *txn,
+                            TransactionManager *txn_mgr) -> std::vector<UndoLog> {
   // 检索该元组的所有撤销日志 直到事务读取时间戳
 
   std::vector<UndoLog> ret;
@@ -94,11 +93,13 @@ inline auto CollectUndoLogs(Rid rid, const TupleMeta &base_meta, const RmRecord 
   while (link.IsValid()) {
     UndoLog log = txn_mgr->GetUndoLog(link);
 
-    // 由于目前的回滚直接回复 所以版本链检查需跳过abort事务
-    if (txn_mgr->CheckIsAbort(link.prev_txn_)) {
-      link = log.prev_version_;
-      continue;
-    }
+    // // 由于目前的回滚直接回复 所以版本链检查需跳过abort事务
+    // if (txn_mgr->CheckIsAbort(link.prev_txn_)) {
+    //   link = log.prev_version_;
+    //   continue;
+    // }
+    // 重构回滚后版本链不应存在abort事务
+    assert(!txn_mgr->CheckIsAbort(link.prev_txn_));
 
     // 代表临时时间戳与大于read_ts的
     if (log.ts_ > read_ts) {
@@ -227,32 +228,23 @@ inline auto GenerateUpdatedUndoLog(const TabMeta *schema, const RmRecord *base_t
 }
 
 // 在版本链中找到对应事务的版本链，否则返回版本链最后一个有效链
-inline std::optional<UndoLink> WalkLinkToTxnLink(const Rid &rid, TransactionManager *txn_mgr, const txn_id_t txn_id) {
-  std::optional<UndoLink> op_undo_link = txn_mgr->GetUndoLink(rid);
-  if (!op_undo_link.has_value()) {
+inline std::optional<UndoLink> WalkLinkToTxnLink(int fd, const Rid &rid, TransactionManager *txn_mgr,
+                                                 const txn_id_t txn_id) {
+  std::optional<UndoLink> op_undo_link = txn_mgr->GetUndoLink(fd, rid);
+  if (!(op_undo_link.has_value() && (*op_undo_link).IsValid())) {
     return std::nullopt;
   }
-  UndoLink link = op_undo_link.value();
-  while (true) {
-    if (link.prev_txn_ == txn_id) {
-      return link;
-    }
-    UndoLog log = txn_mgr->GetUndoLog(link);
-    if (!log.prev_version_.IsValid()) {
-      return link;
-    }
-    link = log.prev_version_;
-  }
-  return std::nullopt;
+  //   若为了更新undo_log，那么前一个必定是事务自己的undo_log，否则，前一个就是最后的版本链
+  return op_undo_link;
 }
 
-inline std::tuple<UndoLog, UndoLink> generateUndoLogAndLink(const Rid &rid, const RmRecord *old_rec,
+inline std::tuple<UndoLog, UndoLink> generateUndoLogAndLink(int fd, const Rid &rid, const RmRecord *old_rec,
                                                             const RmRecord *new_rec, const Context *context,
                                                             const TabMeta *schema) {
   UndoLog undo_log;
   UndoLink undo_link;
   txn_id_t txn_id = context->txn_->get_transaction_id();
-  std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(rid, context->txn_mgr_, txn_id);
+  std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(fd, rid, context->txn_mgr_, txn_id);
   if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ == txn_id) {
     // 找到事务对应undo log，进行更改
     UndoLog old_log = context->txn_mgr_->GetUndoLog(*op_undo_link);

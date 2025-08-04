@@ -8,13 +8,15 @@ EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
+#include <cxxabi.h>
+#include <execinfo.h>  // 回溯调用栈
+
 #include <netinet/in.h>
 #include <readline/history.h>
 #include <readline/readline.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <unistd.h>
-
 #include <atomic>
 #include <future>
 
@@ -61,6 +63,36 @@ void sigint_handler(int signo) {
   log_manager->flush_log_to_disk();
   std::cout << "The Server receive Crtl+C, will been closed\n";
   longjmp(jmpbuf, 1);
+}
+
+// debug用
+void signal_handler(int sig) {
+  void *callstack[128];
+  int frames = backtrace(callstack, 128);
+  char **symbols = backtrace_symbols(callstack, frames);
+
+  std::cerr << "=== 捕获信号 " << sig << " (" << strsignal(sig) << ") ===" << std::endl;
+
+  for (int i = 0; i < frames; ++i) {
+    std::string symbol(symbols[i]);
+    size_t begin = symbol.find('(');
+    size_t end = symbol.find('+', begin);
+    std::string mangled =
+        (begin != std::string::npos && end != std::string::npos) ? symbol.substr(begin + 1, end - begin - 1) : "";
+
+    int status = 0;
+    char *demangled = abi::__cxa_demangle(mangled.c_str(), nullptr, nullptr, &status);
+    std::cerr << "[" << i << "] ";
+    if (status == 0 && demangled) {
+      std::cerr << symbol.substr(0, begin + 1) << demangled << symbol.substr(end);
+    } else {
+      std::cerr << symbol;
+    }
+    std::cerr << std::endl;
+    free(demangled);
+  }
+  free(symbols);
+  _Exit(EXIT_FAILURE);
 }
 
 // 判断当前正在执行的是显式事务还是单条SQL语句的事务，并更新事务ID
@@ -147,10 +179,8 @@ void *client_handler(void *sock_fd) {
       std::string csv_file = load_stmt.substr(5, csv_file_end - 5);
       std::string tab_name = load_stmt.substr(tab_name_start, tab_name_end - tab_name_start);
 
-      futures.emplace_back(std::async(std::launch::async, [csv_file, tab_name] {
-        sm_manager->load_csv_data(csv_file, tab_name);
-        // buffer_pool_manager->flush_all_pages(sm_manager->fhs_.at(tab_name)->GetFd());
-      }));
+      futures.emplace_back(
+          std::async(std::launch::async, [csv_file, tab_name] { sm_manager->load_csv_data(csv_file, tab_name); }));
       //   sm_manager->load_csv_data(csv_file, tab_name);
       if (write(fd, data_send, offset + 1) == -1) {
         break;
@@ -163,13 +193,11 @@ void *client_handler(void *sock_fd) {
     for (auto &future : futures) {
       future.get();
     }
-    // if(!futures.empty()){
-    //     for(auto &entry:sm_manager->fhs_){
-    //       buffer_pool_manager->flush_all_pages(entry.second->GetFd());
-    //     }
-    //     for(auto &entry:sm_manager->ihs_){
-    //       index_buffer_pool_manager->flush_all_pages(entry.second->get_fd());
-    //     }
+
+    // if (!futures.empty()) {
+    //   for (auto &entry : sm_manager->ihs_) {
+    //     index_buffer_pool_manager->flush_all_pages(entry.second->get_fd());
+    //   }
     // }
     futures.clear();
     pool_mutex.unlock();
@@ -222,7 +250,7 @@ void *client_handler(void *sock_fd) {
           offset = str.length();
 
           // 回滚事务
-          txn_manager->abort(context->txn_, log_manager.get());
+          txn_manager->abort(context->txn_, log_manager.get(), context->txn_mgr_);
           std::cout << e.GetInfo() << std::endl;
 
           if (sm_manager->io_enabled_) {  // yfs 7.3
@@ -365,6 +393,11 @@ int main(int argc, char **argv) {
     std::cerr << "Usage: " << argv[0] << " <database>" << std::endl;
     exit(1);
   }
+
+  //   debug用
+  signal(SIGSEGV, signal_handler);  // 段错误
+  signal(SIGTERM, signal_handler);  // 总线错误
+  signal(SIGABRT, signal_handler);  // 断言失败
 
   signal(SIGINT, sigint_handler);
   try {

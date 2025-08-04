@@ -41,15 +41,6 @@ class SmManager {
   RmManager *rm_manager_;
   IxManager *ix_manager_;
 
-  //   sqb 把rollback和redo的共有代码提出来 参照对应算子实现 6.8
-  void record_insert_helper(const std::string &tab_name, const Rid &rid, const RmRecord &rec,
-                            const lsn_t lsn = INVALID_LSN);
-
-  void record_delete_helper(const std::string &tab_name, const Rid &rid, const lsn_t lsn = INVALID_LSN);
-
-  void record_update_helper(const std::string &tab_name, const Rid &rid, const RmRecord &new_rec,
-                            const lsn_t lsn = INVALID_LSN);
-
   void insert_record_for_loader(RmFileHandle *fhdl_ptr, Page *page, int slot_no, char *buf);
 
  public:
@@ -101,20 +92,15 @@ class SmManager {
   // sqb : show index 5.30
   void show_index(const std::string &tab_name, Context *context);
 
-  // sqb 回滚增删改 等价于undo 将进行相反操作 6.8
-  void rollback_insert(const std::string &tab_name, const Rid &rid, const lsn_t lsn = INVALID_LSN) {
-    record_delete_helper(tab_name, rid, lsn);
-  }
+  // 重构roll back,将record和meta原子完成 以便支持垃圾回收 sqb
+  //   void rollback_insert(const std::string &tab_name, WriteRecord &write_rec, Transaction *txn,
+  //                        TransactionManager *txn_mgr, const lsn_t lsn = INVALID_LSN);
 
-  void rollback_delete(const std::string &tab_name, const Rid &rid, const RmRecord &rec,
-                       const lsn_t lsn = INVALID_LSN) {
-    record_insert_helper(tab_name, rid, rec, lsn);
-  }
+  //   void rollback_delete(const std::string &tab_name, WriteRecord &write_rec, Transaction *txn,
+  //                        TransactionManager *txn_mgr, const lsn_t lsn = INVALID_LSN);
 
-  void rollback_update(const std::string &tab_name, const Rid &rid, const RmRecord &old_rec,
-                       const lsn_t lsn = INVALID_LSN) {
-    record_update_helper(tab_name, rid, old_rec, lsn);
-  }
+  void rollback_update(const std::string &tab_name, WriteRecord &write_rec, Transaction *txn,
+                       TransactionManager *txn_mgr, const lsn_t lsn = INVALID_LSN);
 
   // yfs 7.2
   void load_csv_data(const std::string &csv_file_path, const std::string &tab_name);

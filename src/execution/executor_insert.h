@@ -80,6 +80,8 @@ class InsertExecutor : public AbstractExecutor {
 
     // 一次性预读最大长度
     int max_index_len = 0;
+    TupleMeta old_meta;                                                 // 元组现在的tuple_meta，用于事务记录
+    RmRecord *pre_rec = new RmRecord(fh_->get_file_hdr().record_size);  // 存当前表堆最新记录
 
     // sqb 添加索引唯一性检查 注意先检查所有索引再插入数据 不能边检查边插入
     bool reuse_key = false;
@@ -98,10 +100,15 @@ class InsertExecutor : public AbstractExecutor {
         // throw InternalError("index unique constration error");
         // MVCC需对索引键值复用 只有键值不存在 才会先插入记录再插入索引
         for (auto &rid : tmp) {
-          auto [meta, tuple, _] = fh_->get_tuple_and_undoLink(rid, context_);
+          TupleMeta meta = fh_->get_meta(rid);
           if (meta.is_deleted_ &&
               (meta.ts_ <= context_->txn_->get_read_ts() || meta.ts_ == context_->txn_->get_temp_ts())) {
-            fh_->update_record(rid, rec.data, context_, &tuple, &tab_);
+            fh_->update_record(rid, rec.data, context_, pre_rec, &tab_, &old_meta);
+            if (context_ != nullptr && !context_->txn_->check_tuple_operated(fh_->GetFd(), rid)) {
+              auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *pre_rec, old_meta);
+              context_->txn_->append_write_record(std::move(update_wrec));
+              context_->txn_->append_write_tuple(fh_->GetFd(), rid);
+            }
             reuse_key = true;
           } else {
             // throw TransactionAbortException(context_->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
@@ -114,16 +121,19 @@ class InsertExecutor : public AbstractExecutor {
 
     // 复用现有键值 直接返回
     if (reuse_key) {
+      delete pre_rec;
       return nullptr;
     }
 
-    TupleMeta old_meta;  // 元组现在的tuple_meta，用于事务记录
     // mvcc 对应的插入
-    rid_ = fh_->insert_record(rec.data, context_, &tab_, &old_meta);
+    rid_ = fh_->insert_record(rec.data, context_, pre_rec, &tab_, &old_meta);
     // 没有故障恢复的情况下，事务插入直接移出临界区
-    if (context_ != nullptr) {
-      auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, rid_, old_meta);
-      context_->txn_->append_write_record(std::move(insert_wrec));
+    if (context_ != nullptr && !context_->txn_->check_tuple_operated(fh_->GetFd(), rid_)) {
+      //   auto insert_wrec = std::make_unique<WriteRecord>(WType::INSERT_TUPLE, tab_name_, rid_, old_meta);
+      //   context_->txn_->append_write_record(std::move(insert_wrec));
+      auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid_, *pre_rec, old_meta);
+      context_->txn_->append_write_record(std::move(update_wrec));
+      context_->txn_->append_write_tuple(fh_->GetFd(), rid_);
     }
 
     // Insert into index
@@ -140,6 +150,7 @@ class InsertExecutor : public AbstractExecutor {
       ih->insert_entry(key, rid_, context_->txn_);
     }
     delete[] key;
+    delete pre_rec;
 
     return nullptr;
   }

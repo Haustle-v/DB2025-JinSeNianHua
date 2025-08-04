@@ -48,7 +48,7 @@ auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
     TupleMeta tuple_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
     RmRecord tuple(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
 
-    auto undo_link = context->txn_mgr_->GetUndoLink(rid);
+    auto undo_link = context->txn_mgr_->GetUndoLink(fd_, rid);
     ret = std::make_tuple(tuple_meta, tuple, undo_link);
   }
   page_hdl.page->RUnlatch();
@@ -56,15 +56,16 @@ auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
   return ret;
 }
 
-// sqb 6.17 事务commit时更新所有写操作的时间戳 abort时还要恢复is_delete状态
-void RmFileHandle::set_meta(const Rid &rid, timestamp_t ts, bool is_delete) {
+// sqb 6.17 事务commit时更新所有写操作的时间戳 undo_log的时间戳应该一起更改
+void RmFileHandle::set_meta_ts(Transaction *txn, size_t log_idx, const Rid &rid, timestamp_t ts) {
   //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
   page_hdl.page->WLatch();
 
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
   base_meta.ts_ = ts;
-  base_meta.is_deleted_ = is_delete;
+  //   base_meta.is_deleted_ = is_delete;
+  txn->CommitUndoLog(log_idx, ts);
 
   page_hdl.page->WUnlatch();
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
@@ -85,8 +86,7 @@ TupleMeta RmFileHandle::get_meta(const Rid &rid) {
 auto RmFileHandle::get_reconstructed_tuple(const Rid &rid, Context *context, TabMeta &tab)
     -> std::unique_ptr<RmRecord> {
   auto [current_tuple_meta, current_tuple, undo_link] = get_tuple_and_undoLink(rid, context);
-  std::vector<UndoLog> undo_logs =
-      CollectUndoLogs(rid, current_tuple_meta, current_tuple, undo_link, context->txn_, context->txn_mgr_);
+  std::vector<UndoLog> undo_logs = CollectUndoLogs(current_tuple_meta, undo_link, context->txn_, context->txn_mgr_);
   std::optional<RmRecord> tuple = ReconstructTuple(&tab, current_tuple, current_tuple_meta, undo_logs);
   if (tuple.has_value()) {
     return std::make_unique<RmRecord>(*tuple);
@@ -100,7 +100,8 @@ auto RmFileHandle::get_reconstructed_tuple(const Rid &rid, Context *context, Tab
  * @param {Context*} context
  * @return {Rid} 插入的记录的记录号（位置）
  */
-Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *schema, TupleMeta *old_meta) {
+Rid RmFileHandle::insert_record(char *buf, Context *context, RmRecord *old_rec, const TabMeta *schema,
+                                TupleMeta *old_meta) {
   // Todo:
   // 1. 获取当前未满的page handle
   // 2. 在page handle中找到空闲slot位置
@@ -119,7 +120,10 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
   if (free_slot_no == file_hdr_.num_records_per_page) {
     page_hdl.page->WUnlatch();
     buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
-    page_hdl = create_new_page_handle();
+    {
+      std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+      page_hdl = create_new_page_handle();
+    }
     page_hdl.page->WLatch();
     free_slot_no = find_free_slot_no(page_hdl, context);
   }
@@ -140,13 +144,14 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
     // 用于事务记录
     old_meta->ts_ = base_meta.ts_;
     old_meta->is_deleted_ = true;
+    old_rec->SetData(page_hdl.get_slot_record(free_slot_no));
 
     // 版本链记录
     {
       //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
 
       //   补充版本链 sqb 6.19
-      auto [undo_log, undo_link] = generateUndoLogAndLink(ret, nullptr, &new_rec, context, schema);
+      auto [undo_log, undo_link] = generateUndoLogAndLink(fd_, ret, nullptr, &new_rec, context, schema);
       // 元数据时间戳更新
       base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -156,7 +161,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, const TabMeta *sche
       } else {
         // 当前log为新log 追加到事务缓冲区内 同时更新版本链
         undo_link = context->txn_->AppendUndoLog(undo_log);
-        context->txn_mgr_->UpdateUndoLink(ret, undo_link);
+        context->txn_mgr_->UpdateUndoLink(fd_, ret, undo_link);
       }
     }
 
@@ -265,7 +270,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
 
       //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
 
-      auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, nullptr, context, schema);
+      auto [undo_log, undo_link] = generateUndoLogAndLink(fd_, rid, old_rec, nullptr, context, schema);
       // 元数据时间戳更新
       base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -275,7 +280,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
       } else {
         // 当前log为新log 追加到事务缓冲区内 同时更新版本链
         undo_link = context->txn_->AppendUndoLog(undo_log);
-        context->txn_mgr_->UpdateUndoLink(rid, undo_link);
+        context->txn_mgr_->UpdateUndoLink(fd_, rid, undo_link);
       }
     }
 
@@ -298,10 +303,10 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
 
   {
     std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
-    if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
-      page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
-      file_hdr_.first_free_page_no = page_hdl.page->get_page_id().page_no;
-    }
+    // if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
+    //   page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
+    //   file_hdr_.first_free_page_no = page_hdl.page->get_page_id().page_no;
+    // }
     // 跟踪表记录数量
     --file_hdr_.record_num;
   }
@@ -352,7 +357,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
       //   补充版本链 sqb 6.19
       RmRecord new_rec(file_hdr_.record_size, buf);
       //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
-      auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, &new_rec, context, schema);
+      auto [undo_log, undo_link] = generateUndoLogAndLink(fd_, rid, old_rec, &new_rec, context, schema);
       // 元数据更新
       base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -362,7 +367,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
       } else {
         // 当前log为新log 追加到事务缓冲区内 同时更新版本链
         undo_link = context->txn_->AppendUndoLog(undo_log);
-        context->txn_mgr_->UpdateUndoLink(rid, undo_link);
+        context->txn_mgr_->UpdateUndoLink(fd_, rid, undo_link);
       }
     }
 
@@ -517,4 +522,54 @@ int RmFileHandle::find_free_slot_no(RmPageHandle &page_hdl, Context *context) {
     }
   }
   return free_slot_no;
+}
+
+//   为了重构回滚 支持MVCC的垃圾回收 加回滚时rec和meta原子回滚的函数
+void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_rec, const TupleMeta &old_meta,
+                                          Transaction *txn, TransactionManager *txn_mgr) {
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
+  RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
+  page_hdl.page->WLatch();
+  assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
+
+  //   回滚事务的版本链必定有值，且必定为自己，并只有一个
+  std::optional<UndoLink> op_link = txn_mgr->GetUndoLink(fd_, rid);
+  assert(op_link.has_value() && (*op_link).prev_txn_ == txn->get_transaction_id());
+  UndoLog log = txn_mgr->GetUndoLog(*op_link);
+  UndoLink pre_link = log.prev_version_;  // 跳过当前版本
+  txn_mgr->UpdateUndoLink(fd_, rid, pre_link);
+
+  TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
+
+  //   因为这步压缩了事务对一个元组回滚的多步 根据旧值与目前最新值推测事务操作 跟踪表记录数量
+  if (base_meta.is_deleted_ != old_meta.is_deleted_) {
+    if (old_meta.is_deleted_) {
+      // 相当于插入做回滚
+      --page_hdl.page_hdr->num_records;
+      std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+      if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
+        page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
+        file_hdr_.first_free_page_no = page_hdl.page->get_page_id().page_no;
+      }
+      --file_hdr_.record_num;
+    } else {
+      // 相当于删除做回滚
+      ++page_hdl.page_hdr->num_records;
+      {
+        std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+        if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
+          file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
+        }
+        // 跟踪表记录数量
+        ++file_hdr_.record_num;
+      }
+    }
+  }
+
+  //   回滚原始值
+  base_meta = old_meta;
+  memcpy(page_hdl.get_slot_record(rid.slot_no), old_rec.data, file_hdr_.record_size);
+
+  page_hdl.page->WUnlatch();
+  buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 }
