@@ -8,13 +8,13 @@ EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
 MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
 See the Mulan PSL v2 for more details. */
 
+#include <execinfo.h>  // 回溯调用栈
 #include <netinet/in.h>
 #include <readline/history.h>
 #include <readline/readline.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <unistd.h>
-
 #include <atomic>
 #include <future>
 
@@ -61,6 +61,26 @@ void sigint_handler(int signo) {
   log_manager->flush_log_to_disk();
   std::cout << "The Server receive Crtl+C, will been closed\n";
   longjmp(jmpbuf, 1);
+}
+
+// debug用
+void signal_handler(int sig) {
+  // 1. 打印信号信息
+  std::cerr << "=== 捕获信号 " << sig << " (" << strsignal(sig) << ") ===" << std::endl;
+
+  // 2. 获取调用栈
+  void *callstack[50];
+  int frames = backtrace(callstack, 50);
+  char **symbols = backtrace_symbols(callstack, frames);
+
+  // 3. 打印调用栈
+  for (int i = 0; i < frames; ++i) {
+    std::cerr << "[" << i << "] " << symbols[i] << std::endl;
+  }
+  free(symbols);
+
+  // 4. 退出程序（避免无限递归）
+  std::_Exit(EXIT_FAILURE);  // 比exit()更安全
 }
 
 // 判断当前正在执行的是显式事务还是单条SQL语句的事务，并更新事务ID
@@ -361,6 +381,11 @@ int main(int argc, char **argv) {
     std::cerr << "Usage: " << argv[0] << " <database>" << std::endl;
     exit(1);
   }
+
+  //   debug用
+  signal(SIGSEGV, signal_handler);  // 段错误
+  signal(SIGTERM, signal_handler);  // 总线错误
+  signal(SIGABRT, signal_handler);  // 断言失败
 
   signal(SIGINT, sigint_handler);
   try {
