@@ -22,13 +22,13 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
   // 1. 获取指定记录所在的page handle
   // 2. 初始化一个指向RmRecord的指针（赋值其内部的data和size）
 
-  std::shared_lock<std::shared_mutex> lock(latch_);
+  //   std::shared_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
-  //   page_hdl.page->RLatch();
+  page_hdl.page->RLatch();
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
   std::unique_ptr<RmRecord> record_ptr =
       std::make_unique<RmRecord>(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
-  //   page_hdl.page->RUnlatch();
+  page_hdl.page->RUnlatch();
   //   这个bfm不是raii管理页 数据操作注意释放
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
   return record_ptr;
@@ -38,9 +38,9 @@ std::unique_ptr<RmRecord> RmFileHandle::get_record(const Rid &rid, Context *cont
 auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
     -> std::tuple<TupleMeta, RmRecord, std::optional<UndoLink>> {
   std::tuple<TupleMeta, RmRecord, std::optional<UndoLink>> ret;
-  std::shared_lock<std::shared_mutex> lock(latch_);
+  //   std::shared_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
-  //   page_hdl.page->RLatch();
+  page_hdl.page->RLatch();
   {
     // std::scoped_lock<std::mutex> undo_lock(undo_latch_);
     assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
@@ -51,33 +51,33 @@ auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
     auto undo_link = context->txn_mgr_->GetUndoLink(fd_, rid);
     ret = std::make_tuple(tuple_meta, tuple, undo_link);
   }
-  //   page_hdl.page->RUnlatch();
+  page_hdl.page->RUnlatch();
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
   return ret;
 }
 
 // sqb 6.17 事务commit时更新所有写操作的时间戳 undo_log的时间戳应该一起更改
 void RmFileHandle::set_meta_ts(Transaction *txn, size_t log_idx, const Rid &rid, timestamp_t ts) {
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
-  //   page_hdl.page->WLatch();
+  page_hdl.page->WLatch();
 
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
   base_meta.ts_ = ts;
   //   base_meta.is_deleted_ = is_delete;
   txn->CommitUndoLog(log_idx, ts);
 
-  //   page_hdl.page->WUnlatch();
+  page_hdl.page->WUnlatch();
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 }
 
 // sqb 用于改动rmscan
 TupleMeta RmFileHandle::get_meta(const Rid &rid) {
-  std::shared_lock<std::shared_mutex> lock(latch_);
+  //   std::shared_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
-  //   page_hdl.page->RLatch();
+  page_hdl.page->RLatch();
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
-  //   page_hdl.page->RUnlatch();
+  page_hdl.page->RUnlatch();
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
   return base_meta;
 }
@@ -109,19 +109,22 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, RmRecord *old_rec, 
   // 4. 更新page_handle.page_hdr中的数据结构
   // 注意考虑插入一条记录后页面已满的情况，需要更新file_hdr_.first_free_page_no
 
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = create_page_handle();
-  //   page_hdl.page->WLatch();
+  page_hdl.page->WLatch();
 
   // 找空闲位置
   int free_slot_no = find_free_slot_no(page_hdl, context);
 
   //   如果因为逻辑删除指向了一个无真实空闲槽的数据页，直接创建新页
   if (free_slot_no == file_hdr_.num_records_per_page) {
-    // page_hdl.page->WUnlatch();
+    page_hdl.page->WUnlatch();
     buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), false);
-    page_hdl = create_new_page_handle();
-    // page_hdl.page->WLatch();
+    {
+      std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+      page_hdl = create_new_page_handle();
+    }
+    page_hdl.page->WLatch();
     free_slot_no = find_free_slot_no(page_hdl, context);
   }
 
@@ -178,7 +181,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, RmRecord *old_rec, 
   page_hdl.page_hdr->num_records++;
 
   {
-    // std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
     if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
       file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
     }
@@ -186,7 +189,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, RmRecord *old_rec, 
     ++file_hdr_.record_num;
   }
 
-  //   page_hdl.page->WUnlatch();
+  page_hdl.page->WUnlatch();
   //   当前数据为脏
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 
@@ -199,9 +202,9 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, RmRecord *old_rec, 
  * @param {char*} buf 要插入记录的数据
  */
 void RmFileHandle::insert_record(const Rid &rid, char *buf) {
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
-  //   page_hdl.page->WLatch();
+  page_hdl.page->WLatch();
   memcpy(page_hdl.get_slot_record(rid.slot_no), buf, file_hdr_.record_size);
 
   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
@@ -212,7 +215,7 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
   //   if (!Bitmap::is_set(page_hdl.bitmap, rid.slot_no)) {
   page_hdl.page_hdr->num_records++;
   {
-    // std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
     if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
       file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
     }
@@ -221,7 +224,7 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
   }
   //   }
 
-  //   page_hdl.page->WUnlatch();
+  page_hdl.page->WUnlatch();
   //   当前数据为脏
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 }
@@ -239,9 +242,9 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
   // 注意考虑删除一条记录后页面未满的情况，需要调用release_page_handle()
 
   //   还是只考虑rid存在的情况
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
-  //   page_hdl.page->WLatch();
+  page_hdl.page->WLatch();
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
 
   // sqb添加事务控制语句 6.4
@@ -253,7 +256,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
 
     // 写写冲突检查 6.19
     if (IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
-      //   page_hdl.page->WUnlatch();
+      page_hdl.page->WUnlatch();
       throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
     }
 
@@ -299,7 +302,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
   --page_hdl.page_hdr->num_records;
 
   {
-    // std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
     // if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
     //   page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
     //   file_hdr_.first_free_page_no = page_hdl.page->get_page_id().page_no;
@@ -308,7 +311,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
     --file_hdr_.record_num;
   }
 
-  //   page_hdl.page->WUnlatch();
+  page_hdl.page->WUnlatch();
   //   当前数据为脏
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 }
@@ -326,10 +329,10 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
   // 2. 更新记录
 
   //   暂时只考虑数据存在的情况
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
 
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
-  //   page_hdl.page->WLatch();
+  page_hdl.page->WLatch();
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
 
   // sqb添加事务控制语句 6.4
@@ -341,7 +344,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
 
     // 写写冲突检查 6.19
     if (IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
-      //   page_hdl.page->WUnlatch();
+      page_hdl.page->WUnlatch();
       throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
     }
 
@@ -384,7 +387,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
   // 跟踪表记录数量 由于索引永驻 逻辑删除后重用相当于插入
   if (base_meta.is_deleted_) {
     ++page_hdl.page_hdr->num_records;
-    // std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
     if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
       file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
     }
@@ -392,7 +395,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
   }
   base_meta.is_deleted_ = false;
 
-  //   page_hdl.page->WUnlatch();
+  page_hdl.page->WUnlatch();
   //   当前数据为脏
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 }
@@ -463,7 +466,7 @@ RmPageHandle RmFileHandle::create_page_handle() {
   //     1.2 有空闲页：直接获取第一个空闲页
   // 2. 生成page handle并返回给上层
 
-  //   std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+  std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
   if (file_hdr_.first_free_page_no == INVALID_PAGE_ID) {
     // 没有空闲页
     return create_new_page_handle();
@@ -490,8 +493,8 @@ RmPageHandle RmFileHandle::create_page_handle() {
 
 // sqb 避免故障恢复时 访问不存在的页报错 暂时只考虑申请一次 6.11
 void RmFileHandle::allocate_pages(const Rid &rid) {
-  std::unique_lock<std::shared_mutex> lock(latch_);
-  //   std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
+  std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
   if (rid.page_no >= file_hdr_.num_pages) {
     page_id_t old_fisrt_free_page = file_hdr_.first_free_page_no;
     // RmPageHandle page_hdl = create_page_handle();
@@ -524,9 +527,9 @@ int RmFileHandle::find_free_slot_no(RmPageHandle &page_hdl, Context *context) {
 //   为了重构回滚 支持MVCC的垃圾回收 加回滚时rec和meta原子回滚的函数
 void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_rec, const TupleMeta &old_meta,
                                           Transaction *txn, TransactionManager *txn_mgr) {
-  std::unique_lock<std::shared_mutex> lock(latch_);
+  //   std::unique_lock<std::shared_mutex> lock(latch_);
   RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
-  //   page_hdl.page->WLatch();
+  page_hdl.page->WLatch();
   assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
 
   //   回滚事务的版本链必定有值，且必定为自己，并只有一个
@@ -543,7 +546,7 @@ void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_re
     if (old_meta.is_deleted_) {
       // 相当于插入做回滚
       --page_hdl.page_hdr->num_records;
-      //   std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+      std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
       if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
         page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
         file_hdr_.first_free_page_no = page_hdl.page->get_page_id().page_no;
@@ -553,7 +556,7 @@ void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_re
       // 相当于删除做回滚
       ++page_hdl.page_hdr->num_records;
       {
-        // std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+        std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
         if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
           file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
         }
@@ -567,6 +570,6 @@ void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_re
   base_meta = old_meta;
   memcpy(page_hdl.get_slot_record(rid.slot_no), old_rec.data, file_hdr_.record_size);
 
-  //   page_hdl.page->WUnlatch();
+  page_hdl.page->WUnlatch();
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 }
