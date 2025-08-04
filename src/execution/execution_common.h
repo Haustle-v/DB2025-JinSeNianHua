@@ -93,11 +93,13 @@ inline auto CollectUndoLogs(const TupleMeta &base_meta, std::optional<UndoLink> 
   while (link.IsValid()) {
     UndoLog log = txn_mgr->GetUndoLog(link);
 
-    // 由于目前的回滚直接回复 所以版本链检查需跳过abort事务
-    if (txn_mgr->CheckIsAbort(link.prev_txn_)) {
-      link = log.prev_version_;
-      continue;
-    }
+    // // 由于目前的回滚直接回复 所以版本链检查需跳过abort事务
+    // if (txn_mgr->CheckIsAbort(link.prev_txn_)) {
+    //   link = log.prev_version_;
+    //   continue;
+    // }
+    // 重构回滚后版本链不应存在abort事务
+    assert(!txn_mgr->CheckIsAbort(link.prev_txn_));
 
     // 代表临时时间戳与大于read_ts的
     if (log.ts_ > read_ts) {
@@ -232,17 +234,7 @@ inline std::optional<UndoLink> WalkLinkToTxnLink(int fd, const Rid &rid, Transac
   if (!(op_undo_link.has_value() && (*op_undo_link).IsValid())) {
     return std::nullopt;
   }
-  UndoLink link = op_undo_link.value();
-  while (true) {
-    if (link.prev_txn_ == txn_id) {
-      return link;
-    }
-    UndoLog log = txn_mgr->GetUndoLog(link);
-    if (!log.prev_version_.IsValid()) {
-      break;
-    }
-    link = log.prev_version_;
-  }
+  //   若为了更新undo_log，那么前一个必定是事务自己的undo_log，否则，前一个就是最后的版本链
   return op_undo_link;
 }
 
