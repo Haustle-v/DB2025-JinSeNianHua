@@ -229,7 +229,7 @@ inline auto GenerateUpdatedUndoLog(const TabMeta *schema, const RmRecord *base_t
 inline std::optional<UndoLink> WalkLinkToTxnLink(int fd, const Rid &rid, TransactionManager *txn_mgr,
                                                  const txn_id_t txn_id) {
   std::optional<UndoLink> op_undo_link = txn_mgr->GetUndoLink(fd, rid);
-  if (!op_undo_link.has_value()) {
+  if (!(op_undo_link.has_value() && (*op_undo_link).IsValid())) {
     return std::nullopt;
   }
   UndoLink link = op_undo_link.value();
