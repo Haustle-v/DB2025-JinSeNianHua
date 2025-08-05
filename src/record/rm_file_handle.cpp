@@ -303,10 +303,10 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
 
   {
     std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
-    // if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
-    //   page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
-    //   file_hdr_.first_free_page_no = page_hdl.page->get_page_id().page_no;
-    // }
+    if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
+      page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
+      file_hdr_.first_free_page_no = page_hdl.page->get_page_id().page_no;
+    }
     // 跟踪表记录数量
     --file_hdr_.record_num;
   }
