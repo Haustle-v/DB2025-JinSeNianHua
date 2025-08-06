@@ -511,15 +511,16 @@ int RmFileHandle::find_free_slot_no(RmPageHandle &page_hdl, Context *context) {
     if (Bitmap::is_set(page_hdl.bitmap, i) == 0) {
       free_slot_no = i;
       break;
-    } else {
-      TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(i));
-      //   插入到逻辑删除的位置需要进行写写冲突检查 该函数不应出现写写冲突
-      if (base_meta.is_deleted_ == true &&
-          !(context != nullptr && IsWriteWriteConflict(base_meta.ts_, context->txn_))) {
-        free_slot_no = i;
-        break;
-      }
     }
+    // else {
+    //   TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(i));
+    //   //   插入到逻辑删除的位置需要进行写写冲突检查 该函数不应出现写写冲突
+    //   if (base_meta.is_deleted_ == true &&
+    //       !(context != nullptr && IsWriteWriteConflict(base_meta.ts_, context->txn_))) {
+    //     free_slot_no = i;
+    //     break;
+    //   }
+    // }
   }
   return free_slot_no;
 }
