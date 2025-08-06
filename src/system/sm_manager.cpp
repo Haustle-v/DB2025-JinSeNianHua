@@ -303,7 +303,7 @@ void SmManager::create_index(const std::string &tab_name, const std::vector<std:
       memcpy(key_buffer + curr_offset, rec_ptr->data + col_meta.offset, col_meta.len);
       curr_offset += col_meta.len;
     }
-    ix_hdl_ptr->insert_entry(key_buffer, scan.rid(), nullptr);
+    ix_hdl_ptr->insert_entry(key_buffer, scan.rid(), context->txn_);
   }
 
   //   将索引元数据添加

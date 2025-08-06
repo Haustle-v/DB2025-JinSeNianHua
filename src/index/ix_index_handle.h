@@ -162,6 +162,9 @@ class IxNodeHandle {
     assert(rid_idx < page_hdr->num_key);
     return rid_idx;
   }
+
+  //   为latch_ crabbing定义
+  inline bool is_safe(Operation op);
 };
 
 /* B+树 */
@@ -172,9 +175,9 @@ class IxIndexHandle {
  private:
   DiskManager *disk_manager_;
   BufferPoolManager *index_buffer_pool_manager_;
-  int fd_;               // 存储B+树的文件
-  IxFileHdr *file_hdr_;  // 存了root_page，但其初始化为2（第0页存FILE_HDR_PAGE，第1页存LEAF_HEADER_PAGE）
-  std::mutex root_latch_;
+  int fd_;                 // 存储B+树的文件
+  IxFileHdr *file_hdr_;    // 存了root_page，但其初始化为2（第0页存FILE_HDR_PAGE，第1页存LEAF_HEADER_PAGE）
+  std::mutex root_latch_;  // 让这个保护filr_hdr关于root_page部分
   // std::shared_mutex root_latch_;  // 读写锁提高并发度
 
   IxNodeHandle *last_node_{nullptr};  // load专用，跟踪尾部的叶子节点
@@ -250,4 +253,7 @@ class IxIndexHandle {
 
   // for index test
   Rid get_rid(const Iid &iid) const;
+
+  //   latch crabbing过程中，用于释放祖先节点
+  void release_all_ancestors(Transaction *txn);
 };

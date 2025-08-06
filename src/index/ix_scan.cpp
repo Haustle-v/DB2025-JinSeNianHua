@@ -15,19 +15,30 @@ See the Mulan PSL v2 for more details. */
  * @todo 加上读锁（需要使用缓冲池得到page）
  */
 void IxScan::next() {
-  assert(!is_end());
-  IxNodeHandle *node = ih_->fetch_node(iid_.page_no);
-  assert(node->is_leaf_page());
-  assert(iid_.slot_no < node->get_size());
+  //   assert(!is_end());
+  //   IxNodeHandle *node = ih_->fetch_node(iid_.page_no);
+  //   assert(node->is_leaf_page());
+  //   assert(iid_.slot_no < node->get_size());
   // increment slot no
   iid_.slot_no++;
-  if (iid_.page_no != ih_->file_hdr_->last_leaf_ && iid_.slot_no == node->get_size()) {
+  if (iid_.page_no != ih_->file_hdr_->last_leaf_ && iid_.slot_no == cur_nhdl_ptr_->get_size()) {
     // go to next leaf
     iid_.slot_no = 0;
-    iid_.page_no = node->get_next_leaf();
+    iid_.page_no = cur_nhdl_ptr_->get_next_leaf();
+    cur_nhdl_ptr_->page->RUnlatch();
+    bpm_->unpin_page(cur_nhdl_ptr_->page->get_page_id(), false);
+    delete cur_nhdl_ptr_;
+    cur_nhdl_ptr_ = ih_->fetch_node(iid_.page_no);
+    cur_nhdl_ptr_->page->RLatch();
   }
   // sqb 不加就内存泄漏了
-  bpm_->unpin_page(node->get_page_id(), false);
+  //   bpm_->unpin_page(cur_nhdl_ptr_->get_page_id(), false);
 }
 
-Rid IxScan::rid() const { return ih_->get_rid(iid_); }
+Rid IxScan::rid() const {
+  //   assert(cur_nhdl_ptr_->page->get_page_id().page_no == iid_.page_no&&cur_nhdl_ptr_->get_size()>iid_.slot_no);
+  //   if (cur_nhdl_ptr_->page->get_page_id().page_no == iid_.page_no) {
+  return *cur_nhdl_ptr_->get_rid(iid_.slot_no);
+  //   }
+  //   return ih_->get_rid(iid_);
+}

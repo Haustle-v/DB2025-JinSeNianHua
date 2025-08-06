@@ -19,20 +19,30 @@ See the Mulan PSL v2 for more details. */
 // 用于直接遍历叶子结点，而不用findleafpage来得到叶子结点
 // TODO：对page遍历时，要加上读锁
 class IxScan : public RecScan {
-    const IxIndexHandle *ih_;
-    Iid iid_;  // 初始为lower（用于遍历的指针）
-    Iid end_;  // 初始为upper
-    BufferPoolManager *bpm_;
+  const IxIndexHandle *ih_;
+  Iid iid_;  // 初始为lower（用于遍历的指针）
+  Iid end_;  // 初始为upper
+  BufferPoolManager *bpm_;
+  IxNodeHandle *cur_nhdl_ptr_;
 
-   public:
-    IxScan(const IxIndexHandle *ih, const Iid &lower, const Iid &upper, BufferPoolManager *bpm)
-        : ih_(ih), iid_(lower), end_(upper), bpm_(bpm) {}
+ public:
+  IxScan(const IxIndexHandle *ih, const Iid &lower, const Iid &upper, BufferPoolManager *bpm)
+      : ih_(ih), iid_(lower), end_(upper), bpm_(bpm) {
+    cur_nhdl_ptr_ = ih_->fetch_node(iid_.page_no);
+    cur_nhdl_ptr_->page->RLatch();
+  }
 
-    void next() override;
+  ~IxScan() override {
+    cur_nhdl_ptr_->page->RUnlatch();
+    bpm_->unpin_page(cur_nhdl_ptr_->get_page_id(), false);
+    delete cur_nhdl_ptr_;
+  }
 
-    bool is_end() const override { return iid_ == end_; }
+  void next() override;
 
-    Rid rid() const override;
+  bool is_end() const override { return iid_ == end_; }
 
-    const Iid &iid() const { return iid_; }
+  Rid rid() const override;
+
+  const Iid &iid() const { return iid_; }
 };
