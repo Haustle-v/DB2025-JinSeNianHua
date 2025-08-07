@@ -176,7 +176,7 @@ void IxNodeHandle::insert_pairs(int pos, const char *key, const Rid *rid, int n)
  * @param (key, value) 要插入的键值对
  * @return int 键值对数量
  */
-int IxNodeHandle::insert(const char *key, const Rid &value) {
+std::pair<int, int> IxNodeHandle::insert(const char *key, const Rid &value) {
   // Todo:
   // 1. 查找要插入的键值对应该插入到当前节点的哪个位置
   // 2. 如果key重复则不插入
@@ -190,11 +190,11 @@ int IxNodeHandle::insert(const char *key, const Rid &value) {
   pos = pos == -1 ? 0 : pos;
   if (pos >= 0 && pos < key_num && (ix_compare(key, get_key(pos), file_hdr->col_types_, file_hdr->col_lens_) == 0)) {
     // 键值重复
-    return key_num;
+    return {key_num, -1};
   }
   insert_pair(pos, key, value);
 
-  return get_size();
+  return {get_size(), pos};
 }
 
 /**
@@ -235,7 +235,7 @@ void IxNodeHandle::erase_pair(int pos) {
  * @param key 要删除的键值对key值
  * @return 完成删除操作后的键值对数量
  */
-int IxNodeHandle::remove(const char *key) {
+std::pair<int, int> IxNodeHandle::remove(const char *key) {
   // Todo:
   // 1. 查找要删除键值对的位置
   // 2. 如果要删除的键值对存在，删除键值对
@@ -247,10 +247,10 @@ int IxNodeHandle::remove(const char *key) {
   //   相等才删除键
   if (pos >= 0 && pos < key_num && (ix_compare(key, get_key(pos), file_hdr->col_types_, file_hdr->col_lens_) == 0)) {
     erase_pair(pos);
-    return get_size();
+    return {get_size(), -1};
   }
 
-  return key_num;
+  return {key_num, pos};
 }
 
 //   为latch_ crabbing定义
@@ -267,8 +267,8 @@ inline bool IxNodeHandle::is_safe(Operation op) {
     return get_size() > mini_size;
   }
 
-  //   查找
-  return true;
+  //   前三种情况就返回了
+  return false;
 }
 
 IxIndexHandle::IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
@@ -303,6 +303,7 @@ std::pair<IxNodeHandle *, bool> IxIndexHandle::find_leaf_page(const char *key, O
   // 2. 从根节点开始不断向下查找目标key
   // 3. 找到包含该key值的叶子结点停止查找，并返回叶子节点
 
+  //   这个现在是悲观锁策略
   // sqb 5.26
   root_latch_.lock();
   bool root_locked = true;
@@ -349,6 +350,38 @@ std::pair<IxNodeHandle *, bool> IxIndexHandle::find_leaf_page(const char *key, O
 
   //   插入和删除都需要加锁
   return std::make_pair(node, root_locked);
+}
+
+// 在索引永驻的MVCC下，这个函数只给插入用 一路加读锁，叶子加写锁，在插入进行检查
+IxNodeHandle *IxIndexHandle::find_leaf_page_optimistically(const char *key) {
+  root_latch_.lock();
+  assert(file_hdr_->root_page_ != IX_NO_PAGE && "index start with invalid root page");
+  IxNodeHandle *node = fetch_node(file_hdr_->root_page_);
+
+  //   因为有root latch保护，所以叶子判断必定是安全的
+  if (node->is_leaf_page()) {
+    node->page->WLatch();
+  } else {
+    node->page->RLatch();
+  }
+  root_latch_.unlock();
+
+  while (!node->is_leaf_page()) {
+    // 同理 有父节点的锁，那么子节点的类型判断也必定是安全的
+    page_id_t child_page_no = node->internal_lookup(key);
+    IxNodeHandle *child_node = fetch_node(child_page_no);
+    if (child_node->is_leaf_page()) {
+      child_node->page->WLatch();
+    } else {
+      child_node->page->RLatch();
+    }
+    node->page->RUnlatch();
+    index_buffer_pool_manager_->unpin_page(node->get_page_id(), false);
+    delete node;
+    node = child_node;
+  }
+
+  return node;
 }
 
 /**
@@ -507,7 +540,7 @@ void IxIndexHandle::insert_into_parent(IxNodeHandle *old_node, const char *key, 
     IxNodeHandle *parent_node = fetch_node(old_node->get_parent_page_no());
 
     //   将右侧节点的第一个插入
-    int key_num = parent_node->insert(key, {new_node->get_page_no(), -1});
+    int key_num = parent_node->insert(key, {new_node->get_page_no(), -1}).first;
     if (key_num > file_hdr_->btree_order_) {
       // 还得分裂
       IxNodeHandle *new_split_right_node = split(parent_node);
@@ -551,19 +584,29 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
   // 提示：记得unpin
   // page；若当前叶子节点是最右叶子节点，则需要更新file_hdr_.last_leaf；记得处理并发的上锁
 
-  // sqb   5.28
-  auto [leaf_node, root_locked] = find_leaf_page(key, Operation::INSERT, transaction);
+  //   先乐观锁控制，不安全转换为悲观锁
+  IxNodeHandle *leaf_node = find_leaf_page_optimistically(key);
+  bool root_locked = false;
 
-  //   IxNodeHandle *leaf_node = entry.first;
+  if (!leaf_node->is_safe(Operation::INSERT)) {
+    leaf_node->page->WUnlatch();
+    auto entry = find_leaf_page(key, Operation::INSERT, transaction);
+    leaf_node = entry.first;
+    root_locked = entry.second;
+  }
+
   if (leaf_node == nullptr) {
     throw InternalError("insert entry at invalid leaf node");
   }
-  char pre_first_key[file_hdr_->col_tot_len_];
-  memcpy(pre_first_key, leaf_node->get_key(0), file_hdr_->col_tot_len_);
+
   int ket_num_before = leaf_node->get_size();
-  int key_num_after = leaf_node->insert(key, value);
-  char *cur_first_key = leaf_node->get_key(0);
+  auto [key_num_after, pos] = leaf_node->insert(key, value);
   bool is_repeat = ket_num_before == key_num_after;
+
+  //   修改错误 应该是任何插入到首部的情况下都需维护父节点 处理后分裂就无需处理父节点
+  if (!is_repeat && pos == 0) {
+    maintain_parent(leaf_node);
+  }
 
   //   //   处理并发情况下插入重复键值的问题
   //   if (is_repeat && transaction != nullptr) {
@@ -582,9 +625,6 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
     index_buffer_pool_manager_->unpin_page(new_right_split_node->get_page_id(), true);
     delete new_right_split_node;
     root_locked = false;  // 这个会在insert_into_parent中释放锁，避免重复释放
-  } else if (!is_repeat && memcmp(pre_first_key, cur_first_key, file_hdr_->col_tot_len_) != 0) {
-    // 如果更新了第一个节点，那么维护父节点的对应key
-    maintain_parent(leaf_node);
   }
 
   // 普通的插入或重复键值，处理锁资源
@@ -624,8 +664,14 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
   //   bool root_locked = entry.second;
 
   int key_num_before = leaf_node->get_size();
-  int key_num_after = leaf_node->remove(key);
+  auto [key_num_after, pos] = leaf_node->remove(key);
+
   bool success = key_num_before != key_num_after;
+
+  if (success && pos == 0) {
+    maintain_parent(leaf_node);
+  }
+
   if (success) {
     // 成功删除才调整节点
     coalesce_or_redistribute(leaf_node, transaction, &root_locked);
@@ -683,7 +729,6 @@ bool IxIndexHandle::coalesce_or_redistribute(IxNodeHandle *node, Transaction *tr
     return ret;
   } else if (node->get_size() >= mini_size) {
     // 叶子节点大小符合要求 该节点必定安全，根锁必然释放 同时释放所有锁
-    maintain_parent(node);
     release_all_ancestors(transaction);
     return false;
   }
