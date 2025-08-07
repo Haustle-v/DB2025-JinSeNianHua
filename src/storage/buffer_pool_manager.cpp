@@ -44,7 +44,7 @@ bool BufferPoolManager::flush_page(PageId page_id) { return bpms_[get_instance_i
  * @param {PageId*} page_id 当成功创建一个新的page时存储其page_id
  */
 Page *BufferPoolManager::new_page(PageId *page_id) {
-  *page_id = {page_id->fd, disk_manager_->allocate_page(page_id->fd)};
+  //   *page_id = {page_id->fd, disk_manager_->allocate_page(page_id->fd)};
   return bpms_[get_instance_idx(*page_id)]->new_page(page_id);
 }
 
