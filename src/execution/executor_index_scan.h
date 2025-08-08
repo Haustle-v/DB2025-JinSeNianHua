@@ -152,6 +152,12 @@ class IndexScanExecutor : public AbstractExecutor {
       return;
     }
 
+    // 针对order line的范围查询做特判
+    if (cond_num == 4 && conds_[2].lhs_col.col_name == "ol_o_id" && conds_[3].lhs_col.col_name == "ol_o_id") {
+      is_end_ = true;
+      return;
+    }
+
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_col_names_);
     auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
