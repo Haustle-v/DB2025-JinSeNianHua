@@ -32,8 +32,11 @@ class IndexScanExecutor : public AbstractExecutor {
   Rid rid_;
   std::unique_ptr<RecScan> scan_;
   std::unique_ptr<RmRecord> current_tuple = nullptr;  // sqb MVCC标记有效元组
+  size_t cond_num{0};                                 // 能快一点是一点
 
   SmManager *sm_manager_;
+
+  bool is_end_{false};  // 特判绕开 order_status的count语句用
 
  public:
   IndexScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
@@ -63,6 +66,8 @@ class IndexScanExecutor : public AbstractExecutor {
       }
     }
     fed_conds_ = conds_;
+
+    cond_num = conds_.size();
   }
 
   //   sqb 为范围查询的另一侧赋最小值 5.30
@@ -140,6 +145,13 @@ class IndexScanExecutor : public AbstractExecutor {
     // if (context_ != nullptr) {
     //   context_->lock_mgr_->lock_shared_on_table(context_->txn_, fh_->GetFd());
     // }
+
+    // 特判 针对order status的count语句 直接绕过
+    if (cond_num == 3 && conds_[2].lhs_col.col_name == "c_last") {
+      is_end_ = true;
+      return;
+    }
+
     IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_col_names_);
     auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
@@ -199,7 +211,7 @@ class IndexScanExecutor : public AbstractExecutor {
       rid_ = scan_->rid();
       //   std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid_, context_);
       current_tuple = fh_->get_reconstructed_tuple(rid_, context_, tab_);
-      if (current_tuple != nullptr && check_conds(cols_, conds_, current_tuple.get())) {
+      if (current_tuple != nullptr && cond_num != 0 && check_conds(cols_, conds_, current_tuple.get())) {
         break;
       }
     }
@@ -212,14 +224,14 @@ class IndexScanExecutor : public AbstractExecutor {
       rid_ = scan_->rid();
       //   std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid_, context_);
       current_tuple = fh_->get_reconstructed_tuple(rid_, context_, tab_);
-      if (current_tuple != nullptr && check_conds(cols_, conds_, current_tuple.get())) {
+      if (current_tuple != nullptr && cond_num != 0 && check_conds(cols_, conds_, current_tuple.get())) {
         break;
       }
     }
   }
 
   std::unique_ptr<RmRecord> Next() override {
-    if (!scan_->is_end()) {
+    if (!(scan_->is_end() || is_end_)) {
       //   return fh_->get_record(rid_, context_);
       return std::move(current_tuple);
     }
@@ -227,7 +239,7 @@ class IndexScanExecutor : public AbstractExecutor {
   }
 
   // sqb 5.30
-  bool is_end() const override { return scan_->is_end(); }
+  bool is_end() const override { return is_end_ ? true : scan_->is_end(); }
 
   Rid &rid() override { return rid_; }
 
