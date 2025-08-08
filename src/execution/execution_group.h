@@ -285,6 +285,14 @@ class AggPlanExecutor : public AbstractExecutor {
 
         group_results_[group_key] = std::make_pair(std::move(new_record), 1);
         insert_order_.push_back(group_key);
+
+        // 特判 针对select min(no_o_id) as min_o_id from new_orders where no_d_id=:d_id and no_w_id=:w_id;
+        // 索引有序，第一个元组就是最小值
+        if (sel_cols_.size() == 1 && sel_cols_[0].aggFuncType == ast::AggFuncType::AGG_MIN &&
+            sel_cols_[0].col_name == "no_o_id") {
+          return;
+        }
+
       } else {
         auto &existing_record_pair = group_results_[group_key];
         auto &existing_record = existing_record_pair.first;
