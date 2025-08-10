@@ -227,6 +227,7 @@ Page *BufferPoolObject::new_page(PageId *page_id) {
 
   Page &target_page = pages_[usable_frame_id];
 
+  *page_id = {page_id->fd, disk_manager_->allocate_page(page_id->fd)};
   //   刷盘与更新元数据
   update_page(&target_page, *page_id, usable_frame_id);
 

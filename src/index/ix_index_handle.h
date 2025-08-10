@@ -123,14 +123,14 @@ class IxNodeHandle {
 
   bool leaf_lookup(const char *key, Rid **value);
 
-  int insert(const char *key, const Rid &value);
+  std::pair<int, int> insert(const char *key, const Rid &value);
 
   // 用于在结点中的指定位置插入单个键值对
   void insert_pair(int pos, const char *key, const Rid &rid) { insert_pairs(pos, key, &rid, 1); }
 
   void erase_pair(int pos);
 
-  int remove(const char *key);
+  std::pair<int, int> remove(const char *key);
 
   /**
    * @brief used in internal node to remove the last key in root node, and
@@ -190,6 +190,9 @@ class IxIndexHandle {
 
   std::pair<IxNodeHandle *, bool> find_leaf_page(const char *key, Operation operation, Transaction *transaction,
                                                  bool find_first = false);
+
+  // 在索引永驻的MVCC下，这个函数只给插入用
+  IxNodeHandle *find_leaf_page_optimistically(const char *key);
 
   // for insert
   page_id_t insert_entry(const char *key, const Rid &value, Transaction *transaction);
@@ -255,5 +258,7 @@ class IxIndexHandle {
   Rid get_rid(const Iid &iid) const;
 
   //   latch crabbing过程中，用于释放祖先节点
-  void release_all_ancestors(Transaction *txn);
+  void release_all_Wlatched_pages(Transaction *txn);
+
+  void check_and_release_Wlatched_pages(Transaction *txn, Operation op);
 };

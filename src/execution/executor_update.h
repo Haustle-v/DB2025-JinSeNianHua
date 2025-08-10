@@ -34,11 +34,11 @@ class UpdateExecutor : public AbstractExecutor {
                  Context *context) {
     sm_manager_ = sm_manager;
     tab_name_ = tab_name;
-    set_clauses_ = set_clauses;
+    set_clauses_ = std::move(set_clauses);  // 使用 move 避免拷贝
     tab_ = sm_manager_->db_.get_table(tab_name);
     fh_ = sm_manager_->fhs_.at(tab_name).get();
-    conds_ = conds;
-    rids_ = rids;
+    conds_ = std::move(conds);  // 使用 move 避免拷贝
+    rids_ = std::move(rids);     // 使用 move 避免拷贝
     old_recs = std::move(recs);  // sqb add
     context_ = context;
   }

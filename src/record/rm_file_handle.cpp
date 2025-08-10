@@ -43,6 +43,7 @@ auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
   page_hdl.page->RLatch();
   {
     // std::scoped_lock<std::mutex> undo_lock(undo_latch_);
+    // std::cout << rid.page_no << " " << rid.slot_no;
     assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
 
     TupleMeta tuple_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
@@ -536,7 +537,8 @@ void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_re
   //   回滚事务的版本链必定有值，且必定为自己，并只有一个
   std::optional<UndoLink> op_link = txn_mgr->GetUndoLink(fd_, rid);
   assert(op_link.has_value() && (*op_link).prev_txn_ == txn->get_transaction_id());
-  UndoLog log = txn_mgr->GetUndoLog(*op_link);
+  UndoLog log = txn->GetUndoLog((*op_link).prev_log_idx_);
+  //   UndoLog log = txn_mgr->GetUndoLog(*op_link);
   UndoLink pre_link = log.prev_version_;  // 跳过当前版本
   txn_mgr->UpdateUndoLink(fd_, rid, pre_link);
 

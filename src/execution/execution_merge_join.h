@@ -60,8 +60,8 @@ class MergeJoinExecutor : public AbstractExecutor {
 
     cols_.insert(cols_.end(), right_cols.begin(), right_cols.end());
     isend = false;
-    fed_conds_ = std::move(conds);
-    join_type_ = std::move(join_type);
+    fed_conds_ = std::move(conds);  // 使用 move 避免拷贝
+    join_type_ = std::move(join_type);  // 使用 move 避免拷贝
   }
 
   //   将基于等值的排序合并缝进来
