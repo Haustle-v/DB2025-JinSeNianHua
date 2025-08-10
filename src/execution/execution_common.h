@@ -91,6 +91,8 @@ inline auto CollectUndoLogs(const TupleMeta &base_meta, std::optional<UndoLink> 
     link = undo_link.value();
   }
   while (link.IsValid()) {
+    // 重构回滚后版本链不应存在abort事务
+    assert(!txn_mgr->CheckIsAbort(link.prev_txn_));
     UndoLog log = txn_mgr->GetUndoLog(link);
 
     // // 由于目前的回滚直接回复 所以版本链检查需跳过abort事务
@@ -98,8 +100,6 @@ inline auto CollectUndoLogs(const TupleMeta &base_meta, std::optional<UndoLink> 
     //   link = log.prev_version_;
     //   continue;
     // }
-    // 重构回滚后版本链不应存在abort事务
-    assert(!txn_mgr->CheckIsAbort(link.prev_txn_));
 
     // 代表临时时间戳与大于read_ts的
     if (log.ts_ > read_ts) {
@@ -247,7 +247,8 @@ inline std::tuple<UndoLog, UndoLink> generateUndoLogAndLink(int fd, const Rid &r
   std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(fd, rid, context->txn_mgr_, txn_id);
   if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ == txn_id) {
     // 找到事务对应undo log，进行更改
-    UndoLog old_log = context->txn_mgr_->GetUndoLog(*op_undo_link);
+    // UndoLog old_log = context->txn_mgr_->GetUndoLog(*op_undo_link);
+    UndoLog old_log = context->txn_->GetUndoLog((*op_undo_link).prev_log_idx_);
     undo_log = GenerateUpdatedUndoLog(schema, old_rec, new_rec, old_log);
     undo_link = *op_undo_link;
   } else {
