@@ -135,7 +135,8 @@ class AggPlanExecutor : public AbstractExecutor {
       is_first_ = false;
     }
     if (output_idx_ >= insert_order_.size()) return nullptr;
-    return std::make_unique<RmRecord>(*group_results_[insert_order_[output_idx_]].first);
+    // 直接移动记录而不是拷贝，提高性能
+    return std::move(group_results_[insert_order_[output_idx_]].first);
   }
 
   bool is_end() const override { return output_idx_ >= insert_order_.size(); }

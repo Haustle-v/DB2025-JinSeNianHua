@@ -51,6 +51,10 @@ public:
         if (is_done_ || !current_record_) {
             return nullptr;
         }
+        // 如果记录大小完全匹配，可以考虑直接移动
+        if (current_record_->size == len_) {
+            return std::move(current_record_);
+        }
         return std::make_unique<RmRecord>(*current_record_);
     }
 

@@ -48,6 +48,24 @@ class ProjectionExecutor : public AbstractExecutor {
   std::unique_ptr<RmRecord> Next() override {
     // 将顺序扫描到的记录投影
     std::unique_ptr<RmRecord> pre_rec = prev_->Next();
+    if (!pre_rec) return nullptr;
+    
+    // 如果投影后记录完全一样，可以直接返回原记录
+    if (len_ == pre_rec->size && sel_cols_.size() == prev_->cols().size()) {
+        // 检查是否所有列都被选中且顺序相同
+        bool all_columns_selected = true;
+        for (size_t i = 0; i < sel_cols_.size(); ++i) {
+            if (sel_cols_[i].col_name != prev_->cols()[i].name || 
+                sel_cols_[i].tab_name != prev_->cols()[i].tab_name) {
+                all_columns_selected = false;
+                break;
+            }
+        }
+        if (all_columns_selected) {
+            return std::move(pre_rec);
+        }
+    }
+    
     std::unique_ptr<RmRecord> proj_rec = std::make_unique<RmRecord>(len_);
     size_t proj_col_num = cols_.size();
     for (size_t proj_idx = 0; proj_idx < proj_col_num; ++proj_idx) {
