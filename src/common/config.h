@@ -41,7 +41,7 @@ static constexpr int BUFFER_POOL_SIZE = 65536 * 4;  // size of buffer pool 256MB
 // static constexpr int BUFFER_POOL_SIZE = 65536 * 8;  // size of buffer pool 1GB
 // static constexpr int INDEX_BUFFER_POOL_SIZE = 65536;  // size of index buffer pool 256MB
 // static constexpr int INDEX_BUFFER_POOL_SIZE = 65536 / 8;  // size of index buffer pool 256MB
-static constexpr int BUFFER_POOL_OBJECT_NUM = 1;  // number of buffer pool objects
+static constexpr int BUFFER_POOL_OBJECT_NUM = 4;  // number of buffer pool objects
 static constexpr int BUFFER_POOL_OBJECT_SIZE =
     BUFFER_POOL_SIZE / BUFFER_POOL_OBJECT_NUM;              // size of buffer pool objects
 static constexpr int LOG_BUFFER_SIZE = (1024 * PAGE_SIZE);  // size of a log buffer in byte
