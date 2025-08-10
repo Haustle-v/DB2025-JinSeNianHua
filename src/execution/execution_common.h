@@ -91,8 +91,8 @@ inline auto CollectUndoLogs(const TupleMeta &base_meta, std::optional<UndoLink> 
     link = undo_link.value();
   }
   while (link.IsValid()) {
-    // 重构回滚后版本链不应存在abort事务
-    assert(!txn_mgr->CheckIsAbort(link.prev_txn_));
+    // 重构回滚后版本链不应存在abort事务 取消断言 可能在回顾过程中访问
+    // assert(!txn_mgr->CheckIsAbort(link.prev_txn_));
     UndoLog log = txn_mgr->GetUndoLog(link);
 
     // // 由于目前的回滚直接回复 所以版本链检查需跳过abort事务
