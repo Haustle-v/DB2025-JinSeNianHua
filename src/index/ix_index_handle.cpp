@@ -340,7 +340,7 @@ std::pair<IxNodeHandle *, bool> IxIndexHandle::find_leaf_page(const char *key, O
           root_latch_.unlock();
           root_locked = false;
         }
-        release_all_ancestors(transaction);
+        // release_all_Wlatched_pages(transaction);
       }
     }
 
@@ -532,7 +532,7 @@ void IxIndexHandle::insert_into_parent(IxNodeHandle *old_node, const char *key, 
     file_hdr_->root_page_ = root_page_no;
     // 释放资源
     root_latch_.unlock();
-    release_all_ancestors(transaction);
+    release_all_Wlatched_pages(transaction);
     index_buffer_pool_manager_->unpin_page(root_node->get_page_id(), true);
     delete root_node;
   } else {
@@ -549,7 +549,7 @@ void IxIndexHandle::insert_into_parent(IxNodeHandle *old_node, const char *key, 
       index_buffer_pool_manager_->unpin_page(new_split_right_node->get_page_id(), true);
       delete new_split_right_node;
     }
-    release_all_ancestors(transaction);
+    release_all_Wlatched_pages(transaction);
     index_buffer_pool_manager_->unpin_page(parent_node->get_page_id(), true);
     delete parent_node;
   }
@@ -587,8 +587,8 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
   //   先乐观锁控制，不安全转换为悲观锁
   IxNodeHandle *leaf_node = find_leaf_page_optimistically(key);
   bool root_locked = false;
-
-  if (!leaf_node->is_safe(Operation::INSERT)) {
+  //   不引起分裂 且不改变第一个键的操作视为安全的
+  if (!(leaf_node->is_safe(Operation::INSERT) && memcmp(key, leaf_node->get_key(0), file_hdr_->col_tot_len_) >= 0)) {
     leaf_node->page->WUnlatch();
     auto entry = find_leaf_page(key, Operation::INSERT, transaction);
     leaf_node = entry.first;
@@ -606,12 +606,9 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
   //   修改错误 应该是任何插入到首部的情况下都需维护父节点 处理后分裂就无需处理父节点
   if (!is_repeat && pos == 0) {
     maintain_parent(leaf_node);
+    // 维护完毕后，及时的释放锁
+    check_and_release_Wlatched_pages(transaction, Operation::INSERT);
   }
-
-  //   //   处理并发情况下插入重复键值的问题
-  //   if (is_repeat && transaction != nullptr) {
-  //     throw TransactionAbortException(transaction->get_transaction_id(), AbortReason::WRITE_CONFLICT);
-  //   }
 
   if (!is_repeat && key_num_after > file_hdr_->btree_order_) {
     // 如果没重复会直接插入 超过上限才分裂 更新父节点
@@ -631,7 +628,7 @@ page_id_t IxIndexHandle::insert_entry(const char *key, const Rid &value, Transac
   if (root_locked) {
     root_latch_.unlock();
   }
-  release_all_ancestors(transaction);
+  release_all_Wlatched_pages(transaction);
 
   //   重复则为读-false 不重复为写-true
   leaf_node->page->WUnlatch();
@@ -680,7 +677,7 @@ bool IxIndexHandle::delete_entry(const char *key, Transaction *transaction) {
   if (root_locked) {
     root_latch_.unlock();
   }
-  release_all_ancestors(transaction);
+  release_all_Wlatched_pages(transaction);
 
   //   仍根据success来unpin
   leaf_node->page->WUnlatch();
@@ -725,11 +722,11 @@ bool IxIndexHandle::coalesce_or_redistribute(IxNodeHandle *node, Transaction *tr
       *root_is_latched = false;
     }
     // 根节点已经处理完，可以释放所有锁
-    release_all_ancestors(transaction);
+    release_all_Wlatched_pages(transaction);
     return ret;
   } else if (node->get_size() >= mini_size) {
     // 叶子节点大小符合要求 该节点必定安全，根锁必然释放 同时释放所有锁
-    release_all_ancestors(transaction);
+    release_all_Wlatched_pages(transaction);
     return false;
   }
 
@@ -748,7 +745,7 @@ bool IxIndexHandle::coalesce_or_redistribute(IxNodeHandle *node, Transaction *tr
       *root_is_latched = false;
     }
     redistribute(sibling_node, node, parent_node, node_idx);
-    release_all_ancestors(transaction);
+    release_all_Wlatched_pages(transaction);
     need_remove = false;
   } else {
     // 两节点需合并
@@ -1131,7 +1128,7 @@ void IxIndexHandle::maintain_child(IxNodeHandle *node, int child_idx) {
 }
 
 //   latch crabbing过程中，用于释放祖先节点
-void IxIndexHandle::release_all_ancestors(Transaction *txn) {
+void IxIndexHandle::release_all_Wlatched_pages(Transaction *txn) {
   if (txn != nullptr) {
     auto &latch_pages = *txn->get_index_latch_page_set();
     for (auto &page : latch_pages) {
@@ -1139,5 +1136,24 @@ void IxIndexHandle::release_all_ancestors(Transaction *txn) {
       index_buffer_pool_manager_->unpin_page(page->get_page_id(), false);
     }
     txn->get_index_latch_page_set()->clear();
+  }
+}
+
+void IxIndexHandle::check_and_release_Wlatched_pages(Transaction *txn, Operation op) {
+  if (txn != nullptr) {
+    auto &latch_pages = *txn->get_index_latch_page_set();
+    auto iter = latch_pages.begin();
+    while (iter != latch_pages.end()) {
+      Page *page = *iter;
+      IxNodeHandle node(file_hdr_, page);
+      if (node.is_safe(op)) {
+        page->WUnlatch();
+        index_buffer_pool_manager_->unpin_page(page->get_page_id(), false);
+        iter = latch_pages.erase(iter);
+      } else {
+        ++iter;
+      }
+    }
+    //   for(auto )
   }
 }

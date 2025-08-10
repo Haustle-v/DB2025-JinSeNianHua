@@ -258,5 +258,7 @@ class IxIndexHandle {
   Rid get_rid(const Iid &iid) const;
 
   //   latch crabbing过程中，用于释放祖先节点
-  void release_all_ancestors(Transaction *txn);
+  void release_all_Wlatched_pages(Transaction *txn);
+
+  void check_and_release_Wlatched_pages(Transaction *txn, Operation op);
 };
