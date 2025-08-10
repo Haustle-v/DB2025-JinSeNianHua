@@ -88,7 +88,8 @@ public:
             beginTuple();
         }
         if (current_pos_ < sorted_records_.size()) {
-            return std::make_unique<RmRecord>(*sorted_records_[current_pos_]);
+            // 直接移动而不是拷贝，提高性能
+            return std::move(sorted_records_[current_pos_]);
         }
         return nullptr;
     }

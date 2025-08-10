@@ -48,8 +48,8 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
 
     cols_.insert(cols_.end(), right_cols.begin(), right_cols.end());
     isend = false;
-    fed_conds_ = std::move(conds);
-    join_type_ = std::move(join_type);
+    fed_conds_ = std::move(conds);  // 使用 move 避免拷贝
+    join_type_ = std::move(join_type);  // 使用 move 避免拷贝
   }
 
   // sqb: 先实现一个最直接的嵌套循环连接 应该还有预读或者分块的做法

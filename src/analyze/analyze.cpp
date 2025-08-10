@@ -51,14 +51,14 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
                               .col_name = agg_col->col_name,
                               .alias = agg_col->alias,
                               .aggFuncType = static_cast<ast::AggFuncType>(agg_col->agg_type)};
-        query->cols.push_back(tab_agg_col);
+        query->cols.push_back(std::move(tab_agg_col));
         x->has_agg = true;
       } else {
         TabCol sel_col = {.tab_name = sv_sel_col->tab_name,
                           .col_name = sv_sel_col->col_name,
                           .alias = "",
                           .aggFuncType = ast::AGG_INVALID};
-        query->cols.push_back(sel_col);
+        query->cols.push_back(std::move(sel_col));
       }
     }
 
@@ -67,6 +67,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
       x->has_agg = true;
     }
 
+    // 只在这里计算一次所有列的元数据
     std::vector<ColMeta> all_cols;
     get_all_cols(query->tables, all_cols);
 
@@ -79,8 +80,8 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         query->select_all = true;
         // select all columns
         for (auto &col : all_cols_of_left_tab) {
-          TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name};
-          query->cols.push_back(sel_col);
+          TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name, .alias = "", .aggFuncType = ast::AGG_INVALID};
+          query->cols.push_back(std::move(sel_col));
         }
       } else {
         // infer table name from column name
@@ -93,9 +94,8 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
         query->select_all = true;
         // select all columns
         for (auto &col : all_cols) {
-          TabCol sel_col = {
-              .tab_name = col.tab_name, .col_name = col.name, .alias = "", .aggFuncType = ast::AGG_INVALID};
-          query->cols.push_back(sel_col);
+          TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name, .alias = "", .aggFuncType = ast::AGG_INVALID};
+          query->cols.push_back(std::move(sel_col));
         }
       } else {
         // infer table name from column name
@@ -115,7 +115,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
                           .alias = "",
                           .aggFuncType = ast::AGG_INVALID};
       group_col = check_column(all_cols, group_col);
-      query->group_by_cols.push_back(group_col);
+      query->group_by_cols.push_back(std::move(group_col));
     }
 
     // SELECT 列表中不能出现没有在 GROUP BY 子句中的非聚集列
@@ -139,7 +139,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
 
     // 处理having条件
     get_having_clause(x->having_conds, query->having_conds);
-    check_having_clause(query->tables, query->having_conds, query->group_by_cols);
+    check_having_clause(all_cols, query->having_conds, query->group_by_cols);
 
     // 处理order by条件
     if (x->has_sort) {
@@ -149,7 +149,7 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
                             .alias = "",
                             .aggFuncType = ast::AGG_INVALID};
         order_col = check_column(all_cols, order_col);
-        query->order_bys.cols.push_back(order_col);
+        query->order_bys.cols.push_back(std::move(order_col));
         query->order_bys.is_asc.push_back(order_by->orderby_dir == ast::OrderBy_ASC);
       }
       query->order_bys.limit = x->limit;
@@ -165,10 +165,10 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
 
     // 处理where条件
     get_clause(x->conds, query->conds);
-    check_clause(query->tables, query->conds);
+    check_clause(all_cols, query->conds);
 
     get_clause2(x->jointree, query->join_conds);
-    check_clause(query->tables, query->join_conds);  // 检查列名是否存在，以及可能需要推断表名
+    check_clause(all_cols, query->join_conds);  // 检查列名是否存在，以及可能需要推断表名
   } else if (auto x = std::dynamic_pointer_cast<ast::UpdateStmt>(parse)) {
     /** TODO: */
     // sqb :初步处理update 语句 5.24
@@ -178,23 +178,31 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
       throw TableNotFoundError(x->tab_name);
     }
 
+    // 计算该表的所有列元数据
+    std::vector<ColMeta> all_cols;
+    get_all_cols({x->tab_name}, all_cols);
+
     //  考虑补充列存在检查 （不一定需要）
     // set原语转换
     for (auto &sv_set_clause : x->set_clauses) {
-      SetClause set_clause{.lhs = {x->tab_name, sv_set_clause->col_name},
+      SetClause set_clause{.lhs = {.tab_name = x->tab_name, .col_name = sv_set_clause->col_name, .alias = "", .aggFuncType = ast::AGG_INVALID},
                            .rhs = convert_sv_value(sv_set_clause->val),
                            .is_expr_ = sv_set_clause->is_expr_};
-      query->set_clauses.emplace_back(set_clause);
+      query->set_clauses.emplace_back(std::move(set_clause));
     }
 
     // where 条件
     get_clause(x->conds, query->conds);
-    check_clause({x->tab_name}, query->conds);
+    check_clause(all_cols, query->conds);
 
   } else if (auto x = std::dynamic_pointer_cast<ast::DeleteStmt>(parse)) {
+    // 计算该表的所有列元数据
+    std::vector<ColMeta> all_cols;
+    get_all_cols({x->tab_name}, all_cols);
+    
     // 处理where条件
     get_clause(x->conds, query->conds);
-    check_clause({x->tab_name}, query->conds);
+    check_clause(all_cols, query->conds);
   } else if (auto x = std::dynamic_pointer_cast<ast::InsertStmt>(parse)) {
     // 处理insert 的values值
     for (auto &sv_val : x->vals) {
@@ -298,7 +306,7 @@ void Analyze::get_having_clause(const std::vector<std::shared_ptr<ast::BinaryExp
     } else {
       throw RMDBError("Unexpected sv value type");
     }
-    conds.push_back(cond);
+    conds.emplace_back(std::move(cond));
   }
 }
 
@@ -315,15 +323,13 @@ void Analyze::get_clause(const std::vector<std::shared_ptr<ast::BinaryExpr>> &sv
       cond.is_rhs_val = false;
       cond.rhs_col = {.tab_name = rhs_col->tab_name, .col_name = rhs_col->col_name};
     }
-    conds.push_back(cond);
+    conds.emplace_back(std::move(cond));
   }
 }
 
-void Analyze::check_having_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds,
+void Analyze::check_having_clause(const std::vector<ColMeta> &all_cols, std::vector<Condition> &conds,
                                   const std::vector<TabCol> &group_by_cols) {
-  // auto all_cols = get_all_cols(tab_names);
-  std::vector<ColMeta> all_cols;
-  get_all_cols(tab_names, all_cols);
+  // 直接使用传入的 all_cols，避免重复计算
   // Get raw values in where clause
   for (auto &cond : conds) {
     if (cond.lhs_col.aggFuncType == ast::AGG_INVALID) {
@@ -384,10 +390,8 @@ void Analyze::check_having_clause(const std::vector<std::string> &tab_names, std
   }
 }
 
-void Analyze::check_clause(const std::vector<std::string> &tab_names, std::vector<Condition> &conds) {
-  // auto all_cols = get_all_cols(tab_names);
-  std::vector<ColMeta> all_cols;
-  get_all_cols(tab_names, all_cols);
+void Analyze::check_clause(const std::vector<ColMeta> &all_cols, std::vector<Condition> &conds) {
+  // 直接使用传入的 all_cols，避免重复计算
   // Get raw values in where clause
   for (auto &cond : conds) {
     // Infer table name from column name
@@ -442,7 +446,7 @@ void Analyze::get_clause2(const std::vector<std::shared_ptr<ast::JoinExpr>> &sv_
         cond.is_rhs_val = false;
         cond.rhs_col = {.tab_name = rhs_col->tab_name, .col_name = rhs_col->col_name};
       }
-      join_conds.push_back(cond);
+      join_conds.emplace_back(std::move(cond));
     }
   }
 }
