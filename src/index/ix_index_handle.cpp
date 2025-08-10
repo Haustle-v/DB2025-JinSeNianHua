@@ -271,24 +271,6 @@ inline bool IxNodeHandle::is_safe(Operation op) {
   return false;
 }
 
-//   为latch_ crabbing定义
-inline bool IxNodeHandle::is_safe(Operation op) {
-  if (op == Operation::FIND) return true;
-
-  if (op == Operation::INSERT) {
-    return get_size() + 1 < get_max_size();
-  }
-
-  //   删除时，删到1时根节点要被叶子节点替换 所以根节点最小为2
-  int mini_size = is_root_page() ? 2 : get_min_size();
-  if (op == Operation::DELETE) {
-    return get_size() > mini_size;
-  }
-
-  //   查找
-  return true;
-}
-
 IxIndexHandle::IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd)
     : disk_manager_(disk_manager), index_buffer_pool_manager_(buffer_pool_manager), fd_(fd) {
   // init file_hdr_
