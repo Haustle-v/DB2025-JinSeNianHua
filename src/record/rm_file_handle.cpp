@@ -43,6 +43,7 @@ auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
   page_hdl.page->RLatch();
   {
     // std::scoped_lock<std::mutex> undo_lock(undo_latch_);
+    std::cout << rid.page_no << " " << rid.slot_no;
     assert(Bitmap::is_set(page_hdl.bitmap, rid.slot_no));
 
     TupleMeta tuple_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));

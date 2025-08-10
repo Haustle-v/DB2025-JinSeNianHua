@@ -394,10 +394,10 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
-  //   debug用
-  signal(SIGSEGV, signal_handler);  // 段错误
-  signal(SIGTERM, signal_handler);  // 总线错误
-  signal(SIGABRT, signal_handler);  // 断言失败
+  //   //   debug用
+  //   signal(SIGSEGV, signal_handler);  // 段错误
+  //   signal(SIGTERM, signal_handler);  // 总线错误
+  //   signal(SIGABRT, signal_handler);  // 断言失败
 
   signal(SIGINT, sigint_handler);
   try {
