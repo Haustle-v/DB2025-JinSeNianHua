@@ -1142,18 +1142,24 @@ void IxIndexHandle::release_all_Wlatched_pages(Transaction *txn) {
 void IxIndexHandle::check_and_release_Wlatched_pages(Transaction *txn, Operation op) {
   if (txn != nullptr) {
     auto &latch_pages = *txn->get_index_latch_page_set();
-    auto iter = latch_pages.begin();
-    while (iter != latch_pages.end()) {
+    // 从叶子到根遍历，找到安全节点就释放所有祖先节点 这里没有叶子
+    auto iter = latch_pages.rbegin();
+    while (iter != latch_pages.rend()) {
       Page *page = *iter;
       IxNodeHandle node(file_hdr_, page);
       if (node.is_safe(op)) {
-        page->WUnlatch();
-        index_buffer_pool_manager_->unpin_page(page->get_page_id(), false);
-        iter = latch_pages.erase(iter);
-      } else {
-        ++iter;
+        // 找到安全节点 释放该节点与所有祖先
+        auto it = latch_pages.begin();
+        while (it != (iter + 1).base()) {
+          Page *release_page = *it;
+          release_page->WUnlatch();
+          index_buffer_pool_manager_->unpin_page(release_page->get_page_id(), false);
+          it = latch_pages.erase(it);
+        }
+        break;
       }
+      //   找到安全节点就可以退出了
+      ++iter;
     }
-    //   for(auto )
   }
 }
