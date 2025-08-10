@@ -72,8 +72,8 @@ void BufferPoolObject::update_page(Page *page, PageId new_page_id, frame_id_t ne
 
   //   更新元数据
   page->id_ = new_page_id;
-  page->reset_memory();
-  page->set_page_lsn(INVALID_LSN);
+  //   page->reset_memory();  创建新页的时候强制刷盘
+  //   page->set_page_lsn(INVALID_LSN);
 }
 
 /**
@@ -226,6 +226,8 @@ Page *BufferPoolObject::new_page(PageId *page_id) {
   *page_id = {page_id->fd, disk_manager_->allocate_page(page_id->fd)};
   //   刷盘与更新元数据
   update_page(&target_page, *page_id, usable_frame_id);
+  target_page.reset_memory();
+  target_page.set_page_lsn(INVALID_LSN);
 
   replacer_->pin(usable_frame_id);
   target_page.pin_count_ = 1;
