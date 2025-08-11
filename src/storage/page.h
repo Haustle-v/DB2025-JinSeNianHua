@@ -104,4 +104,7 @@ class Page {
 
   // sqb 读写锁，为file_handle用于保护记录与meta的增删改查 7.7
   mutable std::shared_mutex rwlatch_;
+
+  //   为缓冲池用一个锁保护
+  std::mutex frame_latch_;
 };

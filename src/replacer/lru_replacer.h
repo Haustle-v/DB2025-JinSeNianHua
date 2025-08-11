@@ -46,44 +46,44 @@ class LRUReplacer : public Replacer {
   size_t max_size_;                                                          // 最大容量（与缓冲池的容量相同）
 };
 
-// sqb 尝试用clock置换策略
-class ClockReplacer : public Replacer {
- public:
-  explicit ClockReplacer() {}
+// // sqb 尝试用clock置换策略
+// class ClockReplacer : public Replacer {
+//  public:
+//   explicit ClockReplacer() {}
 
-  ~ClockReplacer() = default;
+//   ~ClockReplacer() = default;
 
-  bool victim(frame_id_t *frame_id) override {
-    int steps = 0;
-    do {
-      clock_hand_ = (clock_hand_ + 1) % BUFFER_POOL_OBJECT_SIZE;
-      if (pin_count_[clock_hand_] == 0 && pined_[clock_hand_] == false) {
-        *frame_id = clock_hand_;
-        return true;
-      }
-      if (pin_count_[clock_hand_] == 0) {
-        pined_[clock_hand_] = false;
-      }
-      ++steps;
-    } while (steps < 2 * BUFFER_POOL_OBJECT_SIZE);
-    return false;
-  }
+//   bool victim(frame_id_t *frame_id) override {
+//     int steps = 0;
+//     do {
+//       clock_hand_ = (clock_hand_ + 1) % BUFFER_POOL_OBJECT_SIZE;
+//       if (pin_count_[clock_hand_] == 0 && pined_[clock_hand_] == false) {
+//         *frame_id = clock_hand_;
+//         return true;
+//       }
+//       if (pin_count_[clock_hand_] == 0) {
+//         pined_[clock_hand_] = false;
+//       }
+//       ++steps;
+//     } while (steps < 2 * BUFFER_POOL_OBJECT_SIZE);
+//     return false;
+//   }
 
-  void pin(frame_id_t frame_id) override {
-    ++pin_count_[frame_id];
-    if (pin_count_[frame_id] == 1) {
-      pined_[frame_id] = true;
-    }
-  }
+//   void pin(frame_id_t frame_id) override {
+//     ++pin_count_[frame_id];
+//     if (pin_count_[frame_id] == 1) {
+//       pined_[frame_id] = true;
+//     }
+//   }
 
-  void unpin(frame_id_t frame_id) override { --pin_count_[frame_id]; }
+//   void unpin(frame_id_t frame_id) override { --pin_count_[frame_id]; }
 
-  size_t Size() override { return BUFFER_POOL_OBJECT_SIZE; }
+//   size_t Size() override { return BUFFER_POOL_OBJECT_SIZE; }
 
- private:
-  int pin_count_[BUFFER_POOL_OBJECT_SIZE];
-  bool pined_[BUFFER_POOL_OBJECT_SIZE];
-  size_t clock_hand_ = 0;  // 当前扫描位置（时钟指针）
-  //   size_t unpinned_count_ = 0;  // 可被替换的帧数
-  //   size_t max_size_ = 0;        // 最多管理的帧
-};
+//  private:
+//   int pin_count_[BUFFER_POOL_OBJECT_SIZE];
+//   bool pined_[BUFFER_POOL_OBJECT_SIZE];
+//   size_t clock_hand_ = 0;  // 当前扫描位置（时钟指针）
+//   //   size_t unpinned_count_ = 0;  // 可被替换的帧数
+//   //   size_t max_size_ = 0;        // 最多管理的帧
+// };
