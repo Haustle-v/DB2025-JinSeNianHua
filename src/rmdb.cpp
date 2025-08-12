@@ -231,13 +231,13 @@ void *client_handler(void *sock_fd) {
     //   assert(0);
     // }
 
-    // // 事务回滚率分析
-    // if (txn_id > 10000 && !has_report) {
-    //   has_report = true;
-    //   std::cout << "transcation manager abort radio report:" << std::endl;
-    //   txn_manager->abort_radio_report();
-    //   assert(0);
-    // }
+    // 事务回滚率分析
+    if (txn_id > 10000 && !has_report) {
+      has_report = true;
+      std::cout << "transcation manager abort radio report:" << std::endl;
+      txn_manager->abort_radio_report();
+      assert(0);
+    }
 
     // 用于判断是否已经调用了yy_delete_buffer来删除buf
     bool finish_analyze = false;
