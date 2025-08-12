@@ -96,11 +96,30 @@ Page *BufferPoolObject::fetch_page(PageId page_id) {
   //  4.     固定目标页，更新pin_count_
   //  5.     返回目标页
 
-  std::scoped_lock<std::mutex> lock(latch_);
+  std::shared_lock<std::shared_mutex> lock(latch_);
   auto iter = page_table_.find(page_id);
   frame_id_t useable_frame_id = INVALID_FRAME_ID;
   if (iter != page_table_.end()) {
     // 缓存命中
+    Page &target_page = pages_[iter->second];
+    target_page.pin_count_++;
+    replacer_->pin(iter->second);  // unpin会在外面被调用 这里必须加
+    // std::cerr << "[DEBUG] bpm fetch_page cached hit! page "
+    //           << page_id.toString() << std::endl;
+    ++hits_;
+    return &target_page;
+  }
+
+  lock.unlock();
+  return fetch_page_Wlock(page_id);
+}
+
+Page *BufferPoolObject::fetch_page_Wlock(PageId page_id) {
+  std::unique_lock<std::shared_mutex> lock(latch_);
+  auto iter = page_table_.find(page_id);
+  frame_id_t useable_frame_id = INVALID_FRAME_ID;
+  if (iter != page_table_.end()) {
+    // 缓存命中 这里是二次检查
     Page &target_page = pages_[iter->second];
     target_page.pin_count_++;
     replacer_->pin(iter->second);  // unpin会在外面被调用 这里必须加
@@ -147,7 +166,7 @@ bool BufferPoolObject::unpin_page(PageId page_id, bool is_dirty) {
   // 2.2.1 若自减后等于0，则调用replacer_的Unpin
   // 3 根据参数is_dirty，更改P的is_dirty_
 
-  std::scoped_lock<std::mutex> lock(latch_);
+  std::shared_lock<std::shared_mutex> lock(latch_);
   auto iter = page_table_.find(page_id);
 
   // std::cerr << "[DEBUG] bpm unpin page " << page_id.toString()
@@ -190,7 +209,7 @@ bool BufferPoolObject::flush_page(PageId page_id) {
   // 2. 无论P是否为脏都将其写回磁盘。
   // 3. 更新P的is_dirty_
   assert(page_id.page_no != INVALID_PAGE_ID && "bpm flush invalid page");
-  std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   auto iter = page_table_.find(page_id);
   if (iter == page_table_.end()) {
     // 不在缓存 直接false
@@ -216,7 +235,7 @@ Page *BufferPoolObject::new_page(PageId *page_id) {
   // 4.   固定frame，更新pin_count_
   // 5.   返回获得的page
 
-  std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   frame_id_t usable_frame_id = INVALID_FRAME_ID;
 
   //   找可用页框
@@ -250,7 +269,7 @@ bool BufferPoolObject::delete_page(PageId page_id) {
   // 3.
   // 将目标页数据写回磁盘，从页表中删除目标页，重置其元数据，将其加入free_list_，返回true
 
-  std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   auto iter = page_table_.find(page_id);
   if (iter == page_table_.end()) {
     return true;
@@ -282,7 +301,7 @@ bool BufferPoolObject::delete_page(PageId page_id) {
  * @param {int} fd 文件句柄
  */
 void BufferPoolObject::flush_all_pages(int fd) {
-  std::scoped_lock<std::mutex> lock(latch_);
+  std::unique_lock<std::shared_mutex> lock(latch_);
   page_id_t max_page_no = disk_manager_->get_fd2pageno(fd);
   PageId cur_page_id{fd, INVALID_PAGE_ID};
   //   仅查找和删除fd下的页

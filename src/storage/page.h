@@ -10,6 +10,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <atomic>
 #include <shared_mutex>
 #include "common/config.h"
 
@@ -97,10 +98,10 @@ class Page {
   char data_[PAGE_SIZE] = {};
 
   /** 脏页判断 */
-  bool is_dirty_ = false;
+  std::atomic<bool> is_dirty_ = false;
 
   /** The pin count of this page. */
-  int pin_count_ = 0;
+  std::atomic<int> pin_count_ = 0;
 
   // sqb 读写锁，为file_handle用于保护记录与meta的增删改查 7.7
   mutable std::shared_mutex rwlatch_;

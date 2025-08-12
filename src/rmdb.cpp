@@ -148,7 +148,7 @@ void *client_handler(void *sock_fd) {
       break;
     }
 
-    printf("i_recvBytes: %d \n ", i_recvBytes);
+    // printf("i_recvBytes: %d \n ", i_recvBytes);
 
     if (strcmp(data_recv, "exit") == 0) {
       std::cout << "Client exit." << std::endl;
@@ -221,14 +221,15 @@ void *client_handler(void *sock_fd) {
     // sqb :启用事务 6.4
     SetTransaction(&txn_id, context);
 
-    if (txn_id > 10000 && !has_report) {
-      has_report = true;
-      std::cout << "record buffer pool report:" << std::endl;
-      buffer_pool_manager->performance_report();
-      std::cout << "index buffer pool report:" << std::endl;
-      index_buffer_pool_manager->performance_report();
-      assert(0);
-    }
+    // // 关于缓冲池的瓶颈分析
+    // if (txn_id > 10000 && !has_report) {
+    //   has_report = true;
+    //   std::cout << "record buffer pool report:" << std::endl;
+    //   buffer_pool_manager->performance_report();
+    //   std::cout << "index buffer pool report:" << std::endl;
+    //   index_buffer_pool_manager->performance_report();
+    //   assert(0);
+    // }
 
     // 用于判断是否已经调用了yy_delete_buffer来删除buf
     bool finish_analyze = false;

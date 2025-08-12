@@ -21,8 +21,8 @@ class BufferPoolObject {
       page_table_;                   // 帧号和页面号的映射哈希表，用于根据页面的PageId定位该页面的帧编号
   std::list<frame_id_t> free_list_;  // 空闲帧编号的链表
   DiskManager *disk_manager_;
-  Replacer *replacer_;  // buffer_pool的置换策略，当前赛题中为LRU置换策略
-  std::mutex latch_;    // 用于共享数据结构的并发控制
+  Replacer *replacer_;       // buffer_pool的置换策略，当前赛题中为LRU置换策略
+  std::shared_mutex latch_;  // 用于共享数据结构的并发控制
 
   std::atomic<size_t> hits_{0}, misses_{0}, evictions_{0};
 
@@ -58,7 +58,10 @@ class BufferPoolObject {
   static void mark_dirty(Page *page) { page->is_dirty_ = true; }
 
  public:
+  //  tpcc下的缓冲池命中率非常高 改为读锁即可
   Page *fetch_page(PageId page_id);
+
+  Page *fetch_page_Wlock(PageId page_id);
 
   bool unpin_page(PageId page_id, bool is_dirty);
 
