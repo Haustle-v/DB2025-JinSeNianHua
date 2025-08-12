@@ -98,6 +98,11 @@ class TransactionManager {
     return false;
   }
 
+  void abort_radio_report() {
+    std::cout << " txn_num: " << txn_num_ << " commit_num: " << commit_num_ << " abort_num: " << aborts_num_
+              << std::endl;
+  }
+
   static std::unordered_map<txn_id_t, Transaction *> txn_map;  // 全局事务表，存放事务ID与事务对象的映射关系
   std::shared_mutex txn_map_mutex_;
   /** ------------------------以下函数仅可能在MVCC当中使用------------------------------------------*/
@@ -163,4 +168,6 @@ class TransactionManager {
   Watermark running_txns_{0};                   // 存储所有正在运行事务的读取时间戳，以便于垃圾回收，仅用于MVCC
 
   std::mutex commit_mutex_;  // 一次仅允许一个事务commit sqb 6.16
+
+  std::atomic<size_t> txn_num_{0}, commit_num_{0}, aborts_num_{0};
 };

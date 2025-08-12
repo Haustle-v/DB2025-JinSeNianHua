@@ -58,7 +58,7 @@ void BufferPoolObject::update_page(Page *page, PageId new_page_id, frame_id_t ne
 
   //   脏页判断
   if (page->is_dirty()) {
-    ++evictions_;
+    // ++evictions_;
     disk_manager_->write_page(page->id_.fd, page->id_.page_no, page->get_data(), PAGE_SIZE);
     page->is_dirty_ = false;
   }
@@ -106,7 +106,7 @@ Page *BufferPoolObject::fetch_page(PageId page_id) {
     replacer_->pin(iter->second);  // unpin会在外面被调用 这里必须加
     // std::cerr << "[DEBUG] bpm fetch_page cached hit! page "
     //           << page_id.toString() << std::endl;
-    ++hits_;
+    // ++hits_;
     return &target_page;
   }
 
@@ -125,11 +125,11 @@ Page *BufferPoolObject::fetch_page_Wlock(PageId page_id) {
     replacer_->pin(iter->second);  // unpin会在外面被调用 这里必须加
     // std::cerr << "[DEBUG] bpm fetch_page cached hit! page "
     //           << page_id.toString() << std::endl;
-    ++hits_;
+    // ++hits_;
     return &target_page;
   }
 
-  ++misses_;
+  //   ++misses_;
   // 缓存未命中 找可用页框
   // 无空闲页框
   if (!find_victim_page(&useable_frame_id)) {
