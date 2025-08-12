@@ -120,16 +120,24 @@ struct std::hash<LockDataId> {
 };
 
 /* 事务回滚原因 */  // sqb 加个MVCC写冲突 6.19
-enum class AbortReason { LOCK_ON_SHIRINKING = 0, UPGRADE_CONFLICT, DEADLOCK_PREVENTION, WRITE_CONFLICT };
+enum class AbortReason {
+  LOCK_ON_SHIRINKING = 0,
+  UPGRADE_CONFLICT,
+  DEADLOCK_PREVENTION,
+  DELETE_CONFLICT,
+  UPDATE_CONFLICT,
+  INSERT_CONFLICT
+};
 
 /* 事务回滚异常，在rmdb.cpp中进行处理 */
 class TransactionAbortException : public std::exception {
   txn_id_t txn_id_;
   AbortReason abort_reason_;
+  std::string table_name_;
 
  public:
-  explicit TransactionAbortException(txn_id_t txn_id, AbortReason abort_reason)
-      : txn_id_(txn_id), abort_reason_(abort_reason) {}
+  explicit TransactionAbortException(txn_id_t txn_id, AbortReason abort_reason, std::string table_name = "")
+      : txn_id_(txn_id), abort_reason_(abort_reason), table_name_(table_name) {}
 
   txn_id_t get_transaction_id() { return txn_id_; }
   AbortReason GetAbortReason() { return abort_reason_; }
@@ -149,10 +157,18 @@ class TransactionAbortException : public std::exception {
         return "Transaction " + std::to_string(txn_id_) + " aborted for deadlock prevention\n";
       } break;
 
-      // sqb 额外添加6.19
-      case AbortReason::WRITE_CONFLICT: {
-        return "Transaction " + std::to_string(txn_id_) + " aborted for MVCC write conflict\n";
+      // 返回关键信息即可
+      //  sqb 额外添加6.19
+      case AbortReason::DELETE_CONFLICT: {
+        return "Txn " + std::to_string(txn_id_) + " aborted for delete " + table_name_ + " \n";
+      } break;
 
+      case AbortReason::UPDATE_CONFLICT: {
+        return "Txn " + std::to_string(txn_id_) + " aborted for MVCC update " + table_name_ + " \n";
+      } break;
+
+      case AbortReason::INSERT_CONFLICT: {
+        return "Txn " + std::to_string(txn_id_) + " aborted for MVCC insert " + table_name_ + " \n";
       } break;
 
       default: {

@@ -258,7 +258,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
     // 写写冲突检查 6.19
     if (IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
       page_hdl.page->WUnlatch();
-      throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+      throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::DELETE_CONFLICT, tab_name_);
     }
 
     // 事务写入记录
@@ -346,7 +346,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
     // 写写冲突检查 6.19
     if (IsWriteWriteConflict(base_meta.ts_, context->txn_)) {
       page_hdl.page->WUnlatch();
-      throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::WRITE_CONFLICT);
+      throw TransactionAbortException(context->txn_->get_transaction_id(), AbortReason::UPDATE_CONFLICT, tab_name_);
     }
 
     // 事务写入记录
