@@ -24,6 +24,8 @@ class BufferPoolObject {
   Replacer *replacer_;  // buffer_pool的置换策略，当前赛题中为LRU置换策略
   std::mutex latch_;    // 用于共享数据结构的并发控制
 
+  std::atomic<size_t> hits_{0}, misses_{0}, evictions_{0};
+
  public:
   BufferPoolObject(size_t pool_size, DiskManager *disk_manager) : pool_size_(pool_size), disk_manager_(disk_manager) {
     // 为buffer pool分配一块连续的内存空间
@@ -67,6 +69,11 @@ class BufferPoolObject {
   bool delete_page(PageId page_id);
 
   void flush_all_pages(int fd);
+
+  void performance_report() {
+    // std::cout << "=== buffer_pool_report===" << std::endl;
+    std::cout << " hits: " << hits_ << " misses: " << misses_ << " evict: " << evictions_ << std::endl;
+  }
 
  private:
   bool find_victim_page(frame_id_t *frame_id);

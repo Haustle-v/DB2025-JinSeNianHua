@@ -73,6 +73,12 @@ class BufferPoolManager {
 
   void flush_all_pages(int fd);
 
+  void performance_report() {
+    for (auto &instance : bpms_) {
+      instance->performance_report();
+    }
+  }
+
  private:
   //   inline size_t get_instance_idx(const PageId &page_id) { return mapper_(page_id) % BUFFER_POOL_OBJECT_NUM; }
   inline size_t get_instance_idx(const PageId &page_id) { return page_id.fd % BUFFER_POOL_OBJECT_NUM; }

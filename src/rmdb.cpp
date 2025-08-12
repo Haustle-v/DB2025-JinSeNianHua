@@ -220,6 +220,13 @@ void *client_handler(void *sock_fd) {
     // sqb :启用事务 6.4
     SetTransaction(&txn_id, context);
 
+    if (txn_id > 10000) {
+      std::cout << "record buffer pool report:" << std::endl;
+      buffer_pool_manager->performance_report();
+      std::cout << "index buffer pool report:" << std::endl;
+      index_buffer_pool_manager->performance_report();
+    }
+
     // 用于判断是否已经调用了yy_delete_buffer来删除buf
     bool finish_analyze = false;
     // pthread_mutex_lock(buffer_mutex);
