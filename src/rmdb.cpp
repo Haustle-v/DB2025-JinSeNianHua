@@ -66,6 +66,7 @@ void sigint_handler(int signo) {
   longjmp(jmpbuf, 1);
 }
 
+std::atomic<bool> has_report{false};
 // debug用
 void signal_handler(int sig) {
   void *callstack[128];
@@ -132,7 +133,7 @@ void *client_handler(void *sock_fd) {
   Context *context = new Context(lock_manager.get(), log_manager.get(), nullptr, data_send, &offset, txn_manager.get());
 
   while (true) {
-    std::cout << "Waiting for request..." << std::endl;
+    // std::cout << "Waiting for request..." << std::endl;
     // memset(data_recv, 0, BUFFER_LENGTH);
     memset(data_recv, 0, i_recvBytes);
 
@@ -207,7 +208,7 @@ void *client_handler(void *sock_fd) {
     futures.clear();
     pool_mutex.unlock();
 
-    std::cout << "Read from client " << fd << ": " << data_recv << std::endl;
+    // std::cout << "Read from client " << fd << ": " << data_recv << std::endl;
 
     // memset(data_send, '\0', BUFFER_LENGTH);
     memset(data_send, '\0', offset);
@@ -220,11 +221,13 @@ void *client_handler(void *sock_fd) {
     // sqb :启用事务 6.4
     SetTransaction(&txn_id, context);
 
-    if (txn_id > 10000) {
+    if (txn_id > 10000 && !has_report) {
+      has_report = true;
       std::cout << "record buffer pool report:" << std::endl;
       buffer_pool_manager->performance_report();
       std::cout << "index buffer pool report:" << std::endl;
       index_buffer_pool_manager->performance_report();
+      assert(0);
     }
 
     // 用于判断是否已经调用了yy_delete_buffer来删除buf
