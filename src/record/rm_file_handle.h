@@ -69,11 +69,12 @@ class RmFileHandle {
 
   //   mutable std::shared_mutex latch_;  // sqb 加锁保证线程安全 6.17
 
-  //   std::mutex undo_latch_;  // 用于保护undo_log,undo_link的相关操作 sqb 7.7
-
   std::mutex fhdr_latch_;  // 用于保护file_hdr sqb  7.7
 
   std::string tab_name_;  // 事务记录时的表名
+
+  std::unordered_map<Rid, std::shared_ptr<std::shared_mutex>> rid_latches_;  // 增加行锁，页锁只需保护头结构正确
+  std::shared_mutex rid_map_latch_;                                          // 保护map
 
  public:
   RmFileHdr file_hdr_;  // 文件头，维护当前表文件的元数据
@@ -99,7 +100,7 @@ class RmFileHandle {
                           rid.slot_no);  // page的slot_no位置上是否有record
   }
 
-  std::unique_ptr<RmRecord> get_record(const Rid &rid, Context *context) const;
+  std::unique_ptr<RmRecord> get_record(const Rid &rid, Context *context);
 
   // sqb 再次修改增删改接口 让undo link同时更新
   Rid insert_record(char *buf, Context *context, RmRecord *old_rec = nullptr, const TabMeta *schema = nullptr,
@@ -157,4 +158,7 @@ class RmFileHandle {
   //   void release_page_handle(RmPageHandle &page_handle);
 
   int find_free_slot_no(RmPageHandle &page_hdl, Context *context);
+
+  //   找到行锁 不存在则创建 如果后续爆内存 那么就用分块
+  std::shared_ptr<std::shared_mutex> get_rec_latch(const Rid &rid);
 };
