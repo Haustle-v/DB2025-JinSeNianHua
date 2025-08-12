@@ -110,7 +110,7 @@ void *client_handler(void *sock_fd) {
   int fd = *((int *)sock_fd);
   pthread_mutex_unlock(sockfd_mutex);
 
-  int i_recvBytes;
+  int i_recvBytes = BUFFER_LENGTH;
   // 接收客户端发送的请求
   char data_recv[BUFFER_LENGTH];
   // 需要返回给客户端的结果
@@ -127,9 +127,13 @@ void *client_handler(void *sock_fd) {
   std::string output = "establish client connection, sockfd: " + std::to_string(fd) + "\n";
   std::cout << output;
 
+  //   构建一个context 后续请求重用
+  Context *context = new Context(lock_manager.get(), log_manager.get(), nullptr, data_send, &offset, txn_manager.get());
+
   while (true) {
     std::cout << "Waiting for request..." << std::endl;
-    memset(data_recv, 0, BUFFER_LENGTH);
+    // memset(data_recv, 0, BUFFER_LENGTH);
+    memset(data_recv, 0, i_recvBytes);
 
     i_recvBytes = read(fd, data_recv, BUFFER_LENGTH);
 
@@ -204,12 +208,14 @@ void *client_handler(void *sock_fd) {
 
     std::cout << "Read from client " << fd << ": " << data_recv << std::endl;
 
-    memset(data_send, '\0', BUFFER_LENGTH);
+    // memset(data_send, '\0', BUFFER_LENGTH);
+    memset(data_send, '\0', offset);
     offset = 0;
 
+    // //
     // 开启事务，初始化系统所需的上下文信息（包括事务对象指针、锁管理器指针、日志管理器指针、存放结果的buffer、记录结果长度的变量）
-    Context *context =
-        new Context(lock_manager.get(), log_manager.get(), nullptr, data_send, &offset, txn_manager.get());
+    // Context *context =
+    //     new Context(lock_manager.get(), log_manager.get(), nullptr, data_send, &offset, txn_manager.get());
     // sqb :启用事务 6.4
     SetTransaction(&txn_id, context);
 
@@ -310,6 +316,7 @@ void *client_handler(void *sock_fd) {
 
   // Clear
   std::cout << "Terminating current client_connection..." << std::endl;
+  delete context;      // 处理资源泄漏
   close(fd);           // close a file descriptor.
   pthread_exit(NULL);  // terminate calling thread!
 }
