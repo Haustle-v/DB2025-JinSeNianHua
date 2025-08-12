@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 #include <execinfo.h>  // 回溯调用栈
 
 #include <netinet/in.h>
+#include <netinet/tcp.h>  // TCP_NODELAY, TCP_CORK, etc.
 #include <readline/history.h>
 #include <readline/readline.h>
 #include <setjmp.h>
@@ -372,6 +373,13 @@ void start_server() {
     if (sockfd == -1) {
       std::cout << "Accept error!" << std::endl;
       continue;  // ignore current socket ,continue while loop.
+    }
+
+    // 关闭nagle
+    int flag = 1;
+    if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) == -1) {
+      perror("setsockopt TCP_NODELAY failed");
+      // 根据需要关闭 socket / 继续
     }
 
     // 和客户端建立连接，并开启一个线程负责处理客户端请求
