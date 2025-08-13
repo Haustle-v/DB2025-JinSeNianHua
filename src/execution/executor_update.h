@@ -77,15 +77,28 @@ class UpdateExecutor : public AbstractExecutor {
       std::unique_ptr<RmRecord> &rec_ptr = old_recs[i];  // 当前可见版本记录
       RmRecord old_rec = *rec_ptr;
 
-      if (tab_name_ == "warehouse") {
-        std::cout << "warehouse update report" << std::endl;
-        if (set_clauses_.size() == 1) {
-          std::cout << " set_clause tab col: " << set_clauses_[0].lhs.tab_name << " " << set_clauses_[0].lhs.col_name
-                    << " " << set_clauses_[0].is_expr_ << std::endl;
+      //   warehouse测试发现，并非是w_ytd=w_ytd+c，而是具体值
+      //   if (tab_name_ == "warehouse") {
+      //     std::cout << "warehouse update report" << std::endl;
+      //     if (set_clauses_.size() == 1) {
+      //       std::cout << " set_clause tab col: " << set_clauses_[0].lhs.tab_name << " " <<
+      //       set_clauses_[0].lhs.col_name
+      //                 << " " << set_clauses_[0].is_expr_ << std::endl;
+      //       auto col_meta_iter = tab_.get_col(set_clauses_[0].lhs.col_name);
+      //       std::cout << " col_meta iter " << *col_meta_iter << std::endl;
+      //     }
+      //     assert(0);
+      //   }
+
+      // 热点表增量更新特判  走增量日志
+      if (tab_name_ == "warehouse" || tab_name_ == "district") {
+        assert(set_clauses_.size() == 1 && rec_num == 1);
+        if (set_clauses_[0].lhs.col_name == "w_ytd" || set_clauses_[0].lhs.col_name == "d_ytd") {
           auto col_meta_iter = tab_.get_col(set_clauses_[0].lhs.col_name);
-          std::cout << " col_meta iter " << *col_meta_iter << std::endl;
+          context_->txn_->append_delta_entry({rid, set_clauses_[0].rhs.float_val, &(*col_meta_iter)});
+          delete pre_rec;
+          return nullptr;
         }
-        assert(0);
       }
 
       //   更新数据
@@ -93,14 +106,6 @@ class UpdateExecutor : public AbstractExecutor {
         auto col_meta_iter = tab_.get_col(single_set_clause.lhs.col_name);
         // sqb 增加set语句是表达式的支持 6.16
         if (single_set_clause.is_expr_) {
-          // 热点表增量更新特判  走增量日志
-          if ((col_meta_iter->tab_name == "warehouse" && col_meta_iter->name == "w_ytd") ||
-              (col_meta_iter->tab_name == "district" && col_meta_iter->name == "d_ytd")) {
-            assert(set_clauses_.size() == 1 && rec_num == 1);
-            context_->txn_->append_delta_entry({rid, single_set_clause.rhs.float_val, &(*col_meta_iter)});
-            delete pre_rec;
-            return nullptr;
-          }
           char *lhs_val = rec_ptr->data + col_meta_iter->offset;
           switch (col_meta_iter->type) {
             case TYPE_INT: {
