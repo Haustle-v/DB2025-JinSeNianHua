@@ -68,7 +68,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   // 直接进行写操作 所以不会存在未提交的写
   //   更新所有写操作的提交时间戳
   commit_num_++;
-  std::scoped_lock<std::mutex> lck(commit_mutex_);
+  //   std::scoped_lock<std::mutex> lck(commit_mutex_);
   timestamp_t commit_ts = next_timestamp_.fetch_add(1);
   auto write_set_ptr = txn->get_write_set();
   size_t idx = 0;  // 跟踪rid，因为一个rid仅在undo中出现一次，按顺序就是对应的undo_log顺序
