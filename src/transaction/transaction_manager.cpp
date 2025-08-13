@@ -81,6 +81,13 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   // 更新undo log的时间戳
   //   txn->CommitAllUndoLogs(commit_ts);
 
+  //   热点表落实更新
+  auto &delta_entries = txn->get_delta_entries();
+  for (auto iter = delta_entries.begin(); iter != delta_entries.end(); ++iter) {
+    auto fhdl_ptr = sm_manager_->fhs_.at(iter->col_meta_iter_->tab_name).get();
+    fhdl_ptr->set_hot_record(iter->rid_, *(iter->col_meta_iter_), iter->delta_);
+  }
+
   //  释放锁
   auto lock_set_ptr = txn->get_lock_set();
   for (auto &lock_id : *lock_set_ptr) {
@@ -92,6 +99,9 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   txn->get_write_tuples().clear();
   txn->get_index_deleted_page_set()->clear();
   txn->get_index_latch_page_set()->clear();
+
+  //   热点表增量清空
+  txn->get_delta_entries().clear();
 
   //   //   日志与落盘
   //   CommitLogRecord log_record{txn->get_transaction_id()};
@@ -143,6 +153,9 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager, Transa
     // txn->set_prev_lsn(undo_lsn);
     sm_manager_->rollback_update(tab_name, *write_rec_ptr, txn, txn_mgr);
   }
+
+  //   热点表增量清空
+  txn->get_delta_entries().clear();
 
   //  释放锁
   auto lock_set_ptr = txn->get_lock_set();

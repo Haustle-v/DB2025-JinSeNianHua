@@ -83,6 +83,23 @@ void RmFileHandle::set_meta_ts(Transaction *txn, size_t log_idx, const Rid &rid,
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 }
 
+// 热点行的更新操作只需保证串行安全即可 所以commit时就落地更新
+void RmFileHandle::set_hot_record(const Rid &rid, ColMeta &col_meta, int32_t delta) {
+  RmPageHandle page_hdl = fetch_page_handle(rid.page_no);
+
+  //   找行锁 加锁写数据
+  {
+    auto rec_latch_ptr = get_rec_latch(rid);
+    std::unique_lock<std::shared_mutex> rec_lock(*rec_latch_ptr);
+    char *old_val = page_hdl.get_slot_record(rid.slot_no) + col_meta.offset;
+    // 必为整型
+    int new_val = *(int *)old_val + delta;
+    memcpy(old_val, &new_val, col_meta.len);
+  }
+
+  buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
+}
+
 // sqb 用于改动rmscan
 TupleMeta RmFileHandle::get_meta(const Rid &rid) {
   //   std::shared_lock<std::shared_mutex> lock(latch_);

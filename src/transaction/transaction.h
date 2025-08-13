@@ -22,6 +22,8 @@ See the Mulan PSL v2 for more details. */
 #include "record/rm_defs.h"
 #include "transaction/txn_defs.h"
 
+struct ColMeta;
+
 /** 表示此tuple的前一个版本的链接 */
 struct UndoLink {
   /* 之前的版本可以在其中的事务中找到 */
@@ -51,6 +53,13 @@ struct UndoLog {
   timestamp_t ts_{INVALID_TS};
   /* 撤销日志的前一个版本 */
   UndoLink prev_version_{};
+};
+
+// 为warehouse和district的update操作定制增量日志 分别对应w_ytd与d_yd字段增量
+struct DeltaEntry {
+  Rid rid_;                 // 元组位置
+  int32_t delta_;           // 对应字段的增量值
+  ColMeta *col_meta_iter_;  // 对应字段的元数据 指向dbmeta中列元数据
 };
 
 class Transaction {
@@ -144,6 +153,10 @@ class Transaction {
     undo_logs_[idx].ts_ = commit_ts;
   }
 
+  //   热点表增量日志处理
+  inline void append_delta_entry(DeltaEntry delta) { delta_entris_.emplace_back(std::move(delta)); }
+  inline std::vector<DeltaEntry> &get_delta_entries() { return delta_entris_; }
+
  private:
   bool txn_mode_;                   // 用于标识当前事务为显式事务还是单条SQL语句的隐式事务
   TransactionState state_;          // 事务状态
@@ -172,4 +185,6 @@ class Transaction {
   std::vector<UndoLog> undo_logs_;
   /** 用于访问事务级撤销日志的锁。 */
   std::mutex latch_;
+
+  std::vector<DeltaEntry> delta_entris_;  // 针对warehouse和district的增量日志
 };

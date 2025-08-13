@@ -134,6 +134,9 @@ class RmFileHandle {
   // sqb 事务提交更新表堆和undo_log的时间戳
   void set_meta_ts(Transaction *txn, size_t log_idx, const Rid &rid, timestamp_t ts);
 
+  //   热点表增量更新落地 warehouse district
+  void set_hot_record(const Rid &rid, ColMeta &col_meta, int32_t delta);
+
   // sqb 用于改动rmscan
   TupleMeta get_meta(const Rid &rid);
 

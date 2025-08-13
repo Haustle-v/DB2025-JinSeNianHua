@@ -37,7 +37,7 @@ class UpdateExecutor : public AbstractExecutor {
     set_clauses_ = std::move(set_clauses);  // 使用 move 避免拷贝
     tab_ = sm_manager_->db_.get_table(tab_name);
     fh_ = sm_manager_->fhs_.at(tab_name).get();
-    conds_ = std::move(conds);  // 使用 move 避免拷贝
+    conds_ = std::move(conds);   // 使用 move 避免拷贝
     rids_ = std::move(rids);     // 使用 move 避免拷贝
     old_recs = std::move(recs);  // sqb add
     context_ = context;
@@ -82,6 +82,14 @@ class UpdateExecutor : public AbstractExecutor {
         auto col_meta_iter = tab_.get_col(single_set_clause.lhs.col_name);
         // sqb 增加set语句是表达式的支持 6.16
         if (single_set_clause.is_expr_) {
+          // 热点表增量更新特判  走增量日志
+          if ((col_meta_iter->tab_name == "warehouse" && col_meta_iter->name == "w_ytd") ||
+              (col_meta_iter->tab_name == "district" && col_meta_iter->name == "d_ytd")) {
+            assert(set_clauses_.size() == 1 && rec_num == 1);
+            context_->txn_->append_delta_entry({rid, single_set_clause.rhs.int_val, &(*col_meta_iter)});
+            delete pre_rec;
+            return nullptr;
+          }
           char *lhs_val = rec_ptr->data + col_meta_iter->offset;
           switch (col_meta_iter->type) {
             case TYPE_INT: {
