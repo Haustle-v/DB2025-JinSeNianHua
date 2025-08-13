@@ -262,7 +262,7 @@ class IndexScanExecutor : public AbstractExecutor {
 
   // sqb 5.30
   bool is_end() const override {
-    if (equal_scan_) return is_end_;
+    if (equal_scan_) return current_tuple == nullptr ? true : is_end_;
     return is_end_ ? true : scan_->is_end();
   }
 
