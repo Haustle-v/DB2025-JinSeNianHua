@@ -36,7 +36,8 @@ class IndexScanExecutor : public AbstractExecutor {
 
   SmManager *sm_manager_;
 
-  bool is_end_{false};  // 特判绕开 order_status的count语句用
+  bool is_end_{false};      // 特判绕开 order_status的count语句用
+  bool equal_scan_{false};  // 为等值索引查找专用
 
  public:
   IndexScanExecutor(SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
@@ -202,7 +203,17 @@ class IndexScanExecutor : public AbstractExecutor {
     }
 
     // 初始化scan
-    if (tmp > 0) {
+    if (tmp == 0) {
+      // 等值查询，直接用get_value 减少一次索引查询
+      scan_ = nullptr;
+      std::vector<Rid> tmp_rids;
+      ix_hdl_ptr->get_value(lower_key, &tmp_rids, context_->txn_);
+      assert(tmp_rids.size() == 1);  // 等值查询应该就一条
+      rid_ = tmp_rids[0];
+      current_tuple = fh_->get_reconstructed_tuple(rid_, context_, tab_);
+      equal_scan_ = true;
+      return;
+    } else if (tmp > 0) {
       // lower > upper
       scan_ = std::make_unique<IxScan>(ix_hdl_ptr, ix_hdl_ptr->leaf_end(), ix_hdl_ptr->leaf_end(),
                                        sm_manager_->get_index_bpm());
@@ -224,6 +235,12 @@ class IndexScanExecutor : public AbstractExecutor {
   }
 
   void nextTuple() override {
+    // 打补丁 等值扫描只扫第一个 is_end判断后将被赋值为true
+    if (equal_scan_) {
+      is_end_ = true;
+      return;
+    }
+
     // 对scan的记录扫描检查既可
     scan_->next();
     for (; !scan_->is_end(); scan_->next()) {
@@ -237,15 +254,17 @@ class IndexScanExecutor : public AbstractExecutor {
   }
 
   std::unique_ptr<RmRecord> Next() override {
-    if (!(scan_->is_end() || is_end_)) {
-      //   return fh_->get_record(rid_, context_);
-      return std::move(current_tuple);
-    }
+    // if (is_end_ || !(scan_->is_end())) {
+    return std::move(current_tuple);
+    // }
     return nullptr;
   }
 
   // sqb 5.30
-  bool is_end() const override { return is_end_ ? true : scan_->is_end(); }
+  bool is_end() const override {
+    if (equal_scan_) return is_end_;
+    return is_end_ ? true : scan_->is_end();
+  }
 
   Rid &rid() override { return rid_; }
 

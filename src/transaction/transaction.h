@@ -58,7 +58,7 @@ struct UndoLog {
 // 为warehouse和district的update操作定制增量日志 分别对应w_ytd与d_yd字段增量
 struct DeltaEntry {
   Rid rid_;                 // 元组位置
-  int32_t delta_;           // 对应字段的增量值
+  float delta_;             // 对应字段的增量值
   ColMeta *col_meta_iter_;  // 对应字段的元数据 指向dbmeta中列元数据
 };
 

@@ -86,7 +86,7 @@ class UpdateExecutor : public AbstractExecutor {
           if ((col_meta_iter->tab_name == "warehouse" && col_meta_iter->name == "w_ytd") ||
               (col_meta_iter->tab_name == "district" && col_meta_iter->name == "d_ytd")) {
             assert(set_clauses_.size() == 1 && rec_num == 1);
-            context_->txn_->append_delta_entry({rid, single_set_clause.rhs.int_val, &(*col_meta_iter)});
+            context_->txn_->append_delta_entry({rid, single_set_clause.rhs.float_val, &(*col_meta_iter)});
             delete pre_rec;
             return nullptr;
           }
