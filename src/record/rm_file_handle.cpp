@@ -169,8 +169,8 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, RmRecord *old_rec, 
   Bitmap::set(page_hdl.bitmap, free_slot_no);
   page_hdl.page_hdr->num_records++;
   {
-    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
     if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
+      std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
       file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
     }
     // 跟踪表记录数量
@@ -245,8 +245,8 @@ void RmFileHandle::insert_record(const Rid &rid, char *buf) {
   page_hdl.page->WLatch();
   page_hdl.page_hdr->num_records++;
   {
-    std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
     if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
+      std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
       file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
     }
     // 跟踪表记录数量
@@ -316,7 +316,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
     --page_hdl.page_hdr->num_records;
 
     {
-      std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+      // std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
       // if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
       //   page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
       //   file_hdr_.first_free_page_no = page_hdl.page->get_page_id().page_no;
@@ -399,8 +399,8 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
     // 跟踪表记录数量 由于索引永驻 逻辑删除后重用相当于插入
     if (old_meta->is_deleted_) {
       ++page_hdl.page_hdr->num_records;
-      std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
       if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
+        std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
         file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
       }
       ++file_hdr_.record_num;
@@ -590,7 +590,7 @@ void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_re
     if (old_meta.is_deleted_) {
       // 相当于插入做回滚
       --page_hdl.page_hdr->num_records;
-      std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+      // std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
       //   if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page - 1) {
       //     page_hdl.page_hdr->next_free_page_no = file_hdr_.first_free_page_no;
       //     file_hdr_.first_free_page_no = page_hdl.page->get_page_id().page_no;
@@ -600,7 +600,7 @@ void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_re
       // 相当于删除做回滚
       ++page_hdl.page_hdr->num_records;
       {
-        std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
+        // std::scoped_lock<std::mutex> fhdr_lock(fhdr_latch_);
         // if (page_hdl.page_hdr->num_records == file_hdr_.num_records_per_page) {
         //   file_hdr_.first_free_page_no = page_hdl.page_hdr->next_free_page_no;
         // }
