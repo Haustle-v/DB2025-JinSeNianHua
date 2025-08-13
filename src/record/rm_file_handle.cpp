@@ -585,7 +585,7 @@ void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_re
   }
 
   //   因为这步压缩了事务对一个元组回滚的多步 根据旧值与目前最新值推测事务操作 跟踪表记录数量
-  page_hdl.page->WLatch();
+  //   page_hdl.page->WLatch();
   if (pre_meta.is_deleted_ != old_meta.is_deleted_) {
     if (old_meta.is_deleted_) {
       // 相当于插入做回滚
@@ -609,7 +609,7 @@ void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_re
       }
     }
   }
-  page_hdl.page->WUnlatch();
+  //   page_hdl.page->WUnlatch();
 
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
 }
