@@ -77,6 +77,17 @@ class UpdateExecutor : public AbstractExecutor {
       std::unique_ptr<RmRecord> &rec_ptr = old_recs[i];  // 当前可见版本记录
       RmRecord old_rec = *rec_ptr;
 
+      if (tab_name_ == "warehouse") {
+        std::cout << "warehouse update report" << std::endl;
+        if (set_clauses_.size() == 1) {
+          std::cout << " set_clause tab col: " << set_clauses_[0].lhs.tab_name << " " << set_clauses_[0].lhs.col_name
+                    << " " << set_clauses_[0].is_expr_ << std::endl;
+          auto col_meta_iter = tab_.get_col(set_clauses_[0].lhs.col_name);
+          std::cout << " col_meta iter " << *col_meta_iter << std::endl;
+        }
+        assert(0);
+      }
+
       //   更新数据
       for (auto &single_set_clause : set_clauses_) {
         auto col_meta_iter = tab_.get_col(single_set_clause.lhs.col_name);
