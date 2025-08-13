@@ -661,6 +661,16 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
   }
   disk_manager_->set_fd2pageno(fhdl_ptr->GetFd(), fhdl_ptr->file_hdr_.num_pages);
 
+  if (tab_name == "warehouse" || tab_name == "district") {
+    // 热点表预读
+    int page_num = fhdl_ptr->file_hdr_.num_pages;
+    PageId page_id{fhdl_ptr->GetFd(), -1};
+    for (page_id_t page_no = 1; page_no < page_num; ++page_no) {
+      page_id.page_no = page_no;
+      buffer_pool_manager_->fetch_page(page_id);
+    }
+  }
+
   // 清理资源
   delete[] record;
   delete page;
