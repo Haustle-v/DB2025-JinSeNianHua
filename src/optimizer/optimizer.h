@@ -38,10 +38,10 @@ class Optimizer {
       return std::make_shared<OtherPlan>(T_ShowTable, std::string());
     } else if (auto x = std::dynamic_pointer_cast<ast::DescTable>(query->parse)) {
       // desc table;
-      return std::make_shared<OtherPlan>(T_DescTable, x->tab_name);
+      return std::make_shared<OtherPlan>(T_DescTable, std::move(x->tab_name));
     } else if (auto x = std::dynamic_pointer_cast<ast::ShowIndex>(query->parse)) {
       // sqb: show index 5.30
-      return std::make_shared<OtherPlan>(T_ShowIndex, x->tab_name);
+      return std::make_shared<OtherPlan>(T_ShowIndex, std::move(x->tab_name));
     } else if (auto x = std::dynamic_pointer_cast<ast::TxnBegin>(query->parse)) {
       // begin;
       return std::make_shared<OtherPlan>(T_Transaction_begin, std::string());
@@ -64,7 +64,7 @@ class Optimizer {
       // sqb 6.9
       return std::make_shared<OtherPlan>(T_Crash, std::string());
     } else if (auto x = std::dynamic_pointer_cast<ast::LoadStmt>(query->parse)) {
-      return std::make_shared<OtherPlan>(T_LoadData, x->tab_name, x->file_name);
+      return std::make_shared<OtherPlan>(T_LoadData, std::move(x->tab_name), std::move(x->file_name));
     } else if (auto x = std::dynamic_pointer_cast<ast::IoEnable>(query->parse)) {
       return std::make_shared<OtherPlan>(T_IoEnable, x->set_io_enable);
     } else {

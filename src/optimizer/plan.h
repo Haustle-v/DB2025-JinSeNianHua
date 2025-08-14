@@ -66,7 +66,10 @@ class AggPlan : public Plan {
   std::shared_ptr<Plan> subplan_;
   std::vector<TabCol> group_by_cols;
 
-  AggPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> group_by_cols, std::vector<TabCol> sel_cols_)
+  //   AggPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> group_by_cols, std::vector<TabCol>
+  //   sel_cols_)
+  AggPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> &&group_by_cols,
+          std::vector<TabCol> &&sel_cols_)
       : sel_cols_(std::move(sel_cols_)), subplan_(std::move(subplan)), group_by_cols(std::move(group_by_cols)) {
     Plan::tag = tag;
   }
@@ -79,7 +82,8 @@ class HavingPlan : public Plan {
   std::shared_ptr<Plan> subplan_;
   std::vector<Condition> having_conds_;
 
-  HavingPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<Condition> having_conds)
+  //   HavingPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<Condition> having_conds)
+  HavingPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<Condition> &&having_conds)
       : subplan_(std::move(subplan)), having_conds_(std::move(having_conds)) {
     Plan::tag = tag;
   }
@@ -89,8 +93,11 @@ class HavingPlan : public Plan {
 
 class ScanPlan : public Plan {
  public:
+  //   ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
+  //            std::vector<std::string> index_col_names) {
   ScanPlan(PlanTag tag, SmManager *sm_manager, std::string tab_name, std::vector<Condition> conds,
-           std::vector<std::string> index_col_names) {
+           std::vector<std::string> &&index_col_names) {
+    // scan计划套在了dml计划里，move只能用一次，scan进行拷贝就好
     Plan::tag = tag;
     tab_name_ = std::move(tab_name);
     conds_ = std::move(conds);
@@ -98,7 +105,7 @@ class ScanPlan : public Plan {
     cols_ = tab.cols;
     len_ = cols_.back().offset + cols_.back().len;
     fed_conds_ = conds_;
-    index_col_names_ = index_col_names;
+    index_col_names_ = std::move(index_col_names);
   }
   ~ScanPlan() {}
   // 以下变量同ScanExecutor中的变量
@@ -112,7 +119,9 @@ class ScanPlan : public Plan {
 
 class JoinPlan : public Plan {
  public:
-  JoinPlan(PlanTag tag, std::shared_ptr<Plan> left, std::shared_ptr<Plan> right, std::vector<Condition> conds,
+  //   JoinPlan(PlanTag tag, std::shared_ptr<Plan> left, std::shared_ptr<Plan> right, std::vector<Condition> conds,
+  //            bool reverse = false, JoinType type = JoinType::INNER_JOIN) {
+  JoinPlan(PlanTag tag, std::shared_ptr<Plan> left, std::shared_ptr<Plan> right, std::vector<Condition> &&conds,
            bool reverse = false, JoinType type = JoinType::INNER_JOIN) {
     Plan::tag = tag;
     left_ = std::move(left);
@@ -137,7 +146,9 @@ class JoinPlan : public Plan {
 
 class ProjectionPlan : public Plan {
  public:
-  ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, bool select_all = false) {
+  //   ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, bool select_all = false)
+  //   {
+  ProjectionPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> &&sel_cols, bool select_all = false) {
     Plan::tag = tag;
     subplan_ = std::move(subplan);
     sel_cols_ = std::move(sel_cols);
@@ -151,7 +162,9 @@ class ProjectionPlan : public Plan {
 
 class SortPlan : public Plan {
  public:
-  SortPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, std::vector<bool> is_asc,
+  //   SortPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> sel_cols, std::vector<bool> is_asc,
+  //            int limit) {
+  SortPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::vector<TabCol> &&sel_cols, std::vector<bool> &&is_asc,
            int limit) {
     Plan::tag = tag;
     subplan_ = std::move(subplan);
@@ -169,8 +182,10 @@ class SortPlan : public Plan {
 // dml语句，包括insert; delete; update; select语句　
 class DMLPlan : public Plan {
  public:
-  DMLPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::string tab_name, std::vector<Value> values,
-          std::vector<Condition> conds, std::vector<SetClause> set_clauses) {
+  //   DMLPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::string tab_name, std::vector<Value> values,
+  //           std::vector<Condition> conds, std::vector<SetClause> set_clauses) {
+  DMLPlan(PlanTag tag, std::shared_ptr<Plan> subplan, std::string &&tab_name, std::vector<Value> &&values,
+          std::vector<Condition> &&conds, std::vector<SetClause> &&set_clauses) {
     Plan::tag = tag;
     subplan_ = std::move(subplan);
     tab_name_ = std::move(tab_name);
@@ -189,7 +204,8 @@ class DMLPlan : public Plan {
 // ddl语句, 包括create/drop table; create/drop index;
 class DDLPlan : public Plan {
  public:
-  DDLPlan(PlanTag tag, std::string tab_name, std::vector<std::string> col_names, std::vector<ColDef> cols) {
+  //   DDLPlan(PlanTag tag, std::string tab_name, std::vector<std::string> col_names, std::vector<ColDef> cols) {
+  DDLPlan(PlanTag tag, std::string &&tab_name, std::vector<std::string> &&col_names, std::vector<ColDef> &&cols) {
     Plan::tag = tag;
     tab_name_ = std::move(tab_name);
     cols_ = std::move(cols);
@@ -205,7 +221,8 @@ class DDLPlan : public Plan {
 // sqb: show index 5.30  create static_checkpoint crash 6.9
 class OtherPlan : public Plan {
  public:
-  OtherPlan(PlanTag tag, std::string tab_name) {
+  //   OtherPlan(PlanTag tag, std::string tab_name) {
+  OtherPlan(PlanTag tag, std::string &&tab_name) {
     Plan::tag = tag;
     tab_name_ = std::move(tab_name);
   }
@@ -213,7 +230,8 @@ class OtherPlan : public Plan {
     Plan::tag = tag;
     io_enable_ = std::move(io_enabled_);
   }
-  OtherPlan(PlanTag tag, std::string tab_name, std::string file_name) {
+  //   OtherPlan(PlanTag tag, std::string tab_name, std::string file_name) {
+  OtherPlan(PlanTag tag, std::string &&tab_name, std::string &&file_name) {
     Plan::tag = tag;
     tab_name_ = std::move(tab_name);
     file_name_ = std::move(file_name);
