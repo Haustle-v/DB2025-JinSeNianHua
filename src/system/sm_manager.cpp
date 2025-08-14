@@ -488,7 +488,7 @@ void SmManager::rollback_update(const std::string &tab_name, WriteRecord &write_
   // 更新回滚与自身行为一致
   TabMeta &tab_meta = db_.get_table(tab_name);
   auto fhdl_ptr = fhs_.at(tab_name).get();
-  fhdl_ptr->allocate_pages(rid);
+  //   fhdl_ptr->allocate_pages(rid);
   //   std::unique_ptr<RmRecord> cur_rec_ptr = fhdl_ptr->get_record(rid, nullptr);
 
   //   // 删除旧索引
