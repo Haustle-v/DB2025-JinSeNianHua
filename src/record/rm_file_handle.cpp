@@ -54,7 +54,7 @@ auto RmFileHandle::get_tuple_and_undoLink(const Rid &rid, Context *context)
     TupleMeta tuple_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
     RmRecord tuple(file_hdr_.record_size, page_hdl.get_slot_record(rid.slot_no));
 
-    auto undo_link = context->txn_mgr_->GetUndoLink(fd_, rid);
+    auto undo_link = GetUndoLink(rid);
     ret = std::make_tuple(tuple_meta, tuple, undo_link);
   }
 
@@ -181,7 +181,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, RmRecord *old_rec, 
   //   插入的undo_log特殊 无需在锁内构建
   Rid ret{page_hdl.page->get_page_id().page_no, free_slot_no};
   RmRecord new_rec = RmRecord(file_hdr_.record_size, buf);
-  auto [undo_log, undo_link] = generateUndoLogAndLink(fd_, ret, nullptr, &new_rec, context, schema);
+  auto [undo_log, undo_link] = generateUndoLogAndLink(ret, nullptr, &new_rec, context, schema, this);
 
   {
     auto rec_latch_ptr = get_rec_latch(ret);
@@ -209,7 +209,7 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, RmRecord *old_rec, 
       } else {
         // 当前log为新log 追加到事务缓冲区内 同时更新版本链
         undo_link = context->txn_->AppendUndoLog(undo_log);
-        context->txn_mgr_->UpdateUndoLink(fd_, ret, undo_link);
+        UpdateUndoLink(ret, undo_link);
       }
     }
     memcpy(page_hdl.get_slot_record(free_slot_no), buf, file_hdr_.record_size);
@@ -290,7 +290,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
       old_meta->is_deleted_ = false;
       old_rec->SetData(page_hdl.get_slot_record(rid.slot_no));
 
-      auto [undo_log, undo_link] = generateUndoLogAndLink(fd_, rid, old_rec, nullptr, context, schema);
+      auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, nullptr, context, schema, this);
       // 元数据时间戳更新
       base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -300,7 +300,7 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
       } else {
         // 当前log为新log 追加到事务缓冲区内 同时更新版本链
         undo_link = context->txn_->AppendUndoLog(undo_log);
-        context->txn_mgr_->UpdateUndoLink(fd_, rid, undo_link);
+        UpdateUndoLink(rid, undo_link);
       }
     }
 
@@ -373,7 +373,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
         //   补充版本链 sqb 6.19
         RmRecord new_rec(file_hdr_.record_size, buf);
         //   std::scoped_lock<std::mutex> undo_lock(undo_latch_);
-        auto [undo_log, undo_link] = generateUndoLogAndLink(fd_, rid, old_rec, &new_rec, context, schema);
+        auto [undo_log, undo_link] = generateUndoLogAndLink(rid, old_rec, &new_rec, context, schema, this);
         // 元数据更新
         base_meta.ts_ = context->txn_->get_temp_ts();
 
@@ -383,7 +383,7 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
         } else {
           // 当前log为新log 追加到事务缓冲区内 同时更新版本链
           undo_link = context->txn_->AppendUndoLog(undo_log);
-          context->txn_mgr_->UpdateUndoLink(fd_, rid, undo_link);
+          UpdateUndoLink(rid, undo_link);
         }
       }
     }
@@ -569,12 +569,12 @@ void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_re
     std::unique_lock<std::shared_mutex> rec_lock(*rec_latch_ptr);
 
     //   回滚事务的版本链必定有值，且必定为自己，并只有一个
-    std::optional<UndoLink> op_link = txn_mgr->GetUndoLink(fd_, rid);
+    std::optional<UndoLink> op_link = GetUndoLink(rid);
     assert(op_link.has_value() && (*op_link).prev_txn_ == txn->get_transaction_id());
     UndoLog log = txn->GetUndoLog((*op_link).prev_log_idx_);
     //   UndoLog log = txn_mgr->GetUndoLog(*op_link);
     UndoLink pre_link = log.prev_version_;  // 跳过当前版本
-    txn_mgr->UpdateUndoLink(fd_, rid, pre_link);
+    UpdateUndoLink(rid, pre_link);
 
     TupleMeta &base_meta = *(TupleMeta *)(page_hdl.get_slot_meta(rid.slot_no));
     pre_meta = base_meta;
@@ -612,4 +612,59 @@ void RmFileHandle::rollback_update_helper(const Rid &rid, const RmRecord &old_re
   //   page_hdl.page->WUnlatch();
 
   buffer_pool_manager_->unpin_page(page_hdl.page->get_page_id(), true);
+}
+
+/**
+ * @brief 更新一个撤销链接，该链接将表堆元组与第一个撤销日志连接起来。
+ * 在更新之前，将调用 `check` 函数以确保有效性。
+ */
+// 不确定
+bool RmFileHandle::UpdateUndoLink(Rid rid, std::optional<UndoLink> prev_link,
+                                  std::function<bool(std::optional<UndoLink>)> &&check) {
+  std::unique_lock<std::shared_mutex> verion_table_lock(version_info_mutex_);
+  std::shared_ptr<PageVersionInfo> pvi_ptr = nullptr;
+  auto iter = version_info_.find(rid.page_no);
+  if (iter == version_info_.end()) {
+    // 无则创建
+    pvi_ptr = std::make_shared<PageVersionInfo>();
+    version_info_[rid.page_no] = pvi_ptr;
+  } else {
+    // 有则准备修改
+    pvi_ptr = iter->second;
+  }
+  std::unique_lock<std::shared_mutex> pvi_lock(pvi_ptr->mutex_);
+  verion_table_lock.unlock();
+  auto it = pvi_ptr->prev_version_.find(rid.slot_no);
+  if (it == pvi_ptr->prev_version_.end()) {
+    if (check != nullptr && !check(std::nullopt)) {
+      return false;
+    }
+  } else {
+    if (check != nullptr && !check(it->second.prev_)) {
+      return false;
+    }
+  }
+  if (prev_link.has_value()) {
+    pvi_ptr->prev_version_[rid.slot_no].prev_ = prev_link.value();
+  } else {
+    pvi_ptr->prev_version_.erase(rid.slot_no);
+  }
+  return true;
+}
+
+/** @brief 获取表堆元组的第一个撤销日志。 */
+std::optional<UndoLink> RmFileHandle::GetUndoLink(Rid rid) {
+  std::shared_lock<std::shared_mutex> version_table_lock(version_info_mutex_);
+  auto iter = version_info_.find(rid.page_no);
+  if (iter == version_info_.end()) {
+    return std::nullopt;
+  }
+  std::shared_ptr<PageVersionInfo> pvi_ptr = iter->second;
+  std::unique_lock<std::shared_mutex> pvi_lock(pvi_ptr->mutex_);
+  version_table_lock.unlock();
+  auto it = pvi_ptr->prev_version_.find(rid.slot_no);
+  if (it == pvi_ptr->prev_version_.end()) {
+    return std::nullopt;
+  }
+  return std::make_optional(it->second.prev_);
 }

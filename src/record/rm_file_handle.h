@@ -12,6 +12,7 @@ See the Mulan PSL v2 for more details. */
 
 #include <assert.h>
 
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -24,6 +25,26 @@ See the Mulan PSL v2 for more details. */
 
 class RmManager;
 struct TabMeta;  // sqb
+
+/// 版本链中的第一个撤销链接，将表堆元组链接到撤销日志。
+struct VersionUndoLink {
+  /** 版本链中的下一个版本。 */
+  UndoLink prev_;
+  bool in_progress_{false};
+
+  friend auto operator==(const VersionUndoLink &a, const VersionUndoLink &b) {
+    return a.prev_ == b.prev_ && a.in_progress_ == b.in_progress_;
+  }
+
+  friend auto operator!=(const VersionUndoLink &a, const VersionUndoLink &b) { return !(a == b); }
+
+  inline static std::optional<VersionUndoLink> FromOptionalUndoLink(std::optional<UndoLink> undo_link) {
+    if (undo_link.has_value()) {
+      return VersionUndoLink{*undo_link};
+    }
+    return std::nullopt;
+  }
+};
 
 /* 对表数据文件中的页面进行封装 */
 struct RmPageHandle {
@@ -75,6 +96,31 @@ class RmFileHandle {
 
   std::unordered_map<Rid, std::shared_ptr<std::shared_mutex>> rid_latches_;  // 增加行锁，页锁只需保护头结构正确
   std::shared_mutex rid_map_latch_;                                          // 保护map
+
+ public:
+  //   把原有MVCC版本链的控制从事务管理器移到这 降低锁竞争
+  struct PageVersionInfo {
+    std::shared_mutex mutex_;
+    /** 存储所有槽的先前版本信息。注意：不要使用 `[x]` 来访问它，因为
+     * 即使不存在也会创建新元素。请使用 `find` 来代替。
+     */
+    std::unordered_map<slot_offset_t, VersionUndoLink> prev_version_;
+  };
+
+  /** 保护版本信息 */
+  std::shared_mutex version_info_mutex_;
+  /** 存储表堆中每个元组的先前版本。 */
+  std::unordered_map<page_id_t, std::shared_ptr<PageVersionInfo>> version_info_;
+
+  /**
+   * @brief 更新一个撤销链接，该链接将表堆元组与第一个撤销日志连接起来。
+   * 在更新之前，将调用 `check` 函数以确保有效性。
+   */
+  bool UpdateUndoLink(Rid rid, std::optional<UndoLink> prev_link,
+                      std::function<bool(std::optional<UndoLink>)> &&check = nullptr);
+
+  /** @brief 获取表堆元组的第一个撤销日志。 */
+  std::optional<UndoLink> GetUndoLink(Rid rid);
 
  public:
   RmFileHdr file_hdr_;  // 文件头，维护当前表文件的元数据

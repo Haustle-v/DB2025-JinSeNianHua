@@ -228,9 +228,9 @@ inline auto GenerateUpdatedUndoLog(const TabMeta *schema, const RmRecord *base_t
 }
 
 // 在版本链中找到对应事务的版本链，否则返回版本链最后一个有效链
-inline std::optional<UndoLink> WalkLinkToTxnLink(int fd, const Rid &rid, TransactionManager *txn_mgr,
-                                                 const txn_id_t txn_id) {
-  std::optional<UndoLink> op_undo_link = txn_mgr->GetUndoLink(fd, rid);
+inline std::optional<UndoLink> WalkLinkToTxnLink(const Rid &rid, TransactionManager *txn_mgr, const txn_id_t txn_id,
+                                                 RmFileHandle *fhdl_ptr) {
+  std::optional<UndoLink> op_undo_link = fhdl_ptr->GetUndoLink(rid);
   if (!(op_undo_link.has_value() && (*op_undo_link).IsValid())) {
     return std::nullopt;
   }
@@ -238,13 +238,13 @@ inline std::optional<UndoLink> WalkLinkToTxnLink(int fd, const Rid &rid, Transac
   return op_undo_link;
 }
 
-inline std::tuple<UndoLog, UndoLink> generateUndoLogAndLink(int fd, const Rid &rid, const RmRecord *old_rec,
+inline std::tuple<UndoLog, UndoLink> generateUndoLogAndLink(const Rid &rid, const RmRecord *old_rec,
                                                             const RmRecord *new_rec, const Context *context,
-                                                            const TabMeta *schema) {
+                                                            const TabMeta *schema, RmFileHandle *fhdl_ptr) {
   UndoLog undo_log;
   UndoLink undo_link;
   txn_id_t txn_id = context->txn_->get_transaction_id();
-  std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(fd, rid, context->txn_mgr_, txn_id);
+  std::optional<UndoLink> op_undo_link = WalkLinkToTxnLink(rid, context->txn_mgr_, txn_id, fhdl_ptr);
   if (op_undo_link.has_value() && (*op_undo_link).prev_txn_ == txn_id) {
     // 找到事务对应undo log，进行更改
     // UndoLog old_log = context->txn_mgr_->GetUndoLog(*op_undo_link);
