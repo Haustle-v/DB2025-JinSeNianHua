@@ -55,7 +55,6 @@ struct std::hash<PageId> {
  * Page对象在磁盘上有文件存储, 若在Buffer中则有帧偏移, 并非特指Buffer或Disk上的数据
  */
 class Page {
-  friend class BufferPoolObject;
   friend class BufferPoolManager;
 
  public:

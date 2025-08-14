@@ -56,7 +56,7 @@ class ClockReplacer : public Replacer {
   bool victim(frame_id_t *frame_id) override {
     int steps = 0;
     do {
-      clock_hand_ = (clock_hand_ + 1) % BUFFER_POOL_OBJECT_SIZE;
+      clock_hand_ = (clock_hand_ + 1) % BUFFER_POOL_SIZE;
       if (pin_count_[clock_hand_] == 0 && pined_[clock_hand_] == false) {
         *frame_id = clock_hand_;
         return true;
@@ -65,7 +65,7 @@ class ClockReplacer : public Replacer {
         pined_[clock_hand_] = false;
       }
       ++steps;
-    } while (steps < 2 * BUFFER_POOL_OBJECT_SIZE);
+    } while (steps < 2 * BUFFER_POOL_SIZE);
     return false;
   }
 
@@ -78,11 +78,11 @@ class ClockReplacer : public Replacer {
 
   void unpin(frame_id_t frame_id) override { --pin_count_[frame_id]; }
 
-  size_t Size() override { return BUFFER_POOL_OBJECT_SIZE; }
+  size_t Size() override { return BUFFER_POOL_SIZE; }
 
  private:
-  int pin_count_[BUFFER_POOL_OBJECT_SIZE];
-  bool pined_[BUFFER_POOL_OBJECT_SIZE];
+  int pin_count_[BUFFER_POOL_SIZE];
+  bool pined_[BUFFER_POOL_SIZE];
   size_t clock_hand_ = 0;  // 当前扫描位置（时钟指针）
   //   size_t unpinned_count_ = 0;  // 可被替换的帧数
   //   size_t max_size_ = 0;        // 最多管理的帧
