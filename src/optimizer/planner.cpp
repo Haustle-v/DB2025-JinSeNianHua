@@ -505,10 +505,10 @@ std::shared_ptr<Plan> Planner::do_planner(std::shared_ptr<Query> query, Context 
     std::vector<ColDef> col_defs;
     for (auto &field : x->fields) {
       if (auto sv_col_def = std::dynamic_pointer_cast<ast::ColDef>(field)) {
-        ColDef col_def = {.name = sv_col_def->col_name,
+        ColDef col_def = {.name = std::move(sv_col_def->col_name),
                           .type = interp_sv_type(sv_col_def->type_len->type),
                           .len = sv_col_def->type_len->len};
-        col_defs.push_back(col_def);
+        col_defs.emplace_back(std::move(col_def));
       } else {
         throw InternalError("Unexpected field type");
       }
