@@ -26,15 +26,16 @@ class InsertExecutor : public AbstractExecutor {
   SmManager *sm_manager_;
 
  public:
-  InsertExecutor(SmManager *sm_manager, const std::string &tab_name, std::vector<Value> values, Context *context) {
+  //   InsertExecutor(SmManager *sm_manager, const std::string &tab_name, std::vector<Value> values, Context *context) {
+  InsertExecutor(SmManager *sm_manager, const std::string &&tab_name, std::vector<Value> &&values, Context *context) {
     sm_manager_ = sm_manager;
-    tab_ = sm_manager_->db_.get_table(tab_name);
+    tab_name_ = std::move(tab_name);
+    tab_ = sm_manager_->db_.get_table(tab_name_);
     values_ = std::move(values);  // 使用 move 避免拷贝
-    tab_name_ = tab_name;
     if (values_.size() != tab_.cols.size()) {
       throw InvalidValueCountError();
     }
-    fh_ = sm_manager_->fhs_.at(tab_name).get();
+    fh_ = sm_manager_->fhs_.at(tab_name_).get();
     context_ = context;
   };
 

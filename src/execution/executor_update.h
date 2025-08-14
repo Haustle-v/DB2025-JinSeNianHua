@@ -29,14 +29,17 @@ class UpdateExecutor : public AbstractExecutor {
   std::vector<std::unique_ptr<RmRecord>> old_recs;  // 减少一次读 sqb
 
  public:
-  UpdateExecutor(SmManager *sm_manager, const std::string &tab_name, std::vector<SetClause> set_clauses,
-                 std::vector<Condition> conds, std::vector<Rid> rids, std::vector<std::unique_ptr<RmRecord>> recs,
+  //   UpdateExecutor(SmManager *sm_manager, const std::string &tab_name, std::vector<SetClause> set_clauses,
+  //                  std::vector<Condition> conds, std::vector<Rid> rids, std::vector<std::unique_ptr<RmRecord>> recs,
+  //                  Context *context) {
+  UpdateExecutor(SmManager *sm_manager, const std::string &&tab_name, std::vector<SetClause> &&set_clauses,
+                 std::vector<Condition> &&conds, std::vector<Rid> &&rids, std::vector<std::unique_ptr<RmRecord>> &&recs,
                  Context *context) {
     sm_manager_ = sm_manager;
-    tab_name_ = tab_name;
+    tab_name_ = std::move(tab_name);
     set_clauses_ = std::move(set_clauses);  // 使用 move 避免拷贝
-    tab_ = sm_manager_->db_.get_table(tab_name);
-    fh_ = sm_manager_->fhs_.at(tab_name).get();
+    tab_ = sm_manager_->db_.get_table(tab_name_);
+    fh_ = sm_manager_->fhs_.at(tab_name_).get();
     conds_ = std::move(conds);   // 使用 move 避免拷贝
     rids_ = std::move(rids);     // 使用 move 避免拷贝
     old_recs = std::move(recs);  // sqb add

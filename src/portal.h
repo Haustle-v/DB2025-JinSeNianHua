@@ -90,8 +90,9 @@ class Portal {
             rids.emplace_back(scan->rid());
             recs.emplace_back(std::move(scan->Next()));
           }
-          std::unique_ptr<AbstractExecutor> root = std::make_unique<UpdateExecutor>(
-              sm_manager_, x->tab_name_, x->set_clauses_, x->conds_, rids, std::move(recs), context);
+          std::unique_ptr<AbstractExecutor> root =
+              std::make_unique<UpdateExecutor>(sm_manager_, std::move(x->tab_name_), std::move(x->set_clauses_),
+                                               std::move(x->conds_), std::move(rids), std::move(recs), context);
           return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(), std::move(root), plan);
         }
         case T_Delete: {
@@ -101,15 +102,15 @@ class Portal {
             rids.emplace_back(scan->rid());
           }
 
-          std::unique_ptr<AbstractExecutor> root =
-              std::make_unique<DeleteExecutor>(sm_manager_, x->tab_name_, x->conds_, rids, context);
+          std::unique_ptr<AbstractExecutor> root = std::make_unique<DeleteExecutor>(
+              sm_manager_, std::move(x->tab_name_), std::move(x->conds_), std::move(rids), context);
 
           return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(), std::move(root), plan);
         }
 
         case T_Insert: {
           std::unique_ptr<AbstractExecutor> root =
-              std::make_unique<InsertExecutor>(sm_manager_, x->tab_name_, x->values_, context);
+              std::make_unique<InsertExecutor>(sm_manager_, std::move(x->tab_name_), std::move(x->values_), context);
 
           return std::make_shared<PortalStmt>(PORTAL_DML_WITHOUT_SELECT, std::vector<TabCol>(), std::move(root), plan);
         }
