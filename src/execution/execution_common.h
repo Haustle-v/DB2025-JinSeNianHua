@@ -131,7 +131,7 @@ inline Value GetValueFromRecord(const TabMeta *schema, const RmRecord *tuple, si
     } break;
   }
   val.init_raw(col_meta.len);
-  return val;
+  return std::move(val);
 }
 
 inline auto GenerateNewUndoLog(const TabMeta *schema, const RmRecord *base_tuple, const RmRecord *target_tuple,
@@ -143,7 +143,7 @@ inline auto GenerateNewUndoLog(const TabMeta *schema, const RmRecord *base_tuple
     log.is_deleted_ = false;
     log.modified_fields_.resize(col_num, true);
     for (size_t i = 0; i < col_num; ++i) {
-      log.tuple_.emplace_back(GetValueFromRecord(schema, base_tuple, i));
+      log.tuple_.emplace_back(std::move(GetValueFromRecord(schema, base_tuple, i)));
     }
   } else if (base_tuple == nullptr) {
     // 插入
@@ -161,7 +161,7 @@ inline auto GenerateNewUndoLog(const TabMeta *schema, const RmRecord *base_tuple
       char *target_val = target_tuple->data + cols_meta[i].offset;
       if (memcmp(base_val, target_val, cols_meta[i].len) != 0) {
         log.modified_fields_[i] = true;
-        log.tuple_.emplace_back(GetValueFromRecord(schema, base_tuple, i));
+        log.tuple_.emplace_back(std::move(GetValueFromRecord(schema, base_tuple, i)));
       } else {
         log.tuple_.emplace_back();
       }
@@ -215,7 +215,7 @@ inline auto GenerateUpdatedUndoLog(const TabMeta *schema, const RmRecord *base_t
           char *target_val = target_tuple->data + cols_meta[i].offset;
           if (memcmp(base_val, target_val, cols_meta[i].len) != 0) {
             updated_log.modified_fields_[i] = true;
-            updated_log.tuple_[i] = GetValueFromRecord(schema, base_tuple, i);
+            updated_log.tuple_[i] = std::move(GetValueFromRecord(schema, base_tuple, i));
           }
         }
       }
