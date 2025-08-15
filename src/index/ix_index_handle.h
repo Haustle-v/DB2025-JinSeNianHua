@@ -72,12 +72,10 @@ class IxNodeHandle {
   }
 
   void reset_page(Page *other_page) {
-    if (page != other_page) {
-      page = other_page;
-      page_hdr = reinterpret_cast<IxPageHdr *>(page->get_data());
-      keys = page->get_data() + sizeof(IxPageHdr);
-      rids = reinterpret_cast<Rid *>(keys + file_hdr->keys_size_);
-    }
+    page = other_page;
+    page_hdr = reinterpret_cast<IxPageHdr *>(page->get_data());
+    keys = page->get_data() + sizeof(IxPageHdr);
+    rids = reinterpret_cast<Rid *>(keys + file_hdr->keys_size_);
   }
 
   int get_size() { return page_hdr->num_key; }
