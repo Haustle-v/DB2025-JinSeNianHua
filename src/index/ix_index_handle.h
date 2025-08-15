@@ -10,6 +10,7 @@ See the Mulan PSL v2 for more details. */
 
 #pragma once
 
+#include <algorithm>
 #include <shared_mutex>
 
 #include "ix_defs.h"
@@ -68,6 +69,15 @@ class IxNodeHandle {
     page_hdr = reinterpret_cast<IxPageHdr *>(page->get_data());
     keys = page->get_data() + sizeof(IxPageHdr);
     rids = reinterpret_cast<Rid *>(keys + file_hdr->keys_size_);
+  }
+
+  void reset_page(Page *other_page) {
+    if (page != other_page) {
+      page = other_page;
+      page_hdr = reinterpret_cast<IxPageHdr *>(page->get_data());
+      keys = page->get_data() + sizeof(IxPageHdr);
+      rids = reinterpret_cast<Rid *>(keys + file_hdr->keys_size_);
+    }
   }
 
   int get_size() { return page_hdr->num_key; }
@@ -167,6 +177,53 @@ class IxNodeHandle {
   inline bool is_safe(Operation op);
 };
 
+// 节点池
+class IxNodePool {
+ private:
+  std::vector<std::unique_ptr<IxNodeHandle>> nodes_;
+  std::vector<bool> in_use_;
+  std::mutex mutex_;
+  static constexpr size_t MAX_POOL_SIZE = 100;
+
+ public:
+  IxNodeHandle *acquire_node(const IxFileHdr *file_hdr, Page *page) {
+    std::scoped_lock<std::mutex> lock(mutex_);
+    // 找空闲节点
+    auto iter = std::find(in_use_.begin(), in_use_.end(), false);
+    if (iter != in_use_.end()) {
+      size_t idx = std::distance(in_use_.begin(), iter);
+      nodes_[idx]->reset_page(page);
+      in_use_[idx] = true;
+      return nodes_[idx].get();
+    }
+    // 找不到就添加新节点
+    if (nodes_.size() < MAX_POOL_SIZE) {
+      auto new_node = std::make_unique<IxNodeHandle>(file_hdr, page);
+      IxNodeHandle *ret = new_node.get();
+      nodes_.emplace_back(std::move(new_node));
+      in_use_.emplace_back(true);
+      return ret;
+    }
+
+    // 池满了就直接创建
+    return new IxNodeHandle(file_hdr, page);
+  }
+
+  void free_node(IxNodeHandle *node) {
+    std::scoped_lock<std::mutex> lock(mutex_);
+    // 找节点在池中位置
+    auto iter = std::find_if(nodes_.begin(), nodes_.end(),
+                             [node](const std::unique_ptr<IxNodeHandle> &p) { return p.get() == node; });
+    if (iter != nodes_.end()) {
+      size_t idx = std::distance(nodes_.begin(), iter);
+      in_use_[idx] = false;
+      return;
+    }
+    // 不在池中的直接删了
+    delete node;
+  }
+};
+
 /* B+树 */
 class IxIndexHandle {
   friend class IxScan;
@@ -181,6 +238,7 @@ class IxIndexHandle {
   // std::shared_mutex root_latch_;  // 读写锁提高并发度
 
   IxNodeHandle *last_node_{nullptr};  // load专用，跟踪尾部的叶子节点
+  mutable IxNodePool node_pool;       // 将节点池化，避免频繁的new delete
 
  public:
   IxIndexHandle(DiskManager *disk_manager, BufferPoolManager *buffer_pool_manager, int fd);
