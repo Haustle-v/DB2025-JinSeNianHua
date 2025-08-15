@@ -940,7 +940,9 @@ Iid IxIndexHandle::lower_bound(const char *key) {
   Iid ret{-1, -1};
   if (key_idx == leaf_node->get_size()) {
     if (leaf_node->get_next_leaf() == IX_LEAF_HEADER_PAGE) {
-      ret = leaf_end();
+      //   ret = leaf_end();
+      ret.page_no = leaf_node->get_page_no();
+      ret.slot_no = key_idx;
     } else {
       ret.page_no = leaf_node->get_next_leaf();
       ret.slot_no = 0;
@@ -972,7 +974,9 @@ Iid IxIndexHandle::upper_bound(const char *key) {
     ret = leaf_end();
   } else if (key_idx == leaf_node->get_size()) {
     if (leaf_node->get_next_leaf() == IX_LEAF_HEADER_PAGE) {
-      ret = leaf_end();
+      //   ret = leaf_end();
+      ret.page_no = leaf_node->get_page_no();
+      ret.slot_no = key_idx;
     } else {
       ret.page_no = leaf_node->get_next_leaf();
       ret.slot_no = 0;
