@@ -43,17 +43,17 @@ class IxManager {
   }
 
   bool exists(const std::string &filename, const std::vector<ColMeta> &index_cols) {
-    auto ix_name = get_index_name(filename, index_cols);
+    auto ix_name = std::move(get_index_name(filename, index_cols));
     return disk_manager_->is_file(ix_name);
   }
 
   bool exists(const std::string &filename, const std::vector<std::string> &index_cols) {
-    auto ix_name = get_index_name(filename, index_cols);
+    auto ix_name = std::move(get_index_name(filename, index_cols));
     return disk_manager_->is_file(ix_name);
   }
 
   void create_index(const std::string &filename, const std::vector<ColMeta> &index_cols) {
-    std::string ix_name = get_index_name(filename, index_cols);
+    std::string ix_name = std::move(get_index_name(filename, index_cols));
     // Create index file
     disk_manager_->create_file(ix_name);
     // Open index file
@@ -133,24 +133,24 @@ class IxManager {
   }
 
   void destroy_index(const std::string &filename, const std::vector<ColMeta> &index_cols) {
-    std::string ix_name = get_index_name(filename, index_cols);
+    std::string ix_name = std::move(get_index_name(filename, index_cols));
     disk_manager_->destroy_file(ix_name);
   }
 
   void destroy_index(const std::string &filename, const std::vector<std::string> &index_cols) {
-    std::string ix_name = get_index_name(filename, index_cols);
+    std::string ix_name = std::move(get_index_name(filename, index_cols));
     disk_manager_->destroy_file(ix_name);
   }
 
   // 注意这里打开文件，创建并返回了index file handle的指针
   std::unique_ptr<IxIndexHandle> open_index(const std::string &filename, const std::vector<ColMeta> &index_cols) {
-    std::string ix_name = get_index_name(filename, index_cols);
+    std::string ix_name = std::move(get_index_name(filename, index_cols));
     int fd = disk_manager_->open_file(ix_name);
     return std::make_unique<IxIndexHandle>(disk_manager_, index_buffer_pool_manager_, fd);
   }
 
   std::unique_ptr<IxIndexHandle> open_index(const std::string &filename, const std::vector<std::string> &index_cols) {
-    std::string ix_name = get_index_name(filename, index_cols);
+    std::string ix_name = std::move(get_index_name(filename, index_cols));
     int fd = disk_manager_->open_file(ix_name);
     return std::make_unique<IxIndexHandle>(disk_manager_, index_buffer_pool_manager_, fd);
   }

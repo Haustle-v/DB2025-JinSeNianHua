@@ -54,7 +54,6 @@ class UpdateExecutor : public AbstractExecutor {
     //   context_->lock_mgr_->lock_exclusive_on_table(context_->txn_, fh_->GetFd());
     // }
     // 提前做类型兼容 并为set 子句的值分配空间 它的空间通过raii管理
-    IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
     for (auto &single_set_clause : set_clauses_) {
       auto col_meta_iter = tab_.get_col(single_set_clause.lhs.col_name);
 
@@ -73,7 +72,8 @@ class UpdateExecutor : public AbstractExecutor {
     // for (auto &rid : rids_) {
     // std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
     TupleMeta old_meta;
-    RmRecord *pre_rec = new RmRecord(fh_->get_file_hdr().record_size);  // 被update赋值 存当前表堆最新记录
+    // RmRecord *pre_rec = new RmRecord(fh_->get_file_hdr().record_size);  // 被update赋值 存当前表堆最新记录
+    auto pre_rec = std::make_unique<RmRecord>(fh_->get_file_hdr().record_size);  // 被update赋值 存当前表堆最新记录
     size_t rec_num = rids_.size();
     for (size_t i = 0; i < rec_num; ++i) {
       Rid &rid = rids_[i];
@@ -98,8 +98,8 @@ class UpdateExecutor : public AbstractExecutor {
         assert(set_clauses_.size() == 1 && rec_num == 1);
         if (set_clauses_[0].lhs.col_name == "w_ytd" || set_clauses_[0].lhs.col_name == "d_ytd") {
           auto col_meta_iter = tab_.get_col(set_clauses_[0].lhs.col_name);
-          context_->txn_->append_delta_entry({rid, set_clauses_[0].rhs.float_val, &(*col_meta_iter)});
-          delete pre_rec;
+          DeltaEntry delta{rid, set_clauses_[0].rhs.float_val, &(*col_meta_iter)};
+          context_->txn_->append_delta_entry(std::move(delta));
           return nullptr;
         }
       }
@@ -137,7 +137,7 @@ class UpdateExecutor : public AbstractExecutor {
       bool reuse_key = false;
       for (auto &index_meta : tab_.indexes) {
         char old_key[index_meta.col_tot_len], new_key[index_meta.col_tot_len];
-        std::string index_name = ix_manager_ptr->get_index_name(tab_name_, index_meta.cols);
+        std::string index_name = std::move(IxManager::get_index_name(tab_name_, index_meta.cols));
         auto ix_hdl_ptr = sm_manager_->ihs_[index_name].get();
         // 获取新旧键
         int offset = 0;
@@ -158,14 +158,14 @@ class UpdateExecutor : public AbstractExecutor {
               TupleMeta meta = fh_->get_meta(ix_rid);
               if (meta.is_deleted_ &&
                   (meta.ts_ <= context_->txn_->get_read_ts() || meta.ts_ == context_->txn_->get_temp_ts())) {
-                fh_->delete_record(ix_rid, context_, pre_rec, &tab_, &old_meta);
+                fh_->delete_record(ix_rid, context_, pre_rec.get(), &tab_, &old_meta);
                 if (context_ != nullptr && !context_->txn_->check_tuple_operated(fh_->GetFd(), ix_rid)) {
                   auto update_wrec =
                       std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, ix_rid, *pre_rec, old_meta);
                   context_->txn_->append_write_record(std::move(update_wrec));
                   context_->txn_->append_write_tuple(fh_->GetFd(), ix_rid);
                 }
-                Rid new_rid = fh_->insert_record(rec_ptr->data, context_, pre_rec, &tab_, &old_meta);
+                Rid new_rid = fh_->insert_record(rec_ptr->data, context_, pre_rec.get(), &tab_, &old_meta);
                 // 没有故障恢复的情况下，事务插入直接移出临界区
                 if (context_ != nullptr && !context_->txn_->check_tuple_operated(fh_->GetFd(), new_rid)) {
                   auto update_wrec =
@@ -192,14 +192,13 @@ class UpdateExecutor : public AbstractExecutor {
       if (reuse_key) continue;
 
       //   mvcc下的非主键的更新
-      fh_->update_record(rid, rec_ptr->data, context_, pre_rec, &tab_, &old_meta);
+      fh_->update_record(rid, rec_ptr->data, context_, pre_rec.get(), &tab_, &old_meta);
       if (context_ != nullptr && !context_->txn_->check_tuple_operated(fh_->GetFd(), rid)) {
         auto update_wrec = std::make_unique<WriteRecord>(WType::UPDATE_TUPLE, tab_name_, rid, *pre_rec, old_meta);
         context_->txn_->append_write_record(std::move(update_wrec));
         context_->txn_->append_write_tuple(fh_->GetFd(), rid);
       }
     }
-    delete pre_rec;
 
     return nullptr;
   }

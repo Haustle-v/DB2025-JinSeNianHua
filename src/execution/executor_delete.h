@@ -48,7 +48,8 @@ class DeleteExecutor : public AbstractExecutor {
     // }
     // IxManager *ix_manager_ptr = sm_manager_->get_ix_manager();
 
-    RmRecord *pre_rec = new RmRecord(fh_->get_file_hdr().record_size);
+    // RmRecord *pre_rec = new RmRecord(fh_->get_file_hdr().record_size);
+    auto pre_rec = std::make_unique<RmRecord>(fh_->get_file_hdr().record_size);
     for (auto &rid : rids_) {
       //   std::unique_ptr<RmRecord> rec_ptr = fh_->get_record(rid, context_);
 
@@ -68,7 +69,7 @@ class DeleteExecutor : public AbstractExecutor {
 
       TupleMeta old_meta;  // 元组现在的tuple_meta，用于事务记录
       //   mvcc 下的删除
-      fh_->delete_record(rid, context_, pre_rec, &tab_, &old_meta);
+      fh_->delete_record(rid, context_, pre_rec.get(), &tab_, &old_meta);
       // 将事务记录移出临界区
       if (context_ != nullptr && !context_->txn_->check_tuple_operated(fh_->GetFd(), rid)) {
         // auto delete_wrec = std::make_unique<WriteRecord>(WType::DELETE_TUPLE, tab_name_, rid, *pre_rec, old_meta);
@@ -78,7 +79,6 @@ class DeleteExecutor : public AbstractExecutor {
         context_->txn_->append_write_tuple(fh_->GetFd(), rid);
       }
     }
-    delete pre_rec;
 
     return nullptr;
   }

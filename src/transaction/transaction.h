@@ -154,7 +154,7 @@ class Transaction {
   }
 
   //   热点表增量日志处理
-  inline void append_delta_entry(DeltaEntry delta) { delta_entris_.emplace_back(std::move(delta)); }
+  inline void append_delta_entry(DeltaEntry &&delta) { delta_entris_.emplace_back(std::move(delta)); }
   inline std::vector<DeltaEntry> &get_delta_entries() { return delta_entris_; }
 
  private:

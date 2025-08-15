@@ -106,8 +106,8 @@ void SmManager::open_db(const std::string &db_name) {
     fhs_.emplace(table_and_meta.first, rm_manager_->open_file(table_and_meta.first));
     // 加载表的索引文件
     for (auto &index_meta : table_and_meta.second.indexes) {
-      std::string index_name = ix_manager_->get_index_name(table_and_meta.first, index_meta.cols);
-      ihs_.emplace(index_name, ix_manager_->open_index(table_and_meta.first, index_meta.cols));
+      std::string index_name = std::move(IxManager::get_index_name(table_and_meta.first, index_meta.cols));
+      ihs_.emplace(std::move(index_name), ix_manager_->open_index(table_and_meta.first, index_meta.cols));
     }
   }
 }
@@ -624,7 +624,7 @@ void SmManager::load_csv_data(const std::string &csv_file_path, const std::strin
 
     // 插入索引
     for (const auto &index : tab.indexes) {
-      auto idx_name = IxManager::get_index_name(tab_name, index.cols);
+      auto idx_name = std::move(IxManager::get_index_name(tab_name, index.cols));
       auto ih = ihs_.at(idx_name).get();
 
       char key[index.col_tot_len];
