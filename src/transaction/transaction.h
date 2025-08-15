@@ -125,13 +125,13 @@ class Transaction {
   inline timestamp_t get_temp_ts() const { return TXN_START_ID + txn_id_; }
 
   /** 修改现有的撤销日志 */
-  inline auto ModifyUndoLog(int log_idx, UndoLog &&new_log) {
+  inline auto ModifyUndoLog(int log_idx, UndoLog new_log) {
     std::scoped_lock<std::mutex> lck(latch_);
     undo_logs_[log_idx] = std::move(new_log);
   }
 
   /** @return 此事务中撤销日志的索引 */
-  inline auto AppendUndoLog(UndoLog &&log) -> UndoLink {
+  inline auto AppendUndoLog(UndoLog log) -> UndoLink {
     std::scoped_lock<std::mutex> lck(latch_);
     undo_logs_.emplace_back(std::move(log));
     return {txn_id_, static_cast<int>(undo_logs_.size() - 1)};

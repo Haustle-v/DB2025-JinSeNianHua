@@ -205,10 +205,10 @@ Rid RmFileHandle::insert_record(char *buf, Context *context, RmRecord *old_rec, 
 
       // 当前log是updated log 在事务缓冲区修改 此时无需改动版本链
       if (undo_link.prev_txn_ == context->txn_->get_transaction_id()) {
-        context->txn_->ModifyUndoLog(undo_link.prev_log_idx_, std::move(undo_log));
+        context->txn_->ModifyUndoLog(undo_link.prev_log_idx_, undo_log);
       } else {
         // 当前log为新log 追加到事务缓冲区内 同时更新版本链
-        undo_link = context->txn_->AppendUndoLog(std::move(undo_log));
+        undo_link = context->txn_->AppendUndoLog(undo_log);
         UpdateUndoLink(ret, undo_link);
       }
     }
@@ -296,10 +296,10 @@ void RmFileHandle::delete_record(const Rid &rid, Context *context, RmRecord *old
 
       // 当前log是updated log 在事务缓冲区修改 此时无需改动版本链
       if (undo_link.prev_txn_ == context->txn_->get_transaction_id()) {
-        context->txn_->ModifyUndoLog(undo_link.prev_log_idx_, std::move(undo_log));
+        context->txn_->ModifyUndoLog(undo_link.prev_log_idx_, undo_log);
       } else {
         // 当前log为新log 追加到事务缓冲区内 同时更新版本链
-        undo_link = context->txn_->AppendUndoLog(std::move(undo_log));
+        undo_link = context->txn_->AppendUndoLog(undo_log);
         UpdateUndoLink(rid, undo_link);
       }
     }
@@ -379,10 +379,10 @@ void RmFileHandle::update_record(const Rid &rid, char *buf, Context *context, Rm
 
         // 当前log是updated log 在事务缓冲区修改 此时无需改动版本链
         if (undo_link.prev_txn_ == context->txn_->get_transaction_id()) {
-          context->txn_->ModifyUndoLog(undo_link.prev_log_idx_, std::move(undo_log));
+          context->txn_->ModifyUndoLog(undo_link.prev_log_idx_, undo_log);
         } else {
           // 当前log为新log 追加到事务缓冲区内 同时更新版本链
-          undo_link = context->txn_->AppendUndoLog(std::move(undo_log));
+          undo_link = context->txn_->AppendUndoLog(undo_log);
           UpdateUndoLink(rid, undo_link);
         }
       }
