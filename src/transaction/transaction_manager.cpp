@@ -29,7 +29,7 @@ Transaction *TransactionManager::begin(Transaction *txn, LogManager *log_manager
   // 如果需要支持MVCC请在上述过程中添加代码
 
   // sqb 涉及mvcc 6.5
-  txn_num_++;
+  //   txn_num_++;
   if (txn == nullptr) {
     txn = new Transaction(next_txn_id_.fetch_add(1));
     txn->set_start_ts(next_timestamp_.fetch_add(1));
@@ -67,7 +67,7 @@ void TransactionManager::commit(Transaction *txn, LogManager *log_manager) {
   // sqb 考虑mvcc 6.5
   // 直接进行写操作 所以不会存在未提交的写
   //   更新所有写操作的提交时间戳
-  commit_num_++;
+  //   commit_num_++;
   //   std::scoped_lock<std::mutex> lck(commit_mutex_);
   timestamp_t commit_ts = next_timestamp_.fetch_add(1);
   auto write_set_ptr = txn->get_write_set();
@@ -136,7 +136,7 @@ void TransactionManager::abort(Transaction *txn, LogManager *log_manager, Transa
   // sqb 未考虑mvcc 6.5
 
   //   写操作回滚
-  aborts_num_++;
+  //   aborts_num_++;
   auto write_set_ptr = txn->get_write_set();
   for (auto iter = write_set_ptr->rbegin(); iter != write_set_ptr->rend(); ++iter) {
     auto &write_rec_ptr = *iter;

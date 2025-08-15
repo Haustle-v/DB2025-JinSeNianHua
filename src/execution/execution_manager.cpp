@@ -161,17 +161,18 @@ void QlManager::run_cmd_utility(std::shared_ptr<Plan> plan, txn_id_t *txn_id, Co
 void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, std::vector<TabCol> sel_cols,
                             Context *context) {
   std::vector<std::string> captions;
-  captions.reserve(sel_cols.size());
+  size_t sel_col_num = sel_cols.size();
+  captions.reserve(sel_col_num);
   for (auto &sel_col : sel_cols) {
     if (sel_col.aggFuncType != ast::AGG_INVALID) {
-      captions.push_back(sel_col.alias);
+      captions.emplace_back(std::move(sel_col.alias));
     } else {
-      captions.push_back(sel_col.col_name);
+      captions.emplace_back(std::move(sel_col.col_name));
     }
   }
 
   // Print header into buffer
-  RecordPrinter rec_printer(sel_cols.size());
+  RecordPrinter rec_printer(sel_col_num);
   rec_printer.print_separator(context);
   rec_printer.print_record(captions, context);
   rec_printer.print_separator(context);
@@ -180,7 +181,8 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
   if (sm_manager_->io_enabled_) {  // yfs 7.3
     outfile.open("output.txt", std::ios::out | std::ios::app);
     outfile << "|";
-    for (int i = 0; i < captions.size(); ++i) {
+    // for (int i = 0; i < captions.size(); ++i) {
+    for (int i = 0; i < sel_col_num; ++i) {
       outfile << " " << captions[i] << " |";
     }
     outfile << "\n";
@@ -203,14 +205,16 @@ void QlManager::select_from(std::unique_ptr<AbstractExecutor> executorTreeRoot, 
         col_str = std::string((char *)rec_buf, col.len);
         col_str.resize(strlen(col_str.c_str()));
       }
-      columns.push_back(col_str);
+      columns.emplace_back(std::move(col_str));
     }
     // print record into buffer
     rec_printer.print_record(columns, context);
     // print record into file
     if (sm_manager_->io_enabled_) {  // yfs 7.3
       outfile << "|";
-      for (int i = 0; i < columns.size(); ++i) {
+
+      size_t cols_num = columns.size();
+      for (int i = 0; i < cols_num; ++i) {
         outfile << " " << columns[i] << " |";
       }
       outfile << "\n";
