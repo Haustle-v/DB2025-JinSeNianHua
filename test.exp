@@ -14,6 +14,14 @@ send "create table departments (dept_id int, dept_name char(20));\r"
 expect "Rucbase> "
 send "create table employees (emp_id int, emp_name char(20), dept_id int, salary int);\r"
 expect "Rucbase> "
+send "insert into departments values(1, 'HR');\r"
+expect "Rucbase> "
+send "insert into departments values(2, 'Engineering');\r"
+expect "Rucbase> "
+send "insert into departments values(3, 'Sales');\r"
+expect "Rucbase> "
+send "insert into departments values(4, 'Marketing');\r"
+expect "Rucbase> "
 send "insert into employees values(101, 'Alice', 1, 70000);\r"
 expect "Rucbase> "
 send "insert into employees values(102, 'Bob', 2, 80000);\r"
@@ -24,7 +32,7 @@ send "insert into employees values(104, 'David', 1, 75000);\r"
 expect "Rucbase> "
 
 # --- 执行查询 ---
-send "select dept_id, dept_name from departments ANTI JOIN employees ON departments.dept_id = employees.dept_id;\r"
+send "select * from departments ANTI JOIN employees ON departments.dept_id = employees.dept_id;\r"
 expect "Rucbase> "
 
 interact
