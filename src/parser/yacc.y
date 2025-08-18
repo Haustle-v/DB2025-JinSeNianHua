@@ -42,7 +42,7 @@ LOAD OFF OUTPUT_FILE
 %token <sv_bool> VALUE_BOOL
 
 // added keywords
-%token STATIC_CHECKPOINT CRASH
+%token STATIC_CHECKPOINT CRASH ANTI
 
 // specify types for non-terminal symbol
 %type <sv_node> stmt dbStmt ddl dml txnStmt setStmt sysStmt io_stmt
@@ -575,6 +575,7 @@ join_type:      /*yfs0527*/
     |   RIGHT JOIN   { $$ = RIGHT_JOIN; }
     |   FULL JOIN   { $$ = FULL_JOIN; }
     |   SEMI JOIN   { $$ = SEMI_JOIN; }
+    |   ANTI JOIN  {$$=ANTI_JOIN;}
     ;
 
 

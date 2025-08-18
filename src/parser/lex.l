@@ -110,6 +110,7 @@ value_path [\.|\/][^ \t]+\.csv
 "EXPLAIN" { return EXPLAIN; }
 "STATIC_CHECKPOINT" {return STATIC_CHECKPOINT;}
 "CRASH" {return CRASH;}
+"ANTI" {return ANTI;}
 "TRUE" { 
     yylval->sv_bool = true;
     return VALUE_BOOL; 

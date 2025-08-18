@@ -33,10 +33,8 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
   std::unique_ptr<RmRecord> cur_rec_ptr_;  // 标记当前有效记录
 
  public:
-  NestedLoopJoinExecutor(std::unique_ptr<AbstractExecutor> left,
-                         std::unique_ptr<AbstractExecutor> right,
-                         std::vector<Condition> conds,
-                        JoinType join_type) {
+  NestedLoopJoinExecutor(std::unique_ptr<AbstractExecutor> left, std::unique_ptr<AbstractExecutor> right,
+                         std::vector<Condition> conds, JoinType join_type) {
     left_ = std::move(left);
     right_ = std::move(right);
     len_ = left_->tupleLen() + right_->tupleLen();
@@ -48,7 +46,7 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
 
     cols_.insert(cols_.end(), right_cols.begin(), right_cols.end());
     isend = false;
-    fed_conds_ = std::move(conds);  // 使用 move 避免拷贝
+    fed_conds_ = std::move(conds);      // 使用 move 避免拷贝
     join_type_ = std::move(join_type);  // 使用 move 避免拷贝
   }
 
@@ -81,22 +79,21 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
           auto &rrec_ptr = Rbuffer[Rpos];
           // 先拼成新元组后再检查
           cur_rec_ptr_ = std::make_unique<RmRecord>(left_->tupleLen());
-          auto temp = std::make_unique<RmRecord>(len_);   //临时构造一个拼接记录，仅用于条件判断
+          auto temp = std::make_unique<RmRecord>(len_);  // 临时构造一个拼接记录，仅用于条件判断
           memcpy(temp->data, lrec_ptr->data, lrec_ptr->size);
-          memcpy(temp->data + lrec_ptr->size, rrec_ptr->data,
-                rrec_ptr->size);
+          memcpy(temp->data + lrec_ptr->size, rrec_ptr->data, rrec_ptr->size);
           if (check_conds(cols_, fed_conds_, temp.get())) {
             // semi join 只保留左表记录
             memcpy(cur_rec_ptr_->data, lrec_ptr->data, lrec_ptr->size);
             is_find = true;
-            break;    // 一旦匹配到，就直接break，不需要再遍历右表了
+            break;  // 一旦匹配到，就直接break，不需要再遍历右表了
           }
         }
         //   注意外循环需迭代全部内表
-        if (!is_find) {   // 如果没找到，Rpos归零，左表++Lpos继续找
-          Rpos = 0;}
-        else {         
-          ++Lpos;   // 如果找到了，Rpos归零，左表++Lpos，跳出循环。注意这里要手动++，因为break就不会经过for的++Lpos
+        if (!is_find) {  // 如果没找到，Rpos归零，左表++Lpos继续找
+          Rpos = 0;
+        } else {
+          ++Lpos;  // 如果找到了，Rpos归零，左表++Lpos，跳出循环。注意这里要手动++，因为break就不会经过for的++Lpos
           break;
         }
       }
@@ -105,35 +102,91 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
       if (!is_find) {
         cur_rec_ptr_ = nullptr;
       }
-    }else{
-
-    for (; Lpos < Lsize && !is_find; ++Lpos) {
-      auto &lrec_ptr = Lbuffer[Lpos];
-      for (; Rpos < Rsize && !is_find; ++Rpos) {
-        auto &rrec_ptr = Rbuffer[Rpos];
-        // 先拼成新元组后再检查
-        cur_rec_ptr_ = std::make_unique<RmRecord>(len_);
-        memcpy(cur_rec_ptr_->data, lrec_ptr->data, lrec_ptr->size);
-        memcpy(cur_rec_ptr_->data + lrec_ptr->size, rrec_ptr->data,
-               rrec_ptr->size);
-        if (check_conds(cols_, fed_conds_, cur_rec_ptr_.get())) {
-          // 注意这里不是break 内循环会因find退出 但Rpos可以顺利自增
-          // 同时外循环用break退出 避免Lpos变化（不执行++Lpos了）！保证下一次还是从这个Lpos寻找，而Rpos就从下一个位置
+    } else if (join_type_ == JoinType::ANTI_JOIN) {
+      // 先做两个特判
+      //   左表为空，结果为空
+      if (Lsize == 0) {
+        cur_rec_ptr_ = nullptr;
+      } else if (Rsize == 0) {
+        // 右表为空，左表就是结果 遍历左表
+        for (; Lpos < Lsize && !is_find; ++Lpos) {
+          auto &lrec_ptr = Lbuffer[Lpos];
+          cur_rec_ptr_ = std::make_unique<RmRecord>(*lrec_ptr);  // 就按前面的做拷贝吧
           is_find = true;
+          //   //   注意外循环需迭代全部内表
+          //   if (!is_find) {  // 如果没找到，Rpos归零，左表++Lpos继续找
+          //     Rpos = 0;
+          //   } else {
+          //     ++Lpos;  //
+          //     如果找到了，Rpos归零，左表++Lpos，跳出循环。注意这里要手动++，因为break就不会经过for的++Lpos break;
+          //   }
+        }
+        if (!is_find) {
+          cur_rec_ptr_ = nullptr;
+        }
+      } else {
+        // 两表都不为空
+        for (; Lpos < Lsize && !is_find; ++Lpos) {
+          auto &lrec_ptr = Lbuffer[Lpos];
+          //  anti join的右边每次都从零开始 不再复用之前的逻辑
+          size_t rr_pos = 0;
+          for (rr_pos; rr_pos < Rsize && !is_find; ++rr_pos) {
+            auto &rrec_ptr = Rbuffer[rr_pos];
+            // 先拼成新元组后再检查
+            cur_rec_ptr_ = std::make_unique<RmRecord>(left_->tupleLen());
+            auto temp = std::make_unique<RmRecord>(len_);  // 临时构造一个拼接记录，仅用于条件判断
+            memcpy(temp->data, lrec_ptr->data, lrec_ptr->size);
+            memcpy(temp->data + lrec_ptr->size, rrec_ptr->data, rrec_ptr->size);
+            if (check_conds(cols_, fed_conds_, temp.get())) {
+              // 匹配到说明左表有效，应该让左表递增，右表归零，需退出当前循环
+              break;
+            }
+          }
+          if (rr_pos == Rsize) {
+            // 右表遍历完了 当前左表列为需要的值
+            cur_rec_ptr_ = std::make_unique<RmRecord>(*lrec_ptr);
+            is_find = true;
+          }
+
+          //   ++Lpos;  // 如果找到了，Rpos归零，左表++Lpos，跳出循环。注意这里要手动++，因为break就不会经过for的++Lpos
+          //   break;
+        }
+
+        // 注意没找到时要释放rec
+        if (!is_find) {
+          cur_rec_ptr_ = nullptr;
         }
       }
-      //   注意外循环需迭代全部内表
+
+    } else {
+      for (; Lpos < Lsize && !is_find; ++Lpos) {
+        auto &lrec_ptr = Lbuffer[Lpos];
+        for (; Rpos < Rsize && !is_find; ++Rpos) {
+          auto &rrec_ptr = Rbuffer[Rpos];
+          // 先拼成新元组后再检查
+          cur_rec_ptr_ = std::make_unique<RmRecord>(len_);
+          memcpy(cur_rec_ptr_->data, lrec_ptr->data, lrec_ptr->size);
+          memcpy(cur_rec_ptr_->data + lrec_ptr->size, rrec_ptr->data, rrec_ptr->size);
+          if (check_conds(cols_, fed_conds_, cur_rec_ptr_.get())) {
+            // 注意这里不是break 内循环会因find退出 但Rpos可以顺利自增
+            // 同时外循环用break退出
+            // 避免Lpos变化（不执行++Lpos了）！保证下一次还是从这个Lpos寻找，而Rpos就从下一个位置
+            is_find = true;
+          }
+        }
+        //   注意外循环需迭代全部内表
+        if (!is_find) {
+          Rpos = 0;
+        } else {
+          break;
+        }
+      }
+
+      // 注意没找到时要释放rec
       if (!is_find) {
-        Rpos = 0;
-      } else {
-        break;
+        cur_rec_ptr_ = nullptr;
       }
     }
-
-    // 注意没找到时要释放rec
-    if (!is_find) {
-      cur_rec_ptr_ = nullptr;
-    }}
   }
 
   // sqb 5.24
@@ -152,8 +205,7 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
   // sqb 5.24
   ColMeta get_col_offset(const TabCol &target) override {
     for (auto &col_meta : cols_) {
-      if (col_meta.tab_name == target.tab_name &&
-          col_meta.name == target.col_name) {
+      if (col_meta.tab_name == target.tab_name && col_meta.name == target.col_name) {
         return col_meta;
       }
     }

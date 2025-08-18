@@ -313,7 +313,7 @@ void Planner::sort_table_on_num(std::vector<std::string> &query_tables) {
 std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
   auto x = std::dynamic_pointer_cast<ast::SelectStmt>(query->parse);
   //   std::vector<std::string> tables = query->tables;
-  sort_table_on_num(query->tables);
+  //   sort_table_on_num(query->tables);
   std::vector<std::string> tables = query->tables;
 
   // Scan table , 生成表算子列表tab_nodes
@@ -352,7 +352,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
   std::shared_ptr<Plan> right = table_scan_executors[1];
   bool reversed = false;
   std::shared_ptr<Plan> table_join_executors;
-  table_join_executors = std::make_shared<JoinPlan>(T_SortMerge, std::move(left), std::move(right),
+  table_join_executors = std::make_shared<JoinPlan>(T_NestLoop, std::move(left), std::move(right),
                                                     std::move(extract_join_conditions(joinconds, tables, 1, reversed)),
                                                     reversed, query->join_type_);
 
@@ -360,7 +360,7 @@ std::shared_ptr<Plan> Planner::make_one_rel(std::shared_ptr<Query> query) {
   for (int i = 2; i <= tables.size() - 1; i++) {  // i是右表的index
     bool reversed = false;
     table_join_executors =
-        std::make_shared<JoinPlan>(T_SortMerge, std::move(table_join_executors),  // 左深树, 把已连接节点放左边
+        std::make_shared<JoinPlan>(T_NestLoop, std::move(table_join_executors),  // 左深树, 把已连接节点放左边
                                    std::move(table_scan_executors[i]),
                                    std::move(extract_join_conditions(joinconds, tables, i, reversed)), reversed);
   }

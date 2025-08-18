@@ -13,7 +13,7 @@ See the Mulan PSL v2 for more details. */
 #include <string>
 #include <vector>
 
-enum JoinType { INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN, SEMI_JOIN };
+enum JoinType { INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN, SEMI_JOIN, ANTI_JOIN };
 namespace ast {
 
 enum SvType { SV_TYPE_INT, SV_TYPE_FLOAT, SV_TYPE_STRING, SV_TYPE_BOOL };

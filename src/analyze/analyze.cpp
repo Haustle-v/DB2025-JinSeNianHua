@@ -73,7 +73,8 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
     // get_all_cols(query->tables, all_cols);
 
     // 处理target list，再target list中添加上表名，例如 a.id
-    if (query->join_type_ == JoinType::SEMI_JOIN) {  // 检查列名的选择是否符合半连接的定义
+    if (query->join_type_ == JoinType::SEMI_JOIN ||
+        query->join_type_ == JoinType::ANTI_JOIN) {  // 检查列名的选择是否符合半连接的定义
       std::vector<ColMeta> all_cols_of_left_tab;
       get_all_cols_of_left_tab(x->jointree[0]->left, all_cols_of_left_tab);
 
@@ -175,8 +176,8 @@ std::shared_ptr<Query> Analyze::do_analyze(std::shared_ptr<ast::TreeNode> parse)
     check_clause(query->tables, query->conds);
 
     // 性能测试没有semi join
-    // get_clause2(x->jointree, query->join_conds);
-    // check_clause(query->tables, query->join_conds);  // 检查列名是否存在，以及可能需要推断表名
+    get_clause2(x->jointree, query->join_conds);
+    check_clause(query->tables, query->join_conds);  // 检查列名是否存在，以及可能需要推断表名
   } else if (auto x = std::dynamic_pointer_cast<ast::UpdateStmt>(parse)) {
     /** TODO: */
     // sqb :初步处理update 语句 5.24

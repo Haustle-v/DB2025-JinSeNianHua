@@ -37,6 +37,7 @@ int main() {
       // "explain select x.a, y.b from x join y where x.a = y.b and c = d;",
       "select x.a, y.b from x join y on x.a = y.b join z on x.a = z.c;",
       "select x.a, y.b from x SEMI JOIN y ON x.a = y.b;",
+      "select dept_id, dept_name from departments ANTI JOIN employees ON departments.dept_id = employees.dept_id;",
       "exit;",
       "help;",
       "",
