@@ -81,6 +81,7 @@ single_op ";"|"("|")"|","|"*"|"="|">"|"<"|"."
 "AND" { return AND; }
 "JOIN" {return JOIN;}
 "SEMI" { return SEMI; }     /*yfs0527*/
+"ANTI" {return ANTI;}
 "ON" { return ON; }     /*yfs0527*/
 "EXIT" { return EXIT; }
 "HELP" { return HELP; }

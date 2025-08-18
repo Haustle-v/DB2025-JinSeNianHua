@@ -74,7 +74,7 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
     bool is_find = false;
 
     // 只要在Rbuffer找到匹配就可以跳出右层循环了
-    if (join_type_ == JoinType::SEMI_JOIN) {
+    if (join_type_ == JoinType::ANTI_JOIN) {
       for (; Lpos < Lsize && !is_find; ++Lpos) {
         auto &lrec_ptr = Lbuffer[Lpos];
         for (; Rpos < Rsize && !is_find; ++Rpos) {
@@ -87,17 +87,20 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
                 rrec_ptr->size);
           if (check_conds(cols_, fed_conds_, temp.get())) {
             // semi join 只保留左表记录
-            memcpy(cur_rec_ptr_->data, lrec_ptr->data, lrec_ptr->size);
+            // memcpy(cur_rec_ptr_->data, lrec_ptr->data, lrec_ptr->size);
             is_find = true;
             break;    // 一旦匹配到，就直接break，不需要再遍历右表了
           }
         }
         //   注意外循环需迭代全部内表
-        if (!is_find) {   // 如果没找到，Rpos归零，左表++Lpos继续找
+        if (!is_find) { 
+          is_find = true;
+          memcpy(cur_rec_ptr_->data, lrec_ptr->data, lrec_ptr->size);  // 如果没找到，Rpos归零，左表++Lpos继续找
           Rpos = 0;}
         else {         
           ++Lpos;   // 如果找到了，Rpos归零，左表++Lpos，跳出循环。注意这里要手动++，因为break就不会经过for的++Lpos
-          break;
+          is_find = false;
+          // break;
         }
       }
 

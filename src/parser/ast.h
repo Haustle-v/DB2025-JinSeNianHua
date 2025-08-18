@@ -14,7 +14,7 @@ See the Mulan PSL v2 for more details. */
 #include <memory>
 
 enum JoinType {
-    INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN, SEMI_JOIN
+    INNER_JOIN, LEFT_JOIN, RIGHT_JOIN, FULL_JOIN, SEMI_JOIN, ANTI_JOIN
 };
 namespace ast {
 

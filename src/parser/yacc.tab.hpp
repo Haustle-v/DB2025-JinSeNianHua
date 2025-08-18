@@ -1,4 +1,4 @@
-/* A Bison parser, made by GNU Bison 3.8.2.  */
+/* A Bison parser, made by GNU Bison 3.7.5.  */
 
 /* Bison interface for Yacc-like parsers in C
 
@@ -16,7 +16,7 @@
    GNU General Public License for more details.
 
    You should have received a copy of the GNU General Public License
-   along with this program.  If not, see <https://www.gnu.org/licenses/>.  */
+   along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 /* As a special exception, you may create a larger work that contains
    part or all of the Bison parser skeleton and distribute that work
@@ -93,15 +93,16 @@ extern int yydebug;
     FULL = 294,                    /* FULL  */
     SEMI = 295,                    /* SEMI  */
     ON = 296,                      /* ON  */
-    LEQ = 297,                     /* LEQ  */
-    NEQ = 298,                     /* NEQ  */
-    GEQ = 299,                     /* GEQ  */
-    T_EOF = 300,                   /* T_EOF  */
-    IDENTIFIER = 301,              /* IDENTIFIER  */
-    VALUE_STRING = 302,            /* VALUE_STRING  */
-    VALUE_INT = 303,               /* VALUE_INT  */
-    VALUE_FLOAT = 304,             /* VALUE_FLOAT  */
-    VALUE_BOOL = 305               /* VALUE_BOOL  */
+    ANTI = 297,                    /* ANTI  */
+    LEQ = 298,                     /* LEQ  */
+    NEQ = 299,                     /* NEQ  */
+    GEQ = 300,                     /* GEQ  */
+    T_EOF = 301,                   /* T_EOF  */
+    IDENTIFIER = 302,              /* IDENTIFIER  */
+    VALUE_STRING = 303,            /* VALUE_STRING  */
+    VALUE_INT = 304,               /* VALUE_INT  */
+    VALUE_FLOAT = 305,             /* VALUE_FLOAT  */
+    VALUE_BOOL = 306               /* VALUE_BOOL  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -124,8 +125,6 @@ struct YYLTYPE
 
 
 
-
 int yyparse (void);
-
 
 #endif /* !YY_YY_YACC_TAB_HPP_INCLUDED  */

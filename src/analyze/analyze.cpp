@@ -44,6 +44,26 @@ std::shared_ptr<Query> Analyze::do_analyze(
     get_all_cols(query->tables, all_cols);
     get_all_cols_of_left_tab(x->jointree[0]->left, all_cols_of_left_tab);
 
+    // 检查列名的选择是否符合反连接的定义
+    if (query->join_type_ == JoinType::ANTI_JOIN){
+      // infer table name from column name
+      for (auto &sel_col : query->cols) {
+        sel_col = check_column4semi_join(all_cols_of_left_tab, sel_col);  // 列元数据校验
+      }
+    }else{
+    if (query->cols.empty()) {
+      // select all columns
+      for (auto &col : all_cols) {
+        TabCol sel_col = {.tab_name = col.tab_name, .col_name = col.name};
+        query->cols.push_back(sel_col);
+      }
+    } else {
+      // infer table name from column name
+      for (auto &sel_col : query->cols) {
+        sel_col = check_column(all_cols, sel_col);  // 列元数据校验
+      }}
+    }
+
     // 检查列名的选择是否符合半连接的定义
     if (query->join_type_ == JoinType::SEMI_JOIN){
       if (query->cols.empty()) {  // select * 表示 select all

@@ -15,26 +15,7 @@ See the Mulan PSL v2 for more details. */
 
 int main() {
     std::vector<std::string> sqls = {       // 这里只考虑能否被正确解析，不考虑表
-        // "show tables;",
-        // "desc tb;",
-        // "create table tb (a int, b float, c char(4));",
-        // "show tables;",
-        // "drop table tb;",
-        // "show tables;",
-        // "create index tb(a);",
-        // "create index tb(a, b, c);",
-        // "drop index tb(a, b, c);",
-        // "drop index tb(b);",
-        // "insert into tb values (1, 3.14, 'pi');",
-        // "delete from tb where a = 1;",
-        // "update tb set a = 1, b = 2.2, c = 'xyz' where x = 2 and y < 1.1 and z > 'abc';",
-        // "select * from tb;",
-        // "select * from tb where x <> 2 and y >= 3. and z <= '123' and b < tb.a;",
-        "select x.a, y.b from x join y on x.a = y.b join z on x.a = z.c;",
-        "select x.a, y.b from x SEMI JOIN y ON x.a = y.b;",
-        // "exit;",
-        // "help;",
-        // "",
+        "select dept_id, dept_name from departments SEMI JOIN employees ON departments.dept_id = employees.dept_id;"
     };
     for (auto &sql : sqls) {
         std::cout << sql << std::endl;
